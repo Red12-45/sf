@@ -1,0 +1,303 @@
+<!-- pricing.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <title>Premium Subscription Plans</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/pricing.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <a href="/">
+                    <i class="fas fa-cubes"></i>
+                    <span>Sales<span class="logo-accent">Flow</span></span>
+                </a>
+            </div>
+            <nav class="nav-menu">
+                <ul class="nav-links">
+                    <li><a href="/" class="nav-link"><i class="fas fa-home"></i> Home</a></li>
+                    
+                    <li><a href="/pricing" class="nav-link active"><i class="fas fa-tags"></i> Pricing</a></li>
+                    <li><a href="/documentation" class="nav-link"><i class="fas fa-book"></i> Documentation</a></li>
+                </ul>
+            </nav>
+            <div class="nav-actions">
+                <a href="/login" class="btn-login">Log In</a>
+                <a href="/register" class="btn-signup">Sign Up</a>
+                <button class="mobile-menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="page-container">
+        <!-- Decorative Elements -->
+        <div class="gradient-bg"></div>
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+        <div class="shape shape-4"></div>
+        
+        <div class="container">
+            <div class="pricing-header">
+                <span class="subtitle">Subscription Plans</span>
+                <h1>Elevate Your Business with <span class="accent">Premium Access</span></h1>
+                <p>Get full access to our complete business management system with real-time analytics, inventory tracking, and dedicated support. Choose the plan that works best for you.</p>
+            </div>
+            
+            <div class="pricing-plans">
+                <!-- Monthly Plan -->
+                <div class="pricing-plan" data-aos="fade-up" data-aos-delay="100">
+                    <div class="plan-inner">
+                        <div class="plan-header">
+                            <div class="plan-icon">
+                                <i class="fas fa-calendar-day"></i>
+                            </div>
+                            <div class="plan-name">Monthly</div>
+                            <div class="plan-price">
+                                <div class="price-value">
+                                    <span class="currency">₹</span>400
+                                </div>
+                                <div class="plan-billing">per month</div>
+                            </div>
+                        </div>
+                        <div class="divider"></div>
+                        <div class="plan-features">
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Full access to business tools</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Inventory & sales tracking</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Real-time analytics</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>24/7 customer support</span>
+                            </div>
+                        </div>
+                        <div class="plan-cta">
+                            <a href="/subscribe/monthly" class="btn btn-outline">
+                                <span>Subscribe Monthly</span>
+                                <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 6 Month Plan -->
+                <div class="pricing-plan plan-popular" data-aos="fade-up">
+                    <div class="popular-badge">
+                        <i class="fas fa-crown"></i> Most Popular
+                    </div>
+                    <div class="plan-inner">
+                        <div class="plan-header">
+                            <div class="plan-icon popular-icon">
+                                <i class="fas fa-calendar-week"></i>
+                            </div>
+                            <div class="plan-name">6 Month</div>
+                            <div class="plan-price">
+                                <div class="price-value">
+                                    <span class="currency">₹</span>4,599
+                                </div>
+                                <div class="plan-billing">for 6 months</div>
+                            </div>
+                            <div class="plan-savings">
+                                <span class="save-tag">Save <span class="save-amount">19%</span></span>
+                            </div>
+                        </div>
+                        <div class="divider"></div>
+                        <div class="plan-features">
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Full access to business tools</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Inventory & sales tracking</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Real-time analytics</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>24/7 customer support</span>
+                            </div>
+                        </div>
+                        <div class="plan-cta">
+                            <a href="/subscribe/half-yearly" class="btn btn-primary">
+                                <span>Subscribe 6 Months</span>
+                                <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Annual Plan -->
+                <div class="pricing-plan" data-aos="fade-up" data-aos-delay="100">
+                    <div class="plan-inner">
+                        <div class="plan-header">
+                            <div class="plan-icon">
+                                <i class="fas fa-calendar-alt"></i>
+                            </div>
+                            <div class="plan-name">Annual</div>
+                            <div class="plan-price">
+                                <div class="price-value">
+                                    <span class="currency">₹</span>8,599
+                                </div>
+                                <div class="plan-billing">for 12 months</div>
+                            </div>
+                            <div class="plan-savings">
+                                <span class="save-tag">Save <span class="save-amount">28%</span></span>
+                            </div>
+                        </div>
+                        <div class="divider"></div>
+                        <div class="plan-features">
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Full access to business tools</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Inventory & sales tracking</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>Real-time analytics</span>
+                            </div>
+                            <div class="feature-item">
+                                <span class="feature-icon"><i class="fas fa-check-circle"></i></span>
+                                <span>24/7 customer support</span>
+                            </div>
+                        </div>
+                        <div class="plan-cta">
+                            <a href="/subscribe/yearly" class="btn btn-outline">
+                                <span>Subscribe Annually</span>
+                                <i class="fas fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pricing-footer">
+                <div class="satisfaction-guarantee">
+                    <div class="guarantee-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div class="guarantee-text">
+                        <strong>30-Day Money-Back Guarantee</strong>
+                        <p>Try our service risk-free. If you're not satisfied, we'll issue a full refund.</p>
+                    </div>
+                </div>
+                
+                <div class="pricing-faq">
+                    <h2>Frequently Asked Questions</h2>
+                    <div class="faq-grid">
+                        <div class="faq-item">
+                            <h3><i class="fas fa-question-circle"></i> Can I switch plans?</h3>
+                            <p>Yes, you can upgrade or downgrade your plan at any time. When upgrading, we'll prorate your current subscription.</p>
+                        </div>
+                        <div class="faq-item">
+                            <h3><i class="fas fa-question-circle"></i> How does billing work?</h3>
+                            <p>You'll be billed at the beginning of each billing cycle. We accept all major credit cards and digital payment methods.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Call to Action Section -->
+        <div class="cta-section">
+            <div class="container">
+                <div class="cta-content">
+                    <h2>Ready to Get Started?</h2>
+                    <p>Join thousands of businesses who trust our platform for their daily operations.</p>
+                    <div class="cta-buttons">
+                        <a href="/signup" class="btn btn-cta-primary">Start Free Trial</a>
+                        <a href="/demo" class="btn btn-cta-secondary">Schedule Demo</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                
+                <div class="footer-bottom">
+                    <div class="copyright">
+                        © 2025 BusinessSuite. All rights reserved.
+                    </div>
+                    <div class="social-links">
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-facebook"></i></a>
+                        <a href="#"><i class="fab fa-linkedin"></i></a>
+                        <a href="#"><i class="fab fa-instagram"></i></a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize AOS animation
+            AOS.init({
+                duration: 800,
+                easing: 'ease-out',
+                once: true
+            });
+            
+            // Add hover effect to pricing plans
+            const plans = document.querySelectorAll('.pricing-plan');
+            plans.forEach(plan => {
+                plan.addEventListener('mouseenter', function() {
+                    this.classList.add('hover');
+                });
+                plan.addEventListener('mouseleave', function() {
+                    this.classList.remove('hover');
+                });
+            });
+            
+            // Mobile menu toggle
+            const menuToggle = document.querySelector('.mobile-menu-toggle');
+            const navMenu = document.querySelector('.nav-menu');
+            
+            menuToggle.addEventListener('click', function() {
+                navMenu.classList.toggle('active');
+                this.classList.toggle('active');
+            });
+            
+            // Sticky navbar on scroll
+            const navbar = document.querySelector('.navbar');
+            let scrollPosition = window.scrollY;
+            
+            window.addEventListener('scroll', function() {
+                scrollPosition = window.scrollY;
+                
+                if (scrollPosition > 10) {
+                    navbar.classList.add('navbar-scrolled');
+                } else {
+                    navbar.classList.remove('navbar-scrolled');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

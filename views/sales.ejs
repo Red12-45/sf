@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales Report - Filtered</title>
+  <!-- Font Awesome for Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <!-- Link to the Sales CSS file -->
+  <link rel="stylesheet" href="/css/sales.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <i class="fas fa-chart-line"></i>
+      <span>Sales Report</span>
+    </div>
+    
+    <div class="sidebar-nav">
+      <!-- Dashboard Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Dashboard</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/" class="sidebar-link active">
+              <i class="fas fa-home"></i>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/sales" class="sidebar-link">
+              <i class="fas fa-shopping-cart"></i>
+              <span>Sales Report</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/profit" class="sidebar-link">
+              <i class="fas fa-chart-bar"></i>
+              <span>Profit Report</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/expense" class="sidebar-link">
+              <i class="fas fa-money-bill-wave"></i>
+              <span>Expenses</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Product Management Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Products</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/add-product" class="sidebar-link">
+              <i class="fas fa-plus-circle"></i>
+              <span>Add New Product</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/view-products" class="sidebar-link">
+              <i class="fas fa-boxes"></i>
+              <span>View/Edit Products</span>
+            </a>
+          </li>
+         
+        </ul>
+      </div>
+      
+      <!-- Settings Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Settings</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/profile" class="sidebar-link">
+              <i class="fas fa-user"></i>
+              <span>Profile</span>
+            </a>
+          </li>
+         
+        </ul>
+      </div>
+    </div>
+    
+    <div class="sidebar-footer">
+      <a href="/logout">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </div>
+  
+  <!-- Main Content Area -->
+  <div class="main-content" id="main-content">
+    <!-- Top Navigation -->
+   
+
+    <!-- Main Page Container -->
+    <div class="page-container">
+     
+      <!-- Filter Form Card with Inline Filters -->
+      <div class="formBox filter-form">
+        <h2><i class="fas fa-filter"></i> Filter Sales</h2>
+        <form action="/sales" method="GET" class="form-inline">
+          <div class="form-field">
+            <label for="saleDate">Sale Date:</label>
+            <input type="date" id="saleDate" name="saleDate" value="<%= saleDate %>">
+          </div>
+          <div class="form-field">
+            <label for="month">Month (YYYY-MM):</label>
+            <input type="month" id="month" name="month" value="<%= month %>">
+          </div>
+          <div class="form-field">
+            <label for="status">Sale Status:</label>
+            <select id="status" name="status">
+              <option value="All" <%= status === 'All' ? 'selected' : '' %>>All</option>
+              <option value="Paid Cash" <%= status === 'Paid Cash' ? 'selected' : '' %>>Paid Cash</option>
+              <option value="Paid Online" <%= status === 'Paid Online' ? 'selected' : '' %>>Paid Online</option>
+              <option value="Not Paid" <%= status === 'Not Paid' ? 'selected' : '' %>>Not Paid</option>
+              <option value="Half Cash + Half Online" <%= status === 'Half Cash + Half Online' ? 'selected' : '' %>>Half Cash + Half Online</option>
+              <option value="Half Cash + Not Paid" <%= status === 'Half Cash + Not Paid' ? 'selected' : '' %>>Half Cash + Not Paid</option>
+              <option value="Half Online + Not Paid" <%= status === 'Half Online + Not Paid' ? 'selected' : '' %>>Half Online + Not Paid</option>
+            </select>
+          </div>
+          <button type="submit"><i class="fas fa-search"></i> Filter</button>
+        </form>
+      </div>
+
+      <!-- Sales Report List -->
+      <div class="sales-report">
+        <%
+          // Group sales by saleDate
+          const groupedSales = {};
+          sales.forEach(function(sale) {
+            const date = sale.saleDate;
+            if (!groupedSales[date]) {
+              groupedSales[date] = [];
+            }
+            groupedSales[date].push(sale);
+          });
+          // Group expenses by saleDate
+          const groupedExpenses = {};
+          expenses.forEach(function(expense) {
+            const date = expense.saleDate;
+            if (!groupedExpenses[date]) {
+              groupedExpenses[date] = [];
+            }
+            groupedExpenses[date].push(expense);
+          });
+          // Create a union of all dates from sales and expenses
+          const allDatesSet = new Set();
+          sales.forEach(sale => allDatesSet.add(sale.saleDate));
+          expenses.forEach(expense => allDatesSet.add(expense.saleDate));
+          const allDates = Array.from(allDatesSet).sort();
+        %>
+
+        <% if(allDates.length === 0) { %>
+          <div class="formBox">
+            <p>No data found for the selected filters.</p>
+          </div>
+        <% } else { %>
+          <% allDates.forEach(function(date) { %>
+            <div class="date-group">
+              <!-- Sales Section Header -->
+              <h2>Sales for <%= date %></h2>
+              <div class="time-info-container">
+                <% if (openingTimes[date] && openingTimes[date].openingTime) { %>
+                  <span class="time-info"><i class="far fa-clock"></i> Opening: <%= openingTimes[date].openingTime %></span>
+                <% } %>
+                <% if (openingTimes[date] && openingTimes[date].closingTime) { %>
+                  <span class="time-info"><i class="far fa-clock"></i> Closing: <%= openingTimes[date].closingTime %></span>
+                <% } %>
+              </div>
+              <!-- Sales Table -->
+              <% if(groupedSales[date] && groupedSales[date].length > 0) { %>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Product ID</th>
+                      <th>Product Name</th>
+                      <th>Wholesale Price</th>
+                      <th>Retail Price</th>
+                      <th>Quantity</th>
+                      <th>Total Sale</th>
+                      <th>Profit per Unit</th>
+                      <th>Total Profit</th>
+                      <th>Status</th>
+                      <th>Opening Balance</th>
+                      <th>Extra Info</th>
+                      <th>Sale Date</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% groupedSales[date].forEach(function(sale){ %>
+                      <tr>
+                        <td><%= sale.customProductId ? sale.customProductId : "-" %></td>
+                        <td><%= sale.productName %></td>
+                        <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
+                        <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
+                        <td><%= sale.saleQuantity %></td>
+                        <td>
+                          <% let totalSale = sale.totalSale || (sale.retailPrice * sale.saleQuantity); %>
+                          <%= parseFloat(totalSale).toFixed(2) %>
+                        </td>
+                        <td>
+                          <% let profitPerUnit = sale.profitPerUnit || (sale.retailPrice - sale.wholesalePrice); %>
+                          <%= parseFloat(profitPerUnit).toFixed(2) %>
+                        </td>
+                        <td><%= parseFloat(sale.profit).toFixed(2) %></td>
+                        <td>
+                          <%= sale.status %>
+                          <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
+                            <br>
+                            <small>
+                              <% if(sale.paymentDetail1) { %>Detail1: <%= sale.paymentDetail1 %><% } %>
+                              <% if(sale.paymentDetail2) { %>, Detail2: <%= sale.paymentDetail2 %><% } %>
+                            </small>
+                          <% } %>
+                        </td>
+                        <td><%= sale.openingBalance %></td>
+                        <td><%= sale.extraInfo %></td>
+                        <td><%= sale.saleDate %></td>
+                        <td>
+                          <% 
+                            let saleTime;
+                            if (sale.createdAt && sale.createdAt.toDate) {
+                              saleTime = sale.createdAt.toDate().toLocaleTimeString();
+                            } else {
+                              saleTime = new Date(sale.createdAt).toLocaleTimeString();
+                            }
+                          %>
+                          <%= saleTime %>
+                        </td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              <% } else { %>
+                <p>No sales found for <%= date %>.</p>
+              <% } %>
+
+              <!-- Expenses Section -->
+              <h2>Expenses for <%= date %></h2>
+              <% if(groupedExpenses[date] && groupedExpenses[date].length > 0) { %>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Expense Reason</th>
+                      <th>Expense Cost</th>
+                      <th>Payment Method</th>
+                      <th>Detail 1</th>
+                      <th>Detail 2</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% groupedExpenses[date].forEach(function(expense){ %>
+                      <tr>
+                        <td><%= expense.expenseReason %></td>
+                        <td><%= parseFloat(expense.expenseCost).toFixed(2) %></td>
+                        <td><%= expense.expenseStatus %></td>
+                        <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : "-" %></td>
+                        <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : "-" %></td>
+                        <td>
+                          <% 
+                            let expenseTime;
+                            if (expense.createdAt && expense.createdAt.toDate) {
+                              expenseTime = expense.createdAt.toDate().toLocaleTimeString();
+                            } else {
+                              expenseTime = new Date(expense.createdAt).toLocaleTimeString();
+                            }
+                          %>
+                          <%= expenseTime %>
+                        </td>
+                      </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              <% } else { %>
+                <p>No expenses found for <%= date %>.</p>
+              <% } %>
+
+              <!-- Summary Section -->
+              <div class="summaryBox">
+                <button class="toggleSummary" data-date="<%= date %>">
+                  <i class="fas fa-chart-pie"></i> Show Summary
+                </button>
+                <div class="summaryContent" id="summary_<%= date %>" style="display: none;">
+                  <%
+                    // Calculate daily sales summary values
+                    let dateSales = groupedSales[date] || [];
+                    let totalSalesAmount = 0;
+                    let totalProfitAmount = 0;
+                    let totalCashSales = 0;
+                    let totalOnlineSales = 0;
+                    let totalNotPaidSales = 0;
+                    dateSales.forEach(function(sale) {
+                      let saleAmount = sale.retailPrice * sale.saleQuantity;
+                      totalSalesAmount += saleAmount;
+                      totalProfitAmount += sale.profit;
+                      switch (sale.status) {
+                        case 'Paid Cash':
+                          totalCashSales += saleAmount;
+                          break;
+                        case 'Paid Online':
+                          totalOnlineSales += saleAmount;
+                          break;
+                        case 'Not Paid':
+                          totalNotPaidSales += saleAmount;
+                          break;
+                        case 'Half Cash + Half Online':
+                          if (sale.paymentDetail1) totalCashSales += parseFloat(sale.paymentDetail1);
+                          if (sale.paymentDetail2) totalOnlineSales += parseFloat(sale.paymentDetail2);
+                          break;
+                        case 'Half Cash + Not Paid':
+                          if (sale.paymentDetail1) totalCashSales += parseFloat(sale.paymentDetail1);
+                          if (sale.paymentDetail2) totalNotPaidSales += parseFloat(sale.paymentDetail2);
+                          break;
+                        case 'Half Online + Not Paid':
+                          if (sale.paymentDetail1) totalOnlineSales += parseFloat(sale.paymentDetail1);
+                          if (sale.paymentDetail2) totalNotPaidSales += parseFloat(sale.paymentDetail2);
+                          break;
+                        default:
+                          break;
+                      }
+                    });
+
+                    // Calculate daily expenses from groupedExpenses
+                    let dateExpenses = groupedExpenses[date] || [];
+                    let totalCashExpenses = 0;
+                    let totalOnlineExpenses = 0;
+                    dateExpenses.forEach(function(expense) {
+                      switch(expense.expenseStatus) {
+                        case 'Paid Cash':
+                          totalCashExpenses += parseFloat(expense.expenseCost);
+                          break;
+                        case 'Paid Online':
+                          totalOnlineExpenses += parseFloat(expense.expenseCost);
+                          break;
+                        case 'Half Cash + Half Online':
+                          if (expense.expenseDetail1) totalCashExpenses += parseFloat(expense.expenseDetail1);
+                          if (expense.expenseDetail2) totalOnlineExpenses += parseFloat(expense.expenseDetail2);
+                          break;
+                        case 'Half Cash + Not Paid':
+                          if (expense.expenseDetail1) totalCashExpenses += parseFloat(expense.expenseDetail1);
+                          break;
+                        case 'Half Online + Not Paid':
+                          if (expense.expenseDetail1) totalOnlineExpenses += parseFloat(expense.expenseDetail1);
+                          break;
+                        default:
+                          break;
+                      }
+                    });
+
+                    // Assume final cash for the day is calculated as cash sales minus cash expenses.
+                    let finalCash = totalCashSales - totalCashExpenses;
+                  %>
+                  <h3>Summary for <%= date %></h3>
+                  <p data-label="Total Sales: "><%= totalSalesAmount.toFixed(2) %></p>
+                  <p data-label="Total Profit: "><%= totalProfitAmount.toFixed(2) %></p>
+                  <p data-label="Total Cash Sales: "><%= totalCashSales.toFixed(2) %></p>
+                  <p data-label="Total Online Sales: "><%= totalOnlineSales.toFixed(2) %></p>
+                  <p data-label="Total Not Paid Sales: "><%= totalNotPaidSales.toFixed(2) %></p>
+                  <p data-label="Total Cash Expenses: "><%= totalCashExpenses.toFixed(2) %></p>
+                  <p data-label="Total Online Expenses: "><%= totalOnlineExpenses.toFixed(2) %></p>
+                  <p data-label="Final Cash: "><%= finalCash.toFixed(2) %></p>
+                </div>
+              </div>
+            </div>
+          <% }); %>
+        <% } %>
+      </div><!-- End of Sales Report List -->
+    </div><!-- End of Page Container -->
+  </div><!-- End of Main Content Area -->
+
+  <script>
+    // Sidebar toggle functionality for responsive design
+    document.getElementById('sidebarToggle').addEventListener('click', function() {
+      document.getElementById('sidebar').classList.toggle('active');
+      document.getElementById('main-content').classList.toggle('sidebar-open');
+    });
+
+    // Toggle Summary Section Logic
+    document.querySelectorAll('.toggleSummary').forEach(function(button) {
+      button.addEventListener('click', function() {
+        var date = button.getAttribute('data-date');
+        var summaryContent = document.getElementById('summary_' + date);
+        if (summaryContent.style.display === 'none' || summaryContent.style.display === '') {
+          summaryContent.style.display = 'block';
+          button.innerHTML = '<i class="fas fa-chart-pie"></i> Hide Summary';
+        } else {
+          summaryContent.style.display = 'none';
+          button.innerHTML = '<i class="fas fa-chart-pie"></i> Show Summary';
+        }
+      });
+    });
+  </script>
+    <script src="/js/firebasePersistence.js" type="module"></script>
+</body>
+</html>

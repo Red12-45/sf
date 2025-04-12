@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <title>Manage Route Permissions</title>
+  <link rel="stylesheet" href="/css/permission.css">
+  <!-- You can add your own styles here -->
+</head>
+<body>
+  <h1>Manage Route Permissions</h1>
+  <% if (success) { %>
+    <p style="color: green;">Permissions updated successfully!</p>
+  <% } %>
+  <form action="/permission" method="POST">
+    <fieldset>
+      <legend>Select routes to lock for sub‑users</legend>
+      <% availableRoutes.forEach(function(route) { %>
+        <div>
+          <input type="checkbox" name="lockedRoutes" value="<%= route.path %>" 
+            <%= lockedRoutes.includes(route.path) ? 'checked' : '' %> >
+          <label><%= route.label %> (<%= route.path %>)</label>
+        </div>
+      <% }); %>
+    </fieldset>
+    <button type="submit">Save Permissions</button>
+  </form>
+  <br>
+  <a href="/">Back to Dashboard</a>
+</body>
+</html>

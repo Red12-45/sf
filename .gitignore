@@ -1,0 +1,12 @@
+# Ignore service account credentials
+serviceAccountKey.json
+
+# Ignore environment/config files
+.env
+
+# Node modules (if you're using Node.js)
+node_modules/
+
+# OS & editor clutter
+.DS_Store
+*.log

@@ -1,0 +1,54 @@
+<!-- payment.ejs -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <title>Complete Payment</title>
+  <!-- Include Razorpay Checkout script -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+  <% if (order) { %>
+    <!-- Hidden form to handle payment success callback -->
+    <form id="paymentForm" action="/payment-success" method="POST" style="display:none;">
+      <!-- Pass the subscription plan (Monthly, Half-Yearly, Yearly) -->
+      <input type="hidden" name="plan" value="<%= plan %>">
+    </form>
+
+    <script>
+      // Define the Razorpay options only if an order exists
+      var options = {
+        "key": "<%= process.env.RAZORPAY_KEY_ID %>",
+        "amount": "<%= order.amount %>",
+        "currency": "<%= order.currency %>",
+        "name": "SalesFlow",
+        "description": "<%= plan %> Subscription",
+        "order_id": "<%= order.id %>",
+        "handler": function (response) {
+          // On successful payment, submit the hidden form to our callback route.
+          document.getElementById('paymentForm').submit();
+        },
+        "prefill": {
+          "name": "<%= user.name %>",
+          "email": "<%= user.email %>"
+        },
+        "theme": {
+          "color": "#3399cc"
+        }
+      };
+
+      var rzp1 = new Razorpay(options);
+
+      // Automatically open the Razorpay checkout when the page loads
+      window.onload = function() {
+        rzp1.open();
+      };
+    </script>
+  <% } else { %>
+    <!-- Display a message if no active order exists -->
+    <h2>Your subscription has expired or is not active.</h2>
+    <p>Please <a href="/pricing">choose a subscription plan</a> to continue using SalesFlow.</p>
+  <% } %>
+</body>
+</html>

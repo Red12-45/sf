@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Website User Guide</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Segoe+UI:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/documentations.css">
+</head>
+<body>
+  <header>
+   
+    <nav>
+      <ul>
+        <li><a href="/">Dashboard</a></li>
+        <li><a href="#getting-started">Getting Started</a></li>
+        <li><a href="#using-account">Your Account</a></li>
+        <li><a href="#manage-products">Manage Products</a></li>
+        <li><a href="#sales-expenses">Sales & Expenses</a></li>
+        <li><a href="#subscription">Subscriptions</a></li>
+        <li><a href="#profile">Your Profile</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Getting Started Section -->
+    <section id="getting-started">
+      <h2>Getting Started</h2>
+      <p>Welcome to your business management platform! This guide will help you set up your account and start using the website easily.</p>
+      <ol>
+        <li>
+          <strong>Registration:</strong>
+          <p>If you are new, click on the "Register" button (found on the homepage or login page). You will need to provide your name, email, phone number, address, and a password. Remember your password as you'll use it to log in.</p>
+        </li>
+        <li>
+          <strong>Logging In:</strong>
+          <p>Once registered, go to the "Login" page, enter your email (or phone) and password, then click "Login". You'll be directed to your dashboard.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Your Account Section -->
+    <section id="using-account">
+      <h2>Your Account</h2>
+      <p>
+        After logging in, you'll see your dashboard. Here you can access various features:
+      </p>
+      <ul>
+        <li><strong>Dashboard:</strong> This displays important summaries like today's sales, expenses, and current opening balance.</li>
+        <li><strong>Navigation Menu:</strong> Use the top or side menu (depending on your screen size) to jump to key areas such as managing products, recording sales, or checking profit details.</li>
+        <li><strong>Logout:</strong> For security, click on "Logout" when you finish your work.</li>
+      </ul>
+    </section>
+
+    <!-- Manage Products Section -->
+    <section id="manage-products">
+      <h2>Manage Products</h2>
+      <p>
+        This section lets you add new products and manage existing ones.
+      </p>
+      <ol>
+        <li>
+          <strong>Adding a New Product:</strong>
+          <p>Click on "Add Product". Fill in details like product name, prices (wholesale and retail), quantity, and category. If you are adding a new type of product, select or type in a new category.</p>
+        </li>
+        <li>
+          <strong>Viewing Products:</strong>
+          <p>To see a list of your products, click "View Products". You can filter by category or set a stock threshold to check for products that are running low.</p>
+        </li>
+        <li>
+          <strong>Edit or Delete:</strong>
+          <p>When you select a specific product, you can update its details or remove any stock batches that are completely used up.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Sales & Expenses Section -->
+    <section id="sales-expenses">
+      <h2>Sales & Expenses</h2>
+      <p>
+        The website helps you keep track of your sales and expenses easily.
+      </p>
+      <ol>
+        <li>
+          <strong>Recording Sales:</strong>
+          <p>Click "New Sale" and select the product you are selling. Enter the quantity and confirm the sale price. The system automatically reduces the product stock and calculates your profit.</p>
+        </li>
+        <li>
+          <strong>Recording Expenses:</strong>
+          <p>If you have any business expenses, navigate to the "Expenses" section. Fill in the reason and cost. These expenses are recorded and deducted from your profit automatically.</p>
+        </li>
+        <li>
+          <strong>Reports:</strong>
+          <p>Under the "Sales" and "Profit" sections, you can view detailed reports with filters for dates and statuses so you can track your business performance.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Subscription & Payment Section -->
+    <section id="subscription">
+      <h2>Subscriptions</h2>
+      <p>
+        To continue using the platform, you need an active subscription.
+      </p>
+      <ol>
+        <li>
+          <strong>Subscription Plans:</strong>
+          <p>There are several plans available - Monthly, Half-Yearly, and Yearly. Click on "Pricing" to see the options along with the cost details.</p>
+        </li>
+        <li>
+          <strong>Making a Payment:</strong>
+          <p>Select your preferred plan, and you will be directed to a secure payment page. The site uses a trusted payment partner, so your transaction is safe and fast.</p>
+        </li>
+        <li>
+          <strong>Renewals:</strong>
+          <p>Your subscription expiry date is shown on your dashboard. When it nears, simply follow the subscription process again to keep using all features without interruption.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Your Profile Section -->
+    <section id="profile">
+      <h2>Your Profile</h2>
+      <p>
+        Click on "Profile" to view or update your details such as name, email, and subscription expiry date. Keeping your details current helps us serve you better.
+      </p>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq">
+      <h2>Frequently Asked Questions (FAQ)</h2>
+      <ul>
+        <li>
+          <strong>How do I reset my password?</strong>
+          <p>If you forget your password, please contact support or use the password reset feature (if available) from the login page.</p>
+        </li>
+        <li>
+          <strong>How can I check my current stock levels?</strong>
+          <p>The "View Products" page shows all your products and current stock. Use the filters to check low-stock items.</p>
+        </li>
+        <li>
+          <strong>How is my profit calculated?</strong>
+          <p>The system calculates profit using the sale price minus the cost price (applied on a first‑in, first‑out basis). Check the "Profit" report for details.</p>
+        </li>
+        <li>
+          <strong>How do subscriptions work?</strong>
+          <p>Subscriptions grant you access to all features of the website. When you subscribe or renew, the expiry date gets updated accordingly.</p>
+        </li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; <%= new Date().getFullYear() %> Your Business Platform. All rights reserved.</p>
+  </footer>
+</body>
+</html>

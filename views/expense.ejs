@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Expense</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <!-- Font Awesome for Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <!-- Link to the custom CSS file -->
+  <link rel="stylesheet" href="/css/expenses.css">
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <i class="fas fa-chart-line"></i>
+      <span>Expense Report</span>
+    </div>
+    <div class="sidebar-nav">
+      <!-- Dashboard Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Dashboard</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/" class="sidebar-link">
+              <i class="fas fa-home"></i>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/sales" class="sidebar-link">
+              <i class="fas fa-shopping-cart"></i>
+              <span>Sales Report</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/profit" class="sidebar-link">
+              <i class="fas fa-chart-bar"></i>
+              <span>Profit Report</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/expense" class="sidebar-link active">
+              <i class="fas fa-money-bill-wave"></i>
+              <span>Expenses</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Products Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Products</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/add-product" class="sidebar-link">
+              <i class="fas fa-plus-circle"></i>
+              <span>Add New Product</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/view-products" class="sidebar-link">
+              <i class="fas fa-boxes"></i>
+              <span>View/Edit Products</span>
+            </a>
+          </li>
+    
+        </ul>
+      </div>
+      
+      <!-- Settings Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Settings</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/profile" class="sidebar-link">
+              <i class="fas fa-user"></i>
+              <span>Profile</span>
+            </a>
+          </li>
+        
+        </ul>
+      </div>
+    </div>
+    
+    <div class="sidebar-footer">
+      <a href="/logout">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </div>
+  
+  <!-- Main Content Area -->
+  <div class="main-content" id="main-content">
+    <div class="page-container">
+      <!-- Filter Form Card -->
+      <div class="formBox">
+        <form action="/expense" method="GET" id="filterForm">
+          <div>
+            <label for="month">Select Month:</label>
+            <input type="month" name="month" id="month" value="<%= month %>" required>
+            <input type="submit" value="Filter">
+          </div>
+        </form>
+      </div>
+      
+      <!-- Expense Submission Form Card -->
+      <div class="formBox">
+        <form action="/expense" method="POST" id="expenseForm">
+          <input type="hidden" name="saleDate" value="<%= month %>-01">
+          <input type="hidden" name="redirectTo" value="expense">
+          <div class="expense-row-inline">
+            <div id="expenseItems">
+              <div class="expense-row">
+                <input type="text" name="expenseReason" placeholder="Expense Reason" class="expense-field" required>
+                <input type="number" step="0.01" name="expenseCost" placeholder="Expense Amount" class="expense-field" required>
+                <input type="hidden" name="expenseStatus" value="Paid Cash">
+                <input type="hidden" name="expenseDetail1" value="">
+                <input type="hidden" name="expenseDetail2" value="">
+                <button type="button" class="removeExpense" style="display: none;">Remove</button>
+              </div>
+            </div>
+            <div class="button-group">
+              <button type="button" id="addExpense">Add More Expense</button>
+              <input type="submit" value="Submit Expenses">
+            </div>
+          </div>
+        </form>
+      </div>
+      
+      <!-- Display Expense Records for the Selected Month -->
+      <% if (groupedExpenses && Object.keys(groupedExpenses).length > 0) { %>
+        <h2>Expenses for <%= month %></h2>
+        <% let dates = Object.keys(groupedExpenses).sort(); %>
+        <% dates.forEach(function(expenseDate) { %>
+          <h3>Expenses for <%= expenseDate %></h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Expense Reason</th>
+                <th>Expense Amount</th>
+                <th>Expense Date</th>
+                <th>Expense Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% groupedExpenses[expenseDate].forEach(function(expense) { 
+                   let createdAt;
+                   if (expense.createdAt && typeof expense.createdAt.toDate === 'function') {
+                     createdAt = expense.createdAt.toDate();
+                   } else {
+                     createdAt = new Date(expense.createdAt);
+                   }
+                   let dateString = createdAt.toISOString().substring(0, 10);
+                   let timeString = createdAt.toLocaleTimeString();
+              %>
+                <tr>
+                  <td><%= expense.expenseReason %></td>
+                  <td><%= parseFloat(expense.expenseCost).toFixed(2) %></td>
+                  <td><%= dateString %></td>
+                  <td><%= timeString %></td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+          <br>
+        <% }); %>
+        <h3>Total Expense for Month: <%= totalExpense.toFixed(2) %></h3>
+      <% } else { %>
+        <p>No expenses found for this month.</p>
+      <% } %>
+    </div>
+  </div>
+  
+  <script>
+    // Sidebar toggle functionality for responsive design
+    if (document.getElementById('sidebarToggle')) {
+      document.getElementById('sidebarToggle').addEventListener('click', function() {
+        document.getElementById('sidebar').classList.toggle('active');
+        document.getElementById('main-content').classList.toggle('sidebar-open');
+      });
+    }
+    
+    // Add expense row dynamically
+    document.getElementById('addExpense').addEventListener('click', function() {
+      var expenseItems = document.getElementById('expenseItems');
+      var newRow = document.createElement('div');
+      newRow.className = 'expense-row';
+      newRow.innerHTML = 
+        '<input type="text" name="expenseReason" placeholder="Expense Reason" class="expense-field" required>' +
+        '<input type="number" step="0.01" name="expenseCost" placeholder="Expense Amount" class="expense-field" required>' +
+        '<input type="hidden" name="expenseStatus" value="Paid Cash">' +
+        '<input type="hidden" name="expenseDetail1" value="">' +
+        '<input type="hidden" name="expenseDetail2" value="">' +
+        '<button type="button" class="removeExpense">Remove</button>';
+      expenseItems.appendChild(newRow);
+      updateRemoveButtonVisibility();
+    });
+
+    // Function to update remove button visibility (hide the remove button on the first expense row)
+    function updateRemoveButtonVisibility() {
+      var expenseRows = document.querySelectorAll('#expenseItems .expense-row');
+      expenseRows.forEach(function(row, index) {
+        var removeBtn = row.querySelector('.removeExpense');
+        if (index === 0) {
+          removeBtn.style.display = 'none';
+        } else {
+          removeBtn.style.display = 'inline-block';
+        }
+      });
+    }
+
+    // Remove expense row dynamically
+    document.getElementById('expenseItems').addEventListener('click', function(e) {
+      if(e.target && e.target.classList.contains('removeExpense')) {
+        e.target.parentElement.remove();
+        updateRemoveButtonVisibility();
+      }
+    });
+  </script>
+    <script src="/js/firebasePersistence.js" type="module"></script>
+</body>
+</html>

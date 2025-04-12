@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+  <title>SalesFlow Dashboard</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/index.css">
+  
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-brand">
+      <i class="fas fa-chart-line"></i>
+      <span>Dashboard</span>
+    </div>
+    <div class="nav-links">
+      <a href="/add-product"><i class="fas fa-plus-circle"></i> Add Product</a>
+      <a href="/view-products"><i class="fas fa-boxes"></i> View Porducts</a>
+      <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
+      <a href="/expense"><i class="fas fa-receipt"></i> Expenses</a>
+      <% if (user && user.isMaster) { %>
+        <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
+        <a href="/permission"><i class="fas fa-lock"></i> Manage Permissions</a>
+      <% } %>
+      <div class="subscription-info">
+        <% if (user.subscriptionExpiry) { %>
+          <span>
+            <%= subscriptionRemaining %> day<%= subscriptionRemaining == 1 ? '' : 's' %> left
+          </span>
+        <% } else { %>
+          <span>No active subscription</span>
+        <% } %>
+      </div>
+      <a href="/profile" class="profile"><i class="fas fa-user"></i> Profile</a>
+      <a href="/documentation" class="profile"><i class="fas fa-file-alt"></i> Guide</a>
+      <a href="/customerservice" class="profile"><i class="fas fa-headset"></i></a>
+      <a href="/logout" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="page-container">
+    <!-- LEFT SIDEBAR (Forms) -->
+    <div class="forms-sidebar">
+      <button id="toggleSidebar" class="sidebar-toggle-btn">
+        <i class="fas fa-angle-double-left"></i>
+      </button>
+
+      <!-- Sales Entry Form -->
+      <div class="formBox">
+        <h1><i class="fas fa-shopping-bag"></i> Sale Transaction</h1>
+        <form action="/sale" method="POST">
+          <!-- Category -->
+          <div>
+            <label for="categorySelect">Category:</label>
+            <select id="categorySelect">
+              <option value="">-- Select a category --</option>
+              <% categories.forEach(function(cat){ %>
+                <option value="<%= cat %>"><%= cat %></option>
+              <% }); %>
+            </select>
+          </div>
+          <!-- Product -->
+          <div>
+            <label for="productSelect">Product:</label>
+            <select id="productSelect" name="productId" required>
+              <option value="">-- Select a product --</option>
+              <% products.forEach(function(product){ %>
+                <option value="<%= product.id %>" 
+                  data-retail="<%= product.retailPrice %>" 
+                  data-category="<%= product.category %>"
+                  data-batches='<%= JSON.stringify(product.batches || []) %>'>
+                  <%= product.productName %> (Stock: <%= product.quantity %>)
+                </option>
+              <% }); %>
+            </select>
+          </div>
+          <!-- Product ID (Optional) -->
+          <div>
+            <label for="productIdSelect">Product ID:</label>
+            <select id="productIdSelect" name="customProductId">
+              <option value="">Product ID (Optional)</option>
+              <% products.forEach(function(product) { %>
+                <% if (product.productId && product.productId.trim() !== "" && product.productId.trim() !== "-") { %>
+                  <option value="<%= product.id %>">
+                    <%= product.productId %> (Stock: <%= product.quantity %>)
+                  </option>
+                <% } %>
+              <% }); %>
+            </select>
+          </div>
+          <!-- Retail Price Entry -->
+          <div>
+            <label for="retailPrice">Retail Price:</label>
+            <input type="number" step="0.01" id="retailPrice" name="retailPrice" placeholder="Enter sale price" required>
+          </div>
+          <!-- Sale Quantity -->
+          <div>
+            <label for="saleQuantity">Quantity:</label>
+            <input type="number" id="saleQuantity" name="saleQuantity" required>
+          </div>
+          <!-- Computed Fields -->
+          <div>
+            <label for="wholesalePrice">Wholesale Price:</label>
+            <input type="text" id="wholesalePrice" name="wholesalePrice" placeholder="Computed wholesale price" readonly>
+          </div>
+          <div>
+            <label for="profitPerUnit">Profit/Unit:</label>
+            <input type="text" id="profitPerUnit" name="profitPerUnit" placeholder="Computed profit per unit" readonly>
+          </div>
+          <div>
+            <label for="totalProfit">Total Profit:</label>
+            <input type="text" id="totalProfit" name="totalProfit" placeholder="Computed total profit" readonly>
+          </div>
+          <!-- Sale Date -->
+          <div>
+            <label for="saleDate">Sale Date:</label>
+            <input type="date" id="saleDate" name="saleDate" value="<%= saleDate %>" required>
+          </div>
+          <!-- Payment Status -->
+          <div>
+            <label for="status">Payment Status:</label>
+            <select id="status" name="status" required>
+              <option value="Paid Cash">Paid Cash</option>
+              <option value="Paid Online">Paid Online</option>
+              <option value="Not Paid">Not Paid</option>
+              <option value="Half Cash + Half Online">Half Cash + Half Online</option>
+              <option value="Half Cash + Not Paid">Half Cash + Not Paid</option>
+              <option value="Half Online + Not Paid">Half Online + Not Paid</option>
+            </select>
+          </div>
+          <!-- Combined Payment Details -->
+          <div id="combinedPaymentFields">
+            <div>
+              <label id="paymentLabel1" for="paymentDetail1">Payment Detail 1:</label>
+              <input type="number" step="0.01" id="paymentDetail1" name="paymentDetail1" placeholder="Amount">
+            </div>
+            <div>
+              <label id="paymentLabel2" for="paymentDetail2">Payment Detail 2:</label>
+              <input type="number" step="0.01" id="paymentDetail2" name="paymentDetail2" placeholder="Amount">
+            </div>
+          </div>
+          <!-- Extra Info -->
+          <div>
+            <label for="extraInfo">Extra Info:</label>
+            <textarea id="extraInfo" name="extraInfo" rows="3" cols="30"></textarea>
+          </div>
+          <button type="submit"><i class="fas fa-check-circle"></i> Process Sale</button>
+        </form>
+      </div>
+
+      <!-- Expense Entry Form -->
+      <div class="formBox">
+        <h1><i class="fas fa-file-invoice-dollar"></i> Expense Transaction</h1>
+        <form action="/expense" method="POST">
+          <input type="hidden" name="saleDate" value="<%= saleDate %>">
+          <div>
+            <label for="expenseReason">Reason:</label>
+            <input type="text" id="expenseReason" name="expenseReason" placeholder="Reason for expense" required>
+          </div>
+          <div>
+            <label for="expenseCost">Cost:</label>
+            <input type="number" step="0.01" id="expenseCost" name="expenseCost" placeholder="Cost" required>
+          </div>
+          <div>
+            <label for="expenseStatus">Payment Method:</label>
+            <select id="expenseStatus" name="expenseStatus" required>
+              <option value="Paid Cash">Paid Cash</option>
+              <option value="Paid Online">Paid Online</option>
+              <option value="Not Paid">Not Paid</option>
+              <option value="Half Cash + Half Online">Half Cash + Half Online</option>
+              <option value="Half Cash + Not Paid">Half Cash + Not Paid</option>
+              <option value="Half Online + Not Paid">Half Online + Not Paid</option>
+            </select>
+          </div>
+          <div id="expenseExtraFields">
+            <div>
+              <label id="expenseLabel1" for="expenseDetail1">Detail 1:</label>
+              <input type="number" step="0.01" id="expenseDetail1" name="expenseDetail1" placeholder="Amount">
+            </div>
+            <div>
+              <label id="expenseLabel2" for="expenseDetail2">Detail 2:</label>
+              <input type="number" step="0.01" id="expenseDetail2" name="expenseDetail2" placeholder="Amount">
+            </div>
+          </div>
+          <button type="submit"><i class="fas fa-plus-circle"></i> Add Expense</button>
+        </form>
+      </div>
+
+      <!-- Opening Balance Form -->
+      <div class="formBox">
+        <h1><i class="fas fa-wallet"></i> Opening Balance</h1>
+        <form action="/update-opening-balance" method="POST">
+          <div>
+            <label for="openingBalance">Opening Balance:</label>
+            <input type="number" step="0.01" id="openingBalance" name="openingBalance" value="<%= openingBalance %>" required>
+          </div>
+          <div>
+            <label for="openingTime">Opening Time:</label>
+            <input type="time" id="openingTime" name="openingTime" value="<%= openingTime %>">
+          </div>
+          <div>
+            <label for="closingTime">Closing Time:</label>
+            <input type="time" id="closingTime" name="closingTime" value="<%= closingTime %>">
+          </div>
+          <input type="hidden" name="saleDate" value="<%= saleDate %>">
+          <button type="submit"><i class="fas fa-sync-alt"></i> Update Balance</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- RIGHT CONTENT AREA (Tables and Summary) -->
+    <div class="tables-content">
+      <!-- Sales Table -->
+      <div>
+        <h2>
+          <span>Sales for <%= saleDate %></span>
+          <span class="date-info">
+            <% if (openingTime) { %>
+              <i class="far fa-clock"></i> Open: <%= openingTime %>
+            <% } %>
+            <% if (closingTime) { %>
+              <i class="fas fa-clock"></i> Close: <%= closingTime %>
+            <% } %>
+          </span>
+        </h2>
+        <% if (sales.length === 0) { %>
+          <div class="no-data">
+            <i class="far fa-chart-bar"></i>
+            <p>No sales recorded for this date.</p>
+          </div>
+        <% } else { %>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Product</th>
+                <th>FIFO Avg. Wholesale</th>
+                <th>Sale Price</th>
+                <th>Qty</th>
+                <th>Total Sale</th>
+                <th>Profit/Unit</th>
+                <th>Total Profit</th>
+                <th>Status</th>
+                <th>Info</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% sales.forEach(function(sale){ %>
+                <tr>
+                  <td><%= sale.customProductId ? sale.customProductId : "-" %></td>
+                  <td><%= sale.productName %></td>
+                  <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
+                  <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
+                  <td><%= sale.saleQuantity %></td>
+                  <td>
+                    <% let totalSale = sale.totalSale || (sale.retailPrice * sale.saleQuantity); %>
+                    <%= parseFloat(totalSale).toFixed(2) %>
+                  </td>
+                  <td>
+                    <% let profitPerUnit = sale.profitPerUnit || (sale.retailPrice - sale.wholesalePrice); %>
+                    <%= parseFloat(profitPerUnit).toFixed(2) %>
+                  </td>
+                  <td><%= parseFloat(sale.profit).toFixed(2) %></td>
+                  <td>
+                    <% 
+                      let statusClass = "";
+                      if (sale.status === "Paid Cash") statusClass = "status-cash";
+                      else if (sale.status === "Paid Online") statusClass = "status-online";
+                      else if (sale.status === "Not Paid") statusClass = "status-notpaid";
+                      else statusClass = "status-mixed";
+                    %>
+                    <span class="status-pill <%= statusClass %>"><%= sale.status %></span>
+                    <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
+                      <br>
+                      <small>
+                        <% if(sale.paymentDetail1) { %>Detail1: <%= sale.paymentDetail1 %><% } %>
+                        <% if(sale.paymentDetail2) { %>, Detail2: <%= sale.paymentDetail2 %><% } %>
+                      </small>
+                    <% } %>
+                  </td>
+                  <td>
+                    <%= sale.extraInfo ? sale.extraInfo : "-" %>
+                  </td>
+                  <td>
+                    <% 
+                      let saleTime;
+                      if (sale.createdAt && sale.createdAt.toDate) {
+                        saleTime = sale.createdAt.toDate().toLocaleTimeString();
+                      } else {
+                        saleTime = new Date(sale.createdAt).toLocaleTimeString();
+                      }
+                    %>
+                    <%= saleTime %>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+
+      <!-- Expenses Table -->
+      <div>
+        <h2>Expenses for <%= saleDate %></h2>
+        <% if (expenses && expenses.length > 0) { %>
+          <table>
+            <thead>
+              <tr>
+                <th>Expense Reason</th>
+                <th>Expense Cost</th>
+                <th>Payment Method</th>
+                <th>Detail 1</th>
+                <th>Detail 2</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% expenses.forEach(function(expense){ %>
+                <tr>
+                  <td><%= expense.expenseReason %></td>
+                  <td><%= expense.expenseCost.toFixed(2) %></td>
+                  <td><%= expense.expenseStatus %></td>
+                  <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : "-" %></td>
+                  <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : "-" %></td>
+                  <td>
+                    <% 
+                      let expenseTime;
+                      if (expense.createdAt && expense.createdAt.toDate) {
+                        expenseTime = expense.createdAt.toDate().toLocaleTimeString();
+                      } else {
+                        expenseTime = new Date(expense.createdAt).toLocaleTimeString();
+                      }
+                    %>
+                    <%= expenseTime %>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        <% } else { %>
+          <div class="no-data">
+            <i class="fas fa-file-invoice-dollar"></i>
+            <p>No expenses recorded for this date.</p>
+          </div>
+        <% } %>
+      </div>
+
+      <!-- Summary Section -->
+      <div id="summarySection" class="formBox">
+        <h2>Summary for <%= saleDate %></h2>
+        <button id="toggleSummary">Show Daily Summary</button>
+        <div id="summaryContent" style="display: none;">
+          <p data-label="Total Sales: "><%= totalSales.toFixed(2) %></p>
+          <p data-label="Total Profit: "><%= totalProfit.toFixed(2) %></p>
+          <p data-label="Total Cash Sales: "><%= totalCashSales.toFixed(2) %></p>
+          <p data-label="Total Online Sales: "><%= totalOnlineSales.toFixed(2) %></p>
+          <p data-label="Total Not Paid Sales: "><%= totalNotPaidSales.toFixed(2) %></p>
+          <p data-label="Total Cash Expenses: "><%= totalCashExpenses.toFixed(2) %></p>
+          <p data-label="Total Online Expenses: "><%= totalOnlineExpenses.toFixed(2) %></p>
+          <p data-label="Final Cash: "><%= finalCash.toFixed(2) %></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Client-Side Script -->
+  <script>
+    // References to DOM elements.
+    const categorySelect = document.getElementById('categorySelect');
+    const productSelect = document.getElementById('productSelect');
+    const productIdSelect = document.getElementById('productIdSelect');
+    const retailInput = document.getElementById('retailPrice');
+    const saleQuantityInput = document.getElementById('saleQuantity');
+    const statusSelect = document.getElementById('status');
+    const combinedPaymentFields = document.getElementById('combinedPaymentFields');
+    const paymentLabel1 = document.getElementById('paymentLabel1');
+    const paymentLabel2 = document.getElementById('paymentLabel2');
+
+    // Filter product dropdown by selected category.
+    categorySelect.addEventListener('change', function() {
+      const selectedCategory = categorySelect.value;
+      for (let i = 0; i < productSelect.options.length; i++) {
+        const option = productSelect.options[i];
+        if (option.value === "") continue;
+        option.style.display = (!selectedCategory || option.getAttribute('data-category') === selectedCategory) ? "" : "none";
+      }
+      productSelect.selectedIndex = 0;
+      productIdSelect.value = "";
+      updateSaleCalculations();
+    });
+
+    productSelect.addEventListener('change', function() {
+      productIdSelect.value = "";
+      updateSaleCalculations();
+    });
+
+    // Handle Product ID selection.
+    productIdSelect.addEventListener('change', function() {
+      const customSelection = productIdSelect.value;
+      if (customSelection) {
+        productSelect.value = customSelection;
+        productSelect.dispatchEvent(new Event('change'));
+      }
+    });
+
+    // Payment status handling.
+    statusSelect.addEventListener('change', function() {
+      const status = statusSelect.value;
+      if (status === "Half Cash + Half Online") {
+        combinedPaymentFields.style.display = "block";
+        paymentLabel1.textContent = "Cash Amount:";
+        paymentLabel2.textContent = "Online Amount:";
+      } else if (status === "Half Cash + Not Paid") {
+        combinedPaymentFields.style.display = "block";
+        paymentLabel1.textContent = "Cash Amount:";
+        paymentLabel2.textContent = "Not Paid Amount:";
+      } else if (status === "Half Online + Not Paid") {
+        combinedPaymentFields.style.display = "block";
+        paymentLabel1.textContent = "Online Amount:";
+        paymentLabel2.textContent = "Not Paid Amount:";
+      } else {
+        combinedPaymentFields.style.display = "none";
+        document.getElementById('paymentDetail1').value = "";
+        document.getElementById('paymentDetail2').value = "";
+      }
+    });
+    statusSelect.dispatchEvent(new Event('change'));
+
+    // Toggle summary section.
+    const toggleSummaryButton = document.getElementById('toggleSummary');
+    const summaryContent = document.getElementById('summaryContent');
+    toggleSummaryButton.addEventListener('click', function() {
+      if (summaryContent.style.display === 'none') {
+        summaryContent.style.display = 'block';
+        toggleSummaryButton.textContent = 'Hide Summary';
+      } else {
+        summaryContent.style.display = 'none';
+        toggleSummaryButton.textContent = 'Show Daily Summary';
+      }
+    });
+
+    // Toggle sidebar.
+    const toggleSidebarButton = document.getElementById('toggleSidebar');
+    const formsSidebar = document.querySelector('.forms-sidebar');
+    toggleSidebarButton.addEventListener('click', function() {
+      formsSidebar.classList.toggle('collapsed');
+      toggleSidebarButton.innerHTML = formsSidebar.classList.contains('collapsed')
+        ? '<i class="fas fa-angle-double-right"></i>'
+        : '<i class="fas fa-angle-double-left"></i>';
+    });
+
+    // Helper function to compute FIFO weighted averages over all batches.
+    function computeFIFO(batches, saleQty) {
+      let remaining = saleQty;
+      let totalWholesaleCost = 0;
+      let totalRetailTotal = 0;
+      let totalUnitsUsed = 0;
+      for (let i = 0; i < batches.length && remaining > 0; i++) {
+        const batch = batches[i];
+        const units = Math.min(batch.qty, remaining);
+        totalWholesaleCost += batch.wholesale * units;
+        totalRetailTotal += batch.retail * units;
+        totalUnitsUsed += units;
+        remaining -= units;
+      }
+      if (totalUnitsUsed === 0) return { wholesale: 0, retail: 0 };
+      return { wholesale: totalWholesaleCost / totalUnitsUsed, retail: totalRetailTotal / totalUnitsUsed };
+    }
+
+    // Updated FIFO Calculation using batches array.
+    function updateSaleCalculations() {
+      const selectedOption = productSelect.options[productSelect.selectedIndex];
+      if (!selectedOption || selectedOption.value === "") {
+        document.getElementById('wholesalePrice').value = "";
+        document.getElementById('profitPerUnit').value = "";
+        document.getElementById('totalProfit').value = "";
+        retailInput.placeholder = "";
+        return;
+      }
+      
+      // Parse batches array from data-batches attribute.
+      let batches = [];
+      try {
+        batches = JSON.parse(selectedOption.getAttribute('data-batches'));
+      } catch (e) {
+        batches = [];
+      }
+      
+      const saleQty = parseInt(saleQuantityInput.value) || 0;
+      
+      // If no sale quantity entered, clear computed values.
+      if (saleQty === 0) {
+        document.getElementById('wholesalePrice').value = "";
+        document.getElementById('profitPerUnit').value = "";
+        document.getElementById('totalProfit').value = "";
+        retailInput.placeholder = "";
+        return;
+      }
+      
+      // Compute FIFO averages.
+      const computed = computeFIFO(batches, saleQty);
+      const computedWholesale = computed.wholesale;
+      const computedRetail = computed.retail;
+      
+      // Set retail input placeholder to computed retail.
+      retailInput.placeholder = computedRetail.toFixed(2);
+      
+      // Use user's retail input if provided; otherwise, use computed retail.
+      const userRetail = parseFloat(retailInput.value);
+      const effectiveRetail = (!isNaN(userRetail) && userRetail > 0) ? userRetail : computedRetail;
+      
+      const profitPerUnit = effectiveRetail - computedWholesale;
+      const totalProfit = profitPerUnit * saleQty;
+      
+      document.getElementById('wholesalePrice').value = computedWholesale.toFixed(2);
+      document.getElementById('profitPerUnit').value = profitPerUnit.toFixed(2);
+      document.getElementById('totalProfit').value = totalProfit.toFixed(2);
+    }
+
+    // Attach updateSaleCalculations to input events.
+    retailInput.addEventListener('input', updateSaleCalculations);
+    saleQuantityInput.addEventListener('input', updateSaleCalculations);
+    productSelect.addEventListener('change', updateSaleCalculations);
+  </script>
+  <script src="/js/firebasePersistence.js" type="module"></script>
+
+</body>
+</html>

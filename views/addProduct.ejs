@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <title>Add New Product/Stock Batch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Using Inter font to match styling -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/addProduct.css">
+</head>
+<body>
+  <div class="page-wrapper">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">Manage Inventory</div>
+        
+      </div>
+      
+      <nav>
+        <div class="sidebar-section">
+          <div class="section-title">Navigation</div>
+          <ul>
+            <li>
+              <a href="/">
+                <span class="nav-icon">🏠</span>
+                Dashboard
+              </a>
+            </li>
+            <li>
+              <a href="/expense" class="active">
+                <span class="nav-icon">📜</span>
+                expenses
+              </a>
+            </li>
+            <li>
+              <a href="/view-products">
+                <span class="nav-icon">📋</span>
+                View Products
+              </a>
+            </li>
+            <li>
+              <a href="/sales">
+                <span class="nav-icon">🏷️</span>
+                Sales
+              </a>
+            </li>
+          </ul>
+        </div>
+        
+        <div class="sidebar-section">
+          <div class="section-title">Management</div>
+          <ul>
+            <li>
+              <a href="/profile">
+                <span class="nav-icon">💼</span>
+                Profile
+              </a>
+            </li>
+            <li>
+              <a href="/settings">
+                <span class="nav-icon">↪</span>
+                Logout
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+      
+  
+      
+      <div class="sidebar-footer">
+        &copy; 2025 SalesFlow
+      </div>
+    </aside>
+
+    <!-- Main Content Section -->
+    <main class="content">
+      <header class="page-header">
+        <h1>Add New Product / Stock Batch</h1>
+      </header>
+
+      <% if (success) { %>
+        <div class="success-message">Product added/updated successfully!</div>
+      <% } %>
+    
+      <section class="form-container">
+        <form action="/add-product" method="POST">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="productName">Product Name:</label>
+              <input type="text" id="productName" name="productName" required placeholder="Enter product name">
+            </div>
+            <div class="form-group">
+              <label for="wholesalePrice">Purchase Price:</label>
+              <input type="number" step="0.01" id="wholesalePrice" name="wholesalePrice" required placeholder="0.00">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="retailPrice">Retail Price:</label>
+              <input type="number" step="0.01" id="retailPrice" name="retailPrice" required placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label for="quantity">Quantity Received:</label>
+              <input type="number" id="quantity" name="quantity" required placeholder="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="productId">Product ID (if the item has id):</label>
+              <input type="text" id="productId" name="productId" placeholder="Enter product ID">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="selectedCategory">Select Category:</label>
+              <select id="selectedCategory" name="selectedCategory">
+                <option value="">-- None --</option>
+                <% categories.forEach(function(cat) { %>
+                  <option value="<%= cat %>"><%= cat %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="newCategory">Or New Category:</label>
+              <input type="text" id="newCategory" name="newCategory" placeholder="Enter new category">
+            </div>
+          </div>
+          <button type="submit">Add Product / Stock</button>
+        </form>
+      </section>
+    </main>
+  </div>
+  
+</body>
+</html>

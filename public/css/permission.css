@@ -1,0 +1,209 @@
+/* Modern CSS Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* Variables */
+  :root {
+    --primary: #4f46e5;
+    --primary-light: #6366f1;
+    --primary-dark: #4338ca;
+    --success: #10b981;
+    --bg-color: #f9fafb;
+    --text-color: #1f2937;
+    --border-color: #e5e7eb;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --radius: 8px;
+    --transition: all 0.3s ease;
+  }
+  
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+    margin-bottom: 1.5rem;
+    text-align: center;
+    position: relative;
+    padding-bottom: 0.75rem;
+  }
+  
+  h1::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background: linear-gradient(to right, var(--primary-light), var(--primary-dark));
+    border-radius: 2px;
+  }
+  
+  form {
+    background-color: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  fieldset {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  legend {
+    font-weight: 600;
+    padding: 0 0.75rem;
+    color: var(--primary);
+  }
+  
+  fieldset div {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  fieldset div:last-child {
+    border-bottom: none;
+  }
+  
+  input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 1.25rem;
+    width: 1.25rem;
+    background-color: #fff;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 0.75rem;
+    transition: var(--transition);
+  }
+  
+  input[type="checkbox"]:checked {
+    background-color: var(--primary);
+    border-color: var(--primary);
+  }
+  
+  input[type="checkbox"]:checked::before {
+    content: '✓';
+    color: white;
+    font-size: 0.75rem;
+  }
+  
+  input[type="checkbox"]:hover {
+    border-color: var(--primary-light);
+  }
+  
+  label {
+    flex: 1;
+    cursor: pointer;
+  }
+  
+  label:hover {
+    color: var(--primary);
+  }
+  
+  button {
+    background-color: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: block;
+    width: 100%;
+    font-size: 1rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  }
+  
+  button:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  button:active {
+    transform: translateY(0);
+  }
+  
+  a {
+    display: inline-block;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition);
+    text-align: center;
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background-color: white;
+  }
+  
+  a:hover {
+    color: var(--primary-dark);
+    background-color: rgba(79, 70, 229, 0.05);
+  }
+  
+  /* Success message */
+  p[style="color: green;"] {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: var(--success) !important;
+    padding: 1rem;
+    border-radius: var(--radius);
+    margin-bottom: 1.5rem;
+    font-weight: 500;
+    text-align: center;
+    border-left: 4px solid var(--success);
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 640px) {
+    body {
+      padding: 1rem;
+    }
+    
+    form {
+      padding: 1.25rem;
+    }
+    
+    fieldset {
+      padding: 1rem;
+    }
+    
+    h1 {
+      font-size: 1.75rem;
+    }
+  }
+  
+  /* Animation for success message */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  p[style="color: green;"] {
+    animation: fadeIn 0.5s ease-out forwards;
+  }

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Profit Report</title>
+  <!-- Font Awesome for Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/profit.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <i class="fas fa-chart-line"></i>
+      <span>Porfit Report</span>
+    </div>
+    
+    <div class="sidebar-nav">
+      <!-- Dashboard Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading"></div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/" class="sidebar-link">
+              <i class="fas fa-home"></i>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/sales" class="sidebar-link">
+              <i class="fas fa-shopping-cart"></i>
+              <span>Sales Report</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/profit" class="sidebar-link active">
+              <i class="fas fa-chart-bar"></i>
+              <span>Profit Report</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/expense" class="sidebar-link">
+              <i class="fas fa-money-bill-wave"></i>
+              <span>Expenses</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Product Management Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Products</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/add-product" class="sidebar-link">
+              <i class="fas fa-plus-circle"></i>
+              <span>Add New Product</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/view-products" class="sidebar-link">
+              <i class="fas fa-boxes"></i>
+              <span>View/Edit Products</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/inventory" class="sidebar-link">
+              <i class="fas fa-warehouse"></i>
+              <span>Inventory</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Settings Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-heading">Settings</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-item">
+            <a href="/profile" class="sidebar-link">
+              <i class="fas fa-user"></i>
+              <span>Profile</span>
+            </a>
+          </li>
+          <li class="sidebar-item">
+            <a href="/settings" class="sidebar-link">
+              <i class="fas fa-cog"></i>
+              <span>Settings</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="sidebar-footer">
+      <a href="/logout">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </div>
+  </div>
+  
+  <!-- Main Content Area -->
+  <div class="main-content" id="main-content">
+    <!-- Top Navigation -->
+    <div class="top-nav">
+      <button class="top-nav-toggle" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+      </button>
+      <div class="page-title">
+        <h2>Profit Report</h2>
+      </div>
+      <div class="top-nav-actions">
+        <button type="button" title="Notifications">
+          <i class="fas fa-bell"></i>
+        </button>
+        <button type="button" title="Settings">
+          <i class="fas fa-cog"></i>
+        </button>
+        <button type="button" title="Profile">
+          <i class="fas fa-user-circle"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Page Container -->
+    <div class="page-container">
+
+      <!-- Filter Form Card -->
+      <div class="formBox filter-form">
+        <h2><i class="fas fa-filter"></i> Filter Profit Data</h2>
+        <form action="/profit" method="GET" class="form-inline">
+          <div class="form-field">
+            <label for="month">Filter by Month (YYYY-MM):</label>
+            <input type="month" id="month" name="month" value="<%= monthFilter %>">
+          </div>
+       
+          <button type="submit"><i class="fas fa-search"></i> Apply Filter</button>
+        </form>
+      </div>
+
+      <!-- Overall Profit Summary Card -->
+      <div class="formBox">
+        <h2><i class="fas fa-chart-line"></i> Overall Profit Summary</h2>
+        <p>Total Profit (Sales Only): <strong><%= totalProfit.toFixed(2) %></strong></p>
+        <p>Total Expenses: <strong><%= totalExpenses.toFixed(2) %></strong></p>
+        <p>Net Profit: <strong><%= netProfit.toFixed(2) %></strong></p>
+      </div>
+
+      <!-- Profit by Month Card/Table -->
+      <div class="formBox">
+        <h2><i class="fas fa-calendar-alt"></i> Profit by Month</h2>
+        <% if (Object.keys(profitByMonth).length === 0) { %>
+          <p>No data available for the selected period.</p>
+        <% } else { %>
+          <table>
+            <thead>
+              <tr>
+                <th>Month (YYYY-MM)</th>
+                <th>Total Profit</th>
+                <th>Total Expenses</th>
+                <th>Net Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% for (let m in profitByMonth) { %>
+                <tr>
+                  <td><%= m %></td>
+                  <td><%= profitByMonth[m].profit.toFixed(2) %></td>
+                  <td><%= profitByMonth[m].expenses.toFixed(2) %></td>
+                  <td><%= profitByMonth[m].netProfit.toFixed(2) %></td>
+                </tr>
+              <% } %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+
+    </div><!-- End of Page Container -->
+  </div><!-- End of Main Content Area -->
+
+  <script>
+    // Sidebar toggle functionality for responsive design
+    document.getElementById('sidebarToggle').addEventListener('click', function() {
+      document.getElementById('sidebar').classList.toggle('active');
+      document.getElementById('main-content').classList.toggle('sidebar-open');
+    });
+  </script>
+    <script src="/js/firebasePersistence.js" type="module"></script>
+</body>
+</html>
