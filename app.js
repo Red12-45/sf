@@ -19,6 +19,30 @@ const db = admin.firestore();
 
 const app = express();
 
+// Store your secret key in an environment variable for security.
+const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
+
+app.post('/verify-captcha', async (req, res) => {
+  const token = req.body.token; // The token from your client-side reCAPTCHA
+
+  // Verify the token with the reCAPTCHA server.
+  const verificationUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${RECAPTCHA_SECRET_KEY}&response=${token}`;
+
+  try {
+    const response = await fetch(verificationUrl, { method: 'POST' });
+    const data = await response.json();
+
+    if (data.success) {
+      res.json({ message: 'Captcha verification successful!' });
+    } else {
+      res.status(400).json({ message: 'Captcha verification failed.', errors: data['error-codes'] });
+    }
+  } catch (error) {
+    console.error('Error verifying reCAPTCHA:', error);
+    res.status(500).json({ message: 'Server error verifying reCAPTCHA.' });
+  }
+});
+
 // Serve static files and favicon.
 app.use(express.static('public'));
 app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
@@ -1277,16 +1301,16 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
 // GET /pricing – Render subscription plans page.
 app.get('/pricing', isAuthenticated, (req, res) => {
   const now = new Date();
-  
-  // Check if the user has an active subscription.
+
+  // Redirect subscribed users back to the homepage
   if (req.session.user.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now) {
-    // If the subscription is still active, redirect to the home page or another appropriate page.
     return res.redirect('/');
   }
-  
-  // Only render the pricing page if there is no active subscription.
+
+  // Only non-subscribed users can view the pricing page
   res.render('pricing', { user: req.session.user });
 });
+
 
 // Subscription routes – Create Razorpay order and render payment page.
 app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
