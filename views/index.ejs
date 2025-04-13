@@ -25,7 +25,7 @@
       <a href="/expense"><i class="fas fa-receipt"></i> Expenses</a>
       <% if (user && user.isMaster) { %>
         <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
-        <a href="/permission"><i class="fas fa-lock"></i> Manage Permissions</a>
+        <a href="/permission"><i class="fas fa-lock"></i>Permissions</a>
       <% } %>
       <div class="subscription-info">
         <% if (user.subscriptionExpiry) { %>
@@ -47,9 +47,10 @@
   <div class="page-container">
     <!-- LEFT SIDEBAR (Forms) -->
     <div class="forms-sidebar">
-      <button id="toggleSidebar" class="sidebar-toggle-btn">
-        <i class="fas fa-angle-double-left"></i>
-      </button>
+      <div id="toggleSidebar" class="collapse-arrow">
+        <i class="fas fa-chevron-left"></i>
+      </div>
+      
 
       <!-- Sales Entry Form -->
       <div class="formBox">
@@ -528,6 +529,26 @@
     retailInput.addEventListener('input', updateSaleCalculations);
     saleQuantityInput.addEventListener('input', updateSaleCalculations);
     productSelect.addEventListener('change', updateSaleCalculations);
+
+    const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining > 0) ? 'true' : 'false' %>;
+
+if (!isSubscribed) {
+  // Default timeout is 5000 ms (5 seconds)
+  let timeoutValue = 5000;
+  // Detect if this navigation comes from a browser back/forward event.
+  // Using the Performance Navigation Timing API:
+  const navEntries = performance.getEntriesByType("navigation");
+  if (navEntries.length > 0 && navEntries[0].type === "back_forward") {
+    // If the page is loaded from the back/forward cache, we extend the delay to 10 seconds.
+    timeoutValue = 10000;
+  }
+
+  setTimeout(() => {
+    // Redirect the user to the pricing route.
+    window.location.href = '/pricing';
+  }, timeoutValue);
+}
+
   </script>
   <script src="/js/firebasePersistence.js" type="module"></script>
 

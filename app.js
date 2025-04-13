@@ -1276,6 +1276,15 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
 
 // GET /pricing – Render subscription plans page.
 app.get('/pricing', isAuthenticated, (req, res) => {
+  const now = new Date();
+  
+  // Check if the user has an active subscription.
+  if (req.session.user.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now) {
+    // If the subscription is still active, redirect to the home page or another appropriate page.
+    return res.redirect('/');
+  }
+  
+  // Only render the pricing page if there is no active subscription.
   res.render('pricing', { user: req.session.user });
 });
 
@@ -1369,6 +1378,34 @@ app.get('/profile', isAuthenticated, async (req, res) => {
     res.status(500).send(error.toString());
   }
 });
+
+
+// GET /billing – Render the billing/subscription details page.
+app.get('/billing', isAuthenticated, async (req, res) => {
+  try {
+    // Fetch the latest user details from Firestore.
+    const userDoc = await db.collection('users').doc(req.session.user.id).get();
+    if (!userDoc.exists) {
+      return res.status(404).send("User not found");
+    }
+    let userData = userDoc.data();
+    
+    // Convert subscriptionExpiry to a JavaScript Date object if needed.
+    if (userData.subscriptionExpiry) {
+      if (typeof userData.subscriptionExpiry.toDate === 'function') {
+        userData.subscriptionExpiry = userData.subscriptionExpiry.toDate();
+      } else {
+        userData.subscriptionExpiry = new Date(userData.subscriptionExpiry);
+      }
+    }
+    
+    // Render the billing.ejs template and pass the userData.
+    res.render('billing', { user: userData });
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
 
 // Start the server.
 const PORT = 3000;

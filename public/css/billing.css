@@ -1,0 +1,453 @@
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+  }
+  
+  body {
+    background-color: #f8fafc;
+    color: #334155;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Header and Navigation */
+  header {
+    background-color: #ffffff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  
+  nav {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .logo a {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #3b82f6;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .nav-links {
+    display: flex;
+    gap: 30px;
+  }
+  
+  nav a {
+    color: #475569;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  nav a:hover {
+    color: #3b82f6;
+  }
+  
+  /* Main Container */
+  .billing-container {
+    max-width: 1000px;
+    margin: 40px auto;
+    padding: 0 20px;
+    flex: 1;
+  }
+  
+  h1 {
+    font-size: 2.25rem;
+    margin-bottom: 30px;
+    color: #1e293b;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  h1 i {
+    color: #3b82f6;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+    margin: 40px 0 24px;
+    color: #334155;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  h2 i {
+    color: #3b82f6;
+  }
+  
+  /* Subscription Info Section */
+  .subscription-info {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 40px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid #3b82f6;
+  }
+  
+  .info-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    color: #3b82f6;
+  }
+  
+  .info-header h3 {
+    font-size: 1.3rem;
+    color: #1e293b;
+  }
+  
+  .current-plan {
+    background-color: #f8fafc;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .current-plan.expiring-soon {
+    border-color: #f59e0b;
+    background-color: #fffbeb;
+  }
+  
+  .days-left {
+    display: inline-block;
+    padding: 3px 10px;
+    background-color: #ecfdf5;
+    color: #059669;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    margin-left: 10px;
+    font-weight: 500;
+  }
+  
+  .days-left.expired {
+    background-color: #fee2e2;
+    color: #ef4444;
+  }
+  
+  .expiry-warning {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #fffbeb;
+    border-radius: 6px;
+    color: #d97706;
+    font-size: 0.9rem;
+  }
+  
+  .no-subscription {
+    background-color: #fef2f2;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #fecaca;
+    color: #ef4444;
+  }
+  
+  .no-subscription p:first-child {
+    font-weight: 500;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .no-subscription p:last-child {
+    color: #64748b;
+  }
+  
+  .info-note {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background-color: #f0f9ff;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: #0369a1;
+  }
+  
+  .info-note i {
+    font-size: 1.2rem;
+    margin-top: 3px;
+  }
+  
+  /* Subscription Plans Section */
+  .subscription-plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 30px;
+    margin-top: 20px;
+  }
+  
+  .plan {
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    padding: 30px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .plan:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  }
+  
+  .plan a {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  
+  .plan h3 {
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+    color: #1e293b;
+    font-weight: 600;
+  }
+  
+  .price {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 5px;
+  }
+  
+  .duration {
+    color: #64748b;
+    font-size: 1rem;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .savings {
+    background-color: #ecfdf5;
+    color: #059669;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-block;
+    margin-bottom: 15px;
+  }
+  
+  .features {
+    list-style: none;
+    margin: 20px 0;
+  }
+  
+  .features li {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #475569;
+  }
+  
+  .features li i {
+    color: #10b981;
+  }
+  
+  .cta-button {
+    background-color: #3b82f6;
+    color: white;
+    border-radius: 8px;
+    padding: 12px 20px;
+    text-align: center;
+    font-weight: 500;
+    margin-top: 20px;
+    transition: background-color 0.3s ease;
+  }
+  
+  .cta-button:hover {
+    background-color: #2563eb;
+  }
+  
+  .plan-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background-color: #3b82f6;
+    color: white;
+    font-size: 0.75rem;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  
+  /* Monthly Plan */
+  .plan.monthly {
+    border-top: 4px solid #60a5fa;
+  }
+  .plan.monthly .plan-badge {
+    background-color: #60a5fa;
+  }
+  .plan.monthly .cta-button {
+    background-color: #60a5fa;
+  }
+  .plan.monthly .cta-button:hover {
+    background-color: #3b82f6;
+  }
+  
+  /* Half-Yearly Plan */
+  .plan.half-yearly {
+    border-top: 4px solid #8b5cf6;
+  }
+  .plan.half-yearly .plan-badge {
+    background-color: #8b5cf6;
+  }
+  .plan.half-yearly .cta-button {
+    background-color: #8b5cf6;
+  }
+  .plan.half-yearly .cta-button:hover {
+    background-color: #7c3aed;
+  }
+  
+  /* Yearly Plan */
+  .plan.yearly {
+    border-top: 4px solid #10b981;
+    position: relative;
+  }
+  .plan.yearly .plan-badge {
+    background-color: #10b981;
+  }
+  .plan.yearly .cta-button {
+    background-color: #10b981;
+  }
+  .plan.yearly .cta-button:hover {
+    background-color: #059669;
+  }
+  
+  /* Payment Methods Section */
+  .payment-methods {
+    margin-top: 50px;
+    text-align: center;
+    padding: 20px;
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  }
+  
+  .payment-methods h3 {
+    margin-bottom: 15px;
+    color: #475569;
+    font-weight: 500;
+    font-size: 1.2rem;
+  }
+  
+  .payment-icons {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    font-size: 2rem;
+    color: #64748b;
+  }
+  
+  /* Footer */
+  footer {
+    background-color: #1e293b;
+    color: #e2e8f0;
+    padding: 25px 20px;
+    margin-top: 50px;
+  }
+  
+  .footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+  
+  .footer-links {
+    display: flex;
+    gap: 20px;
+  }
+  
+  .footer-links a {
+    color: #cbd5e1;
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+  
+  .footer-links a:hover {
+    color: #f8fafc;
+  }
+  
+  /* Responsive Adjustments */
+  @media (max-width: 768px) {
+    .subscription-plans {
+      grid-template-columns: 1fr;
+    }
+    
+    nav {
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .nav-links {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    h1 {
+      font-size: 1.75rem;
+    }
+    
+    .footer-content {
+      flex-direction: column;
+      text-align: center;
+    }
+    
+    .payment-icons {
+      flex-wrap: wrap;
+    }
+  }
+  
+  /* Subtle Animation Effects */
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+  }
+  
+  .plan:hover {
+    animation: pulse 2s infinite;
+  }
+  
+  .current-plan.expiring-soon {
+    animation: pulse 2s infinite;
+  }

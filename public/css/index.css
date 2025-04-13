@@ -595,3 +595,30 @@ table tr:hover {
   50% { transform: scale(1.05); }
   100% { transform: scale(1); }
 }
+/* New styling for the collapse arrow (bigger version) */
+.collapse-arrow {
+  position: absolute;
+  top:10px;          /* Adjust as needed */
+  right: 20px;       /* Adjust to accommodate the larger size */
+  background-color: var(--primary-color);
+  color: var(--text-white);
+  width: 30px;        /* Increased width */
+  height: 30px;       /* Increased height */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.3s ease;
+  z-index: 2;
+}
+
+.collapse-arrow i {
+  font-size: 1.5rem; /* Increase the size of the Font Awesome icon */
+}
+
+.collapse-arrow:hover {
+  background-color: var(--primary-dark);
+  transform: scale(1.1);
+}
