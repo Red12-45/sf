@@ -53,7 +53,7 @@ app.use(session({
     dataset: admin.firestore(), // Alternatively, you can use 'db' if you prefer.
     kind: 'express-sessions'     // (Optional) Custom collection name in Firestore.
   }),
-  secret: 'your-secret-key', // Replace with a strong secret or use an environment variable for production.
+  secret: process.env.SESSION_SECRET, // Replace with a strong secret or use an environment variable for production.
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -124,6 +124,15 @@ app.use((req, res, next) => {
 // ***********************
 // END OF SUBSCRIPTION CHECK MIDDLEWARE
 // ***********************
+
+function requireMaster(req, res, next) {
+  if (req.session.user && req.session.user.isMaster) {
+    return next();
+  }
+  return res.status(403).send("Access denied: Only master users can access this page.");
+}
+
+
 
 // Initialize Razorpay instance
 const razorpay = new Razorpay({
@@ -241,20 +250,22 @@ app.post('/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
-    // Try to find a user by email first.
     let userDoc;
-    const userQuery = await db.collection('users')
-      .where('email', '==', identifier)
-      .get();
-    if (!userQuery.empty) {
-      userDoc = userQuery.docs[0];
+    // Try to find the user by email.
+    const emailQuery = await db.collection('users').where('email', '==', identifier).get();
+    if (!emailQuery.empty) {
+      userDoc = emailQuery.docs[0];
     } else {
-      // If not found by email, try by phone.
-      const phoneQuery = await db.collection('users')
-        .where('phone', '==', identifier)
-        .get();
-      if (!phoneQuery.empty) {
-        userDoc = phoneQuery.docs[0];
+      // Try to find the user by sub‑user ID.
+      const subUserQuery = await db.collection('users').where('subUserId', '==', identifier).get();
+      if (!subUserQuery.empty) {
+        userDoc = subUserQuery.docs[0];
+      } else {
+        // Lastly, try to find the user by phone.
+        const phoneQuery = await db.collection('users').where('phone', '==', identifier).get();
+        if (!phoneQuery.empty) {
+          userDoc = phoneQuery.docs[0];
+        }
       }
     }
     if (!userDoc) {
@@ -262,7 +273,7 @@ app.post('/login', async (req, res) => {
     }
     const userData = userDoc.data();
 
-    // Convert subscriptionExpiry if it exists.
+    // Process subscriptionExpiry (if any) so it becomes a proper Date.
     let subscriptionExpiry = null;
     if (userData.subscriptionExpiry) {
       if (typeof userData.subscriptionExpiry.toDate === 'function') {
@@ -272,7 +283,7 @@ app.post('/login', async (req, res) => {
       }
     }
 
-    // For subusers, fetch subscriptionExpiry from master account.
+    // For sub‑users, fetch subscriptionExpiry from master account.
     if (!userData.isMaster) {
       const masterDoc = await db.collection('users').doc(userData.accountId).get();
       if (masterDoc.exists) {
@@ -287,13 +298,13 @@ app.post('/login', async (req, res) => {
       }
     }
 
-    // Validate password.
+    // Validate the password.
     const validPassword = await bcrypt.compare(password, userData.password);
     if (!validPassword) {
       return res.status(400).send("Invalid password");
     }
 
-    // Set user info into the session with a proper Date for subscriptionExpiry.
+    // Save user details (including subscription expiry) into the session.
     req.session.user = {
       id: userDoc.id,
       name: userData.name,
@@ -303,22 +314,18 @@ app.post('/login', async (req, res) => {
       subscriptionExpiry: subscriptionExpiry
     };
 
-    // For subusers, load locked routes configuration from Firestore.
+    // For sub‑users, load locked routes from Firestore.
     if (!req.session.user.isMaster) {
       const permDoc = await db.collection('permissions').doc(req.session.user.accountId).get();
-      if (permDoc.exists) {
-        req.session.lockedRoutes = permDoc.data().lockedRoutes || [];
-      } else {
-        req.session.lockedRoutes = [];
-      }
+      req.session.lockedRoutes = permDoc.exists ? (permDoc.data().lockedRoutes || []) : [];
     }
 
-    // Directly redirect to the homepage regardless of subscription state.
     res.redirect('/');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
 
 
 // GET /logout – Log out the current user
@@ -337,6 +344,7 @@ app.get('/documentation', (req, res) => {
 // ----------------------
 
 // GET /create-user – Render the create sub‑user form (for master only)
+// GET /create-user – Render the create sub‑user form (for master only)
 app.get('/create-user', isAuthenticated, async (req, res) => {
   if (!req.session.user.isMaster) {
     return res.status(403).send("Access denied");
@@ -352,7 +360,8 @@ app.get('/create-user', isAuthenticated, async (req, res) => {
         id: doc.id,
         name: userData.name,
         email: userData.email,
-        isMaster: userData.isMaster
+        isMaster: userData.isMaster,
+        subUserId: userData.subUserId // Added to pass the sub-user id to the template.
       });
     });
     res.render('createuser', { users });
@@ -361,40 +370,15 @@ app.get('/create-user', isAuthenticated, async (req, res) => {
   }
 });
 
-// POST /edit-user – Update a sub‑user's email and/or password (master only)
-app.post('/edit-user', isAuthenticated, async (req, res) => {
-  if (!req.session.user.isMaster) {
-    return res.status(403).send("Access denied");
-  }
-  try {
-    const { userId, email, password, confirmPassword } = req.body;
-    if (password && password !== confirmPassword) {
-      return res.status(400).send("Passwords do not match");
-    }
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists || userDoc.data().accountId !== req.session.user.accountId) {
-      return res.status(403).send("Access denied");
-    }
-    const updateData = { email };
-    if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      updateData.password = hashedPassword;
-    }
-    await userRef.update(updateData);
-    res.redirect('/create-user');
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
-});
 
-// POST /create-user – Process sub‑user creation (master only)
+
+
 app.post('/create-user', isAuthenticated, async (req, res) => {
   if (!req.session.user.isMaster) {
     return res.status(403).send("Access denied");
   }
   try {
-    // Count existing sub‑users for the master account.
+    // Count existing sub-users for the master account.
     const subUsersQuery = await db.collection('users')
       .where('accountId', '==', req.session.user.accountId)
       .where('isMaster', '==', false)
@@ -403,27 +387,31 @@ app.post('/create-user', isAuthenticated, async (req, res) => {
       return res.status(400).send("Sub‑user limit reached. Maximum 2 sub‑users allowed.");
     }
 
-    const { name, email, phone, address, location, password, confirmPassword } = req.body;
+    // Only destructure the fields that exist in your EJS form.
+    const { name, password, confirmPassword, subUserId } = req.body;
     if (password !== confirmPassword) {
       return res.status(400).send("Passwords do not match");
     }
-    const userQuery = await db.collection('users')
-      .where('email', '==', email)
+    if (!subUserId || subUserId.trim() === "") {
+      return res.status(400).send("Sub‑user ID is required");
+    }
+
+    // Check if the subUserId already exists for this account.
+    const subUserQuery = await db.collection('users')
+      .where('subUserId', '==', subUserId)
       .where('accountId', '==', req.session.user.accountId)
       .get();
-    if (!userQuery.empty) {
-      return res.status(400).send("User already exists");
+    if (!subUserQuery.empty) {
+      return res.status(400).send("Sub‑user ID already exists. Please generate a new one.");
     }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     await db.collection('users').add({
       name,
-      email,
-      phone,
-      address,
-      location,
       password: hashedPassword,
       isMaster: false,
       accountId: req.session.user.accountId,
+      subUserId: subUserId,
       createdAt: new Date()
     });
     res.redirect('/');
@@ -431,6 +419,41 @@ app.post('/create-user', isAuthenticated, async (req, res) => {
     res.status(500).send(error.toString());
   }
 });
+
+
+// POST /edit-user – Update a sub‑user's name and/or password (master only)
+app.post('/edit-user', isAuthenticated, async (req, res) => {
+  if (!req.session.user.isMaster) {
+    return res.status(403).send("Access denied");
+  }
+  try {
+    // Now we expect 'userId', 'name', 'password', and 'confirmPassword'
+    const { userId, name, password, confirmPassword } = req.body;
+    
+    if (password && password !== confirmPassword) {
+      return res.status(400).send("Passwords do not match");
+    }
+    
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists || userDoc.data().accountId !== req.session.user.accountId) {
+      return res.status(403).send("Access denied");
+    }
+    
+    // Prepare update data with the new name. Only update password if provided.
+    const updateData = { name };
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      updateData.password = hashedPassword;
+    }
+    
+    await userRef.update(updateData);
+    res.redirect('/create-user');
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
 
 // POST /delete-user – Delete a sub‑user account (master only)
 app.post('/delete-user', isAuthenticated, async (req, res) => {
@@ -899,11 +922,16 @@ app.post('/update-opening-balance', isAuthenticated, async (req, res) => {
 app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
   try {
     const categories = await getCategories(req.session.user.accountId);
-    res.render('addProduct', { success: req.query.success, categories });
+    res.render('addProduct', { 
+      success: req.query.success, 
+      errorMessage: null, // default value to prevent ReferenceError
+      categories 
+    });
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
 
 // POST /add-product – Process new product (or stock batch) submission.
 app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
@@ -1068,53 +1096,157 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   }
 });
 
-// GET /edit-product/:id – Retrieve edit form for a product.
-app.get('/edit-product/:id', isAuthenticated, restrictRoute('/edit-product'), async (req, res) => {
+
+
+// Helper function to recalculate product values from its stock batches.
+async function recalcProductFromBatches(productId) {
+  const batchesSnapshot = await db.collection('stockBatches')
+    .where('productId', '==', productId)
+    .get();
+  let totalRemaining = 0, totalWholesale = 0, totalRetail = 0;
+  batchesSnapshot.forEach(doc => {
+    const data = doc.data();
+    // Use remainingQuantity for recalculation of current stock
+    totalRemaining += data.remainingQuantity;
+    totalWholesale += data.remainingQuantity * data.purchasePrice;
+    totalRetail += data.remainingQuantity * data.salePrice;
+  });
+  let newWholesale = 0, newRetail = 0, profitMargin = 0;
+  if (totalRemaining > 0) {
+    newWholesale = totalWholesale / totalRemaining;
+    newRetail = totalRetail / totalRemaining;
+    profitMargin = newRetail - newWholesale;
+  }
+  await db.collection('products').doc(productId).update({
+    quantity: totalRemaining,
+    wholesalePrice: newWholesale,
+    retailPrice: newRetail,
+    profitMargin: profitMargin,
+    updatedAt: new Date()
+  });
+}
+
+
+// GET /edit-stock-batch/:batchId – Render the edit form for a stock batch.
+app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
-    const productId = req.params.id;
-    const productDoc = await db.collection('products').doc(productId).get();
-    if (!productDoc.exists || productDoc.data().accountId !== accountId) {
-      return res.status(404).send("Product not found or unauthorized");
+    const batchId = req.params.batchId;
+    const batchRef = db.collection('stockBatches').doc(batchId);
+    const batchDoc = await batchRef.get();
+
+    if (!batchDoc.exists) {
+      return res.status(404).send("Stock batch not found");
     }
-    const product = { id: productDoc.id, ...productDoc.data() };
-    const categories = await getCategories(accountId);
-    res.render('editProduct', { product, categories });
+
+    const batchData = batchDoc.data();
+    // Ensure the stock batch belongs to the current account.
+    if (batchData.accountId !== accountId) {
+      return res.status(403).send("Access denied");
+    }
+
+    // Fetch the parent product for additional context.
+    const productDoc = await db.collection('products').doc(batchData.productId).get();
+    if (!productDoc.exists) {
+      return res.status(404).send("Parent product not found");
+    }
+    const productData = productDoc.data();
+
+    res.render('editStockBatch', { batch: { id: batchDoc.id, ...batchData }, product: { id: productDoc.id, ...productData } });
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
 
-// POST /edit-product/:id – Process the edit product form submission.
-app.post('/edit-product/:id', isAuthenticated, restrictRoute('/edit-product'), async (req, res) => {
+// POST /edit-stock-batch/:batchId – Process stock batch update.
+app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
-    const productId = req.params.id;
-    const productDoc = await db.collection('products').doc(productId).get();
-    if (!productDoc.exists || productDoc.data().accountId !== accountId) {
-      return res.status(404).send("Product not found or unauthorized");
+    const batchId = req.params.batchId;
+    const batchRef = db.collection('stockBatches').doc(batchId);
+    const batchDoc = await batchRef.get();
+
+    if (!batchDoc.exists) {
+      return res.status(404).send("Stock batch not found");
     }
-    let { productName, wholesalePrice, retailPrice, quantity, selectedCategory, newCategory } = req.body;
-    wholesalePrice = parseFloat(wholesalePrice);
-    retailPrice = parseFloat(retailPrice);
-    quantity = parseInt(quantity);
-    const category = newCategory && newCategory.trim() !== "" ? newCategory.trim() : selectedCategory;
-    const profitMargin = retailPrice - wholesalePrice;
-    const updatedData = {
-      productName,
-      wholesalePrice,
-      retailPrice,
+    const batchData = batchDoc.data();
+    if (batchData.accountId !== accountId) {
+      return res.status(403).send("Access denied");
+    }
+
+    // Extract new values from the form.
+    const purchasePrice = parseFloat(req.body.purchasePrice);
+    const salePrice = parseFloat(req.body.salePrice);
+    const quantity = parseInt(req.body.quantity, 10);
+
+    // For simplicity, update both original quantity and remainingQuantity
+    // (You can adjust this if you need to handle cases with already sold items.)
+    await batchRef.update({
+      purchasePrice,
+      salePrice,
       quantity,
-      profitMargin,
-      category,
+      remainingQuantity: quantity, // resetting remainingQuantity to new quantity
       updatedAt: new Date()
-    };
-    await db.collection('products').doc(productId).update(updatedData);
+    });
+
+    // Recalculate the parent product's values based on all its batches.
+    await recalcProductFromBatches(batchData.productId);
+
     res.redirect('/view-products');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
+
+// // GET /edit-product/:id – Retrieve edit form for a product.
+// app.get('/edit-product/:id', isAuthenticated, restrictRoute('/edit-product'), async (req, res) => {
+//   try {
+//     const accountId = req.session.user.accountId;
+//     const productId = req.params.id;
+//     const productDoc = await db.collection('products').doc(productId).get();
+//     if (!productDoc.exists || productDoc.data().accountId !== accountId) {
+//       return res.status(404).send("Product not found or unauthorized");
+//     }
+//     const product = { id: productDoc.id, ...productDoc.data() };
+//     const categories = await getCategories(accountId);
+//     res.render('editProduct', { product, categories });
+//   } catch (error) {
+//     res.status(500).send(error.toString());
+//   }
+// });
+
+// // POST /edit-product/:id – Process the edit product form submission.
+// app.post('/edit-product/:id', isAuthenticated, restrictRoute('/edit-product'), async (req, res) => {
+//   try {
+//     const accountId = req.session.user.accountId;
+//     const productId = req.params.id;
+//     const productDoc = await db.collection('products').doc(productId).get();
+//     if (!productDoc.exists || productDoc.data().accountId !== accountId) {
+//       return res.status(404).send("Product not found or unauthorized");
+//     }
+//     let { productName, wholesalePrice, retailPrice, quantity, selectedCategory, newCategory } = req.body;
+//     wholesalePrice = parseFloat(wholesalePrice);
+//     retailPrice = parseFloat(retailPrice);
+//     quantity = parseInt(quantity);
+//     const category = newCategory && newCategory.trim() !== "" ? newCategory.trim() : selectedCategory;
+//     const profitMargin = retailPrice - wholesalePrice;
+//     const updatedData = {
+//       productName,
+//       wholesalePrice,
+//       retailPrice,
+//       quantity,
+//       profitMargin,
+//       category,
+//       updatedAt: new Date()
+//     };
+//     await db.collection('products').doc(productId).update(updatedData);
+//     res.redirect('/view-products');
+//   } catch (error) {
+//     res.status(500).send(error.toString());
+//   }
+// });
+
 
 // GET /sales – Sales Report and Filtering Route.
 app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => {
@@ -1383,7 +1515,8 @@ app.post('/payment-success', isAuthenticated, async (req, res) => {
 });
 
 // GET /profile – Render the profile page for the current user.
-app.get('/profile', isAuthenticated, async (req, res) => {
+app.get('/profile', isAuthenticated, requireMaster, async (req, res) => {
+  
   try {
     const userDoc = await db.collection('users').doc(req.session.user.id).get();
     if (!userDoc.exists) {
@@ -1405,7 +1538,7 @@ app.get('/profile', isAuthenticated, async (req, res) => {
 
 
 // GET /billing – Render the billing/subscription details page.
-app.get('/billing', isAuthenticated, async (req, res) => {
+app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
   try {
     // Fetch the latest user details from Firestore.
     const userDoc = await db.collection('users').doc(req.session.user.id).get();
@@ -1432,7 +1565,7 @@ app.get('/billing', isAuthenticated, async (req, res) => {
 
 
 // Start the server.
-const PORT = 3000;
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log(`Server started on port ${PORT}`);
 });

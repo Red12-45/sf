@@ -89,127 +89,176 @@
     <!-- Page Container -->
     <div class="page-container">
       <!-- Combined Filter Form: Category & Stock Threshold -->
-      <div class="formBox">
+      <div class="filter-container">
         <form method="GET" action="/view-products">
-          <div>
-            <label for="filterCategory">Filter by Category:</label>
-            <select id="filterCategory" name="filterCategory">
-              <option value="">All Categories</option>
-              <% categories.forEach(function(cat){ %>
-                <option value="<%= cat %>" <%= filterCategory === cat ? 'selected' : '' %>><%= cat %></option>
-              <% }); %>
-            </select>
+          <div class="filter-controls">
+            <div class="filter-group">
+              <label for="filterCategory">Filter by Category:</label>
+              <select id="filterCategory" name="filterCategory">
+                <option value="">All Categories</option>
+                <% categories.forEach(function(cat){ %>
+                  <option value="<%= cat %>" <%= filterCategory === cat ? 'selected' : '' %>><%= cat %></option>
+                <% }); %>
+              </select>
+            </div>
             
-            <!-- New input for stock threshold filter -->
-            <label for="stockThreshold">Filter by Stock below:</label>
-            <input type="number" id="stockThreshold" name="stockThreshold" 
-                   value="<%= typeof stockThreshold !== 'undefined' ? stockThreshold : '' %>" 
-                   placeholder="Enter quantity threshold">
+            <div class="filter-group">
+              <label for="stockThreshold">Filter by Stock below:</label>
+              <input type="number" id="stockThreshold" name="stockThreshold" 
+                    value="<%= typeof stockThreshold !== 'undefined' ? stockThreshold : '' %>" 
+                    placeholder="Enter quantity threshold">
+            </div>
             
-            <button type="submit">Filter</button>
+            <button type="submit" class="filter-button">
+              <i class="fas fa-filter"></i> Apply Filters
+            </button>
           </div>
         </form>
       </div>
       
-      <h1>Products List</h1>
+      <div class="page-header">
+        <h1>Products List</h1>
+      </div>
       
       <% if (products.length === 0) { %>
-        <p>No products available.</p>
+        <div class="empty-state">
+          <i class="fas fa-box-open"></i>
+          <p>No products available.</p>
+        </div>
       <% } else { %>
-        <table>
-          <thead>
-            <tr>
-              <th>Product Name</th>
-              <th>Wholesale Price</th>
-              <th>Retail Price</th>
-              <th>Quantity</th>
-              <th>Profit Margin</th>
-              <th>Product ID</th>
-              <th>Category</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% products.forEach(function(product){ %>
-              <!-- Main Product Row -->
+        <div class="products-table-container">
+          <table class="products-table">
+            <thead>
               <tr>
-                <td><%= product.productName %></td>
-                <td><%= product.wholesalePrice %></td>
-                <td><%= product.retailPrice %></td>
-                <td><%= product.quantity %></td>
-                <td><%= product.profitMargin %></td>
-                <td><%= product.productId ? product.productId : '-' %></td>
-                <td><%= product.category ? product.category : '-' %></td>
-                <td><a href="/edit-product/<%= product.id %>">Edit</a></td>
+                <th class="expand-column"></th>
+                <th>Product Name</th>
+                <th>Wholesale Price</th>
+                <th>Retail Price</th>
+                <th>Quantity</th>
+                <th>Profit Margin</th>
+                <th>Product ID</th>
+                <th>Category</th>
               </tr>
-              <!-- Nested Table for Stock Batches -->
-              <% if (product.batches && product.batches.length > 0) { %>
-              <tr class="stock-batches-row">
-                <td colspan="8">
-                  <strong>Stock Batches:</strong>
-                  <table class="nested-table">
-                    <thead>
-                      <tr>
-                        <th>Batch Date</th>
-                        <th>Time Added</th>
-                        <th>Purchase Price</th>
-                        <th>Retail Price</th>
-                        <th>Quantity</th>
-                        <th>Remaining</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <% product.batches.forEach(function(batch){ %>
-                        <tr>
-                          <td>
-                            <% 
-                              // Convert the batch date to a readable format.
-                              const batchDateObj = batch.batchDate && batch.batchDate.seconds 
-                                ? new Date(batch.batchDate.seconds * 1000) 
-                                : new Date(batch.batchDate);
-                            %>
-                            <%= batchDateObj.toLocaleDateString() %>
-                          </td>
-                          <td>
-                            <%= batchDateObj.toLocaleTimeString() %>
-                          </td>
-                          <td><%= batch.purchasePrice.toFixed(2) %></td>
-                          <td><%= batch.salePrice.toFixed(2) %></td>
-                          <td><%= batch.quantity %></td>
-                          <td><%= batch.remainingQuantity %></td>
-                          <td>
-                            <% if (batch.remainingQuantity === 0) { %>
-                              <form action="/delete-stock-batch/<%= batch.id %>" method="POST" onsubmit="return confirm('Are you sure you want to delete this stock batch?');">
-                                <button type="submit" class="delete-button">
-                                  <i class="fas fa-trash"></i>
-                                </button>
-                              </form>
-                            <% } else { %>
-                              -
-                            <% } %>
-                          </td>
-                        </tr>
-                      <% }); %>
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
-              <% } %>
-            <% }); %>
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              <% products.forEach(function(product, index){ %>
+                <!-- Main Product Row -->
+                <tr class="product-row <%= product.quantity <= 10 ? 'low-stock' : '' %>">
+                  <td class="expand-cell">
+                    <% if (product.batches && product.batches.length > 0) { %>
+                      <button class="expand-button" onclick="toggleBatches('<%= product.id %>')">
+                        <i class="fas fa-chevron-down" id="icon-<%= product.id %>"></i>
+                      </button>
+                    <% } %>
+                  </td>
+                  <td class="product-name"><%= product.productName %></td>
+                  <td class="price-cell"><span class="currency">$</span><%= product.wholesalePrice %></td>
+                  <td class="price-cell"><span class="currency">$</span><%= product.retailPrice %></td>
+                  <td class="quantity-cell <%= product.quantity <= 10 ? 'low-quantity' : '' %>">
+                    <%= product.quantity %>
+                    <% if (product.quantity <= 10) { %>
+                      <span class="stock-badge">Low</span>
+                    <% } %>
+                  </td>
+                  <td class="profit-cell"><%= product.profitMargin %><span class="percent">%</span></td>
+                  <td><%= product.productId ? product.productId : '-' %></td>
+                  <td class="category-cell"><span class="category-badge"><%= product.category ? product.category : '-' %></span></td>
+                </tr>
+                
+                <!-- Batches Section -->
+                <% if (product.batches && product.batches.length > 0) { %>
+                <tr class="batches-container" id="batches-<%= product.id %>">
+                  <td colspan="8" class="batches-cell">
+                    <div class="batches-content">
+                      <h4 class="batches-title">
+                        <i class="fas fa-layer-group"></i>
+                        Stock Batches for <%= product.productName %>
+                      </h4>
+                      <div class="batch-table-wrapper">
+                        <table class="batch-table">
+                          <thead>
+                            <tr>
+                              <th>Batch Date</th>
+                              <th>Time Added</th>
+                              <th>Purchase Price</th>
+                              <th>Retail Price</th>
+                              <th>Quantity</th>
+                              <th>Remaining</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <% product.batches.forEach(function(batch){ %>
+                              <tr class="batch-row <%= batch.remainingQuantity === 0 ? 'empty-batch' : '' %>">
+                                <td>
+                                  <% 
+                                    // Convert the batch date to a readable format.
+                                    const batchDateObj = batch.batchDate && batch.batchDate.seconds 
+                                      ? new Date(batch.batchDate.seconds * 1000) 
+                                      : new Date(batch.batchDate);
+                                  %>
+                                  <%= batchDateObj.toLocaleDateString() %>
+                                </td>
+                                <td>
+                                  <%= batchDateObj.toLocaleTimeString() %>
+                                </td>
+                                <td class="price-cell"><span class="currency">$</span><%= batch.purchasePrice.toFixed(2) %></td>
+                                <td class="price-cell"><span class="currency">$</span><%= batch.salePrice.toFixed(2) %></td>
+                                <td><%= batch.quantity %></td>
+                                <td class="remaining-cell <%= batch.remainingQuantity === 0 ? 'empty' : '' %>">
+                                  <%= batch.remainingQuantity %>
+                                  <% if (batch.remainingQuantity === 0) { %>
+                                    <span class="stock-badge empty">Empty</span>
+                                  <% } %>
+                                </td>
+                                <td>
+                                  <!-- Edit icon now placed in the batch row -->
+                                  <a href="/edit-stock-batch/<%= batch.id %>" title="Edit this stock batch" class="edit-button">
+                                    <i class="fas fa-edit"></i>
+                                  </a>
+                                  <% if (batch.remainingQuantity === 0) { %>
+                                    <form action="/delete-stock-batch/<%= batch.id %>" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this stock batch?');">
+                                      <button type="submit" class="delete-button">
+                                        <i class="fas fa-trash"></i>
+                                      </button>
+                                    </form>
+                                  <% } %>
+                                </td>
+                                
+                              </tr>
+                            <% }); %>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                <% } %>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
       <% } %>
     </div>
   </div>
   
+  <!-- Toggle function for batches -->
   <script>
-    // Sidebar toggle functionality for responsive design.
-    document.getElementById('sidebarToggle').addEventListener('click', function() {
-      document.getElementById('sidebar').classList.toggle('active');
-      document.getElementById('main-content').classList.toggle('sidebar-open');
-    });
+    function toggleBatches(id) {
+      var batchesRow = document.getElementById('batches-' + id);
+      var icon = document.getElementById('icon-' + id);
+      
+      if (batchesRow.classList.contains('show')) {
+        batchesRow.classList.remove('show');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+      } else {
+        batchesRow.classList.add('show');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+      }
+    }
   </script>
-    <script src="/js/firebasePersistence.js" type="module"></script>
+  <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
 </html>

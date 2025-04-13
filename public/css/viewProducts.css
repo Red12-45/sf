@@ -19,7 +19,7 @@
     --text-dark: #1e293b;
     --text-light: #94a3b8;
     --text-white: #f8fafc;
-    --border-color: #e2e8f0;
+    --border-color: #e2e8f0; /* Change to a darker value if you need bolder lines */
     --sidebar-bg: #1e293b;
     --sidebar-width: 250px;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -56,6 +56,7 @@ body {
     box-shadow: var(--shadow-lg);
     display: flex;
     flex-direction: column;
+    z-index: 100;
 }
 
 .sidebar-logo {
@@ -157,150 +158,382 @@ body {
     padding: 1.5rem;
     width: calc(100% - var(--sidebar-width));
     transition: var(--transition);
+    min-height: 100vh;
 }
 
-/* Top Navigation */
-.top-nav {
-    background: var(--card-bg);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 1.5rem;
-    margin-bottom: 1.5rem;
+.page-container {
+    background-color: var(--card-bg);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    padding: 2rem;
+}
+
+.page-header {
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+.page-header h1 {
+    color: var(--primary-dark);
+    font-size: 1.8rem;
+    margin-bottom: 0;
+}
+
+.page-header h1::after {
+    content: none;
+}
+
+/* Filter Container */
+.filter-container {
+    margin-bottom: 2rem;
+    background-color: #f0f7ff;
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid rgba(58, 123, 213, 0.2);
+    display: flex;
+    justify-content: center; /* <-- Center all contents */
+}
+
+
+.filter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.filter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center; /* <-- Center the filter elements */
+    gap: 1.5rem;              /* Adjust spacing between elements */
+    align-items: flex-end;
+}
+
+
+.filter-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--primary-dark);
+}
+
+.filter-group select,
+.filter-group input {
+    width: 100%;
+    max-width: 220px; /* <-- Add this line */
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    background-color: white;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.2);
+    outline: none;
+}
+
+.filter-button {
+    background: linear-gradient(to right, var(--primary-color), var(--primary-dark));
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    min-height: 42px;
+}
+
+.filter-button:hover {
+    transform: translateY(-2px);
     box-shadow: var(--shadow-md);
 }
 
-.top-nav a {
-    text-decoration: none;
-    color: var(--primary-dark);
-    margin-right: 1rem;
+/* Empty State */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    background-color: #f8fafc;
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--border-color);
 }
 
-.top-nav-toggle {
-    display: none;
-}
-
-/* Headings */
-h1, h2, h3, h4, h5, h6 {
-    color: var(--text-dark);
-    font-weight: 700;
+.empty-state i {
+    font-size: 3rem;
+    color: var(--text-light);
     margin-bottom: 1rem;
 }
 
-h1 {
-    font-size: 1.8rem;
-    color: var(--primary-dark);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1.5rem;
+.empty-state p {
+    font-size: 1.1rem;
+    color: var(--text-light);
 }
 
-h1::after {
-    content: '';
-    display: block;
-    width: 80px;
-    height: 3px;
-    background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
-    border-radius: var(--radius-sm);
-    margin-top: 0.5rem;
-}
-
-/* Form Styling */
-form {
-    margin-bottom: 1.5rem;
-}
-
-form label {
-    font-weight: 600;
-    font-size: 0.9rem;
-    margin-right: 0.5rem;
-    color: var(--text-dark);
-}
-
-form select,
-form input[type="text"],
-form input[type="number"],
-form input[type="date"],
-form input[type="month"],
-form input[type="time"],
-form textarea {
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    background-color: var(--light-bg);
-    color: var(--text-dark);
-    font-size: 0.95rem;
-    transition: var(--transition);
-    box-shadow: var(--shadow-sm);
-}
-
-form select:focus,
-form input:focus,
-form textarea:focus {
-    outline: none;
-    border-color: var(--primary-light);
-    box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.2);
-}
-
-/* Button Styling */
-button {
-    background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
-    color: var(--text-white);
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: 600;
-    transition: var(--transition);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    box-shadow: var(--shadow-md);
-}
-
-button:hover {
-    transform: translateY(-2px);
+/* Products Table Container */
+.products-table-container {
+    overflow-x: auto;
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
 }
 
-button:active {
-    transform: translateY(0);
+/* Products Table */
+.products-table {
+    width: 100%;
+    border-collapse: collapse; /* Changed to collapse for unified borders */
+    margin: 0;
+    background-color: white;
+    /* Removed outer border since each cell now gets a border */
 }
 
-/* Table Styling */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 1rem 0 1.5rem;
+.products-table th,
+.products-table td {
+    border: 1px solid var(--border-color); /* Added explicit border for each cell */
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+.products-table thead th {
+    background: linear-gradient(to right, #2c5282, #3a7bd5);
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+/* Remove individual row border styles as cell borders provide the grid */
+.product-row:hover {
+    background-color: rgba(58, 123, 213, 0.05);
+}
+
+.product-name {
+    font-weight: 600;
+    color: var(--primary-dark);
+}
+
+.price-cell {
+    font-weight: 600;
+    color: #2c5282;
+}
+
+.currency {
+    font-size: 0.8em;
+    margin-right: 0.1rem;
+    opacity: 0.7;
+}
+
+.percent {
+    font-size: 0.8em;
+    opacity: 0.7;
+}
+
+.profit-cell {
+    font-weight: 600;
+    color: var(--success-color);
+}
+
+.quantity-cell {
+    position: relative;
+    font-weight: 600;
+}
+
+.quantity-cell.low-quantity {
+    color: var(--danger-color);
+}
+
+.stock-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-left: 0.5rem;
+    background-color: rgba(239, 68, 68, 0.2);
+    color: var(--danger-color);
+}
+
+.stock-badge.empty {
+    background-color: rgba(148, 163, 184, 0.2);
+    color: var(--text-light);
+}
+
+.category-cell {
+    white-space: nowrap;
+}
+
+.category-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background-color: rgba(45, 212, 191, 0.1);
+    color: #0d9488;
+    border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+.actions-cell {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.edit-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: rgba(58, 123, 213, 0.1);
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.edit-button:hover {
+    background-color: var(--primary-color);
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Expand/Collapse functionality */
+.expand-column {
+    width: 40px;
+}
+
+.expand-cell {
+    text-align: center;
+}
+
+.expand-button {
+    background: none;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--primary-color);
+    background-color: rgba(58, 123, 213, 0.1);
+    transition: all 0.2s ease;
+    box-shadow: none;
+    padding: 0;
+}
+
+.expand-button:hover {
+    background-color: var(--primary-color);
+    color: white;
+    transform: scale(1.1);
     box-shadow: var(--shadow-sm);
+}
+
+/* Batches Row */
+.batches-container {
+    display: none;
+    background-color: #f0f7ff;
+}
+
+.batches-container.show {
+    display: table-row;
+}
+
+.batches-cell {
+    padding: 0 !important;
+}
+
+.batches-content {
+    padding: 0 1rem 1rem;
+}
+
+.batches-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    color: var(--primary-dark);
+    margin: 1rem 0;
+    padding-left: 1rem;
+}
+
+.batches-title i {
+    color: var(--primary-color);
+}
+
+.batch-table-wrapper {
+    margin-left: 2rem;
     border-radius: var(--radius-md);
     overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid rgba(58, 123, 213, 0.2);
 }
 
-table th,
-table td {
-    padding: 0.75rem 1rem;
-    text-align: left;
+/* Batch Table */
+.batch-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+    margin: 0;
+    /* Outer border removed; using cell borders instead */
+}
+
+.batch-table th,
+.batch-table td {
     border: 1px solid var(--border-color);
-    font-size: 0.9rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
 }
 
-table th {
-    background: linear-gradient(to right, rgba(58, 123, 213, 0.1), rgba(45, 212, 191, 0.1));
-    color: var(--text-dark);
+.batch-table th {
+    background: rgba(58, 123, 213, 0.1);
+    color: var(--primary-dark);
     font-weight: 600;
-    position: sticky;
-    top: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 
-table tr:nth-child(even) {
-    background-color: rgba(241, 245, 249, 0.5);
+.batch-table td {
+    border: 1px solid var(--border-color);
 }
 
-table tr:hover {
-    background-color: rgba(58, 123, 213, 0.05);
+/* Delete Button */
+.delete-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background-color: rgba(239, 68, 68, 0.1) !important;
+    color: var(--danger-color) !important;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: none;
+    padding: 0;
+}
+
+.delete-button:hover {
+    background-color: var(--danger-color) !important;
+    color: white !important;
+    transform: scale(1.1);
 }
 
 /* Responsive Adjustments */
@@ -326,43 +559,60 @@ table tr:hover {
         margin-left: var(--sidebar-width);
         width: calc(100% - var(--sidebar-width));
     }
+    
+    .filter-controls {
+        flex-direction: column;
+    }
+    
+    .filter-group {
+        width: 100%;
+    }
 }
 
 @media (max-width: 768px) {
-    .top-nav, .main-content, .sidebar {
+    .page-container {
         padding: 1rem;
     }
-
-    table {
-        display: block;
-        overflow-x: auto;
-        white-space: nowrap;
+    
+    .products-table th,
+    .products-table td,
+    .batch-table th,
+    .batch-table td {
+        padding: 0.75rem 0.5rem;
+    }
+    
+    .products-table th:first-child,
+    .products-table td:first-child {
+        padding-left: 0.75rem;
+    }
+    
+    .products-table th:last-child,
+    .products-table td:last-child {
+        padding-right: 0.75rem;
+    }
+    
+    .batches-content {
+        padding: 0 0.5rem 0.5rem;
     }
 }
 
-/* Delete Button Styles */
-.delete-button {
-    background-color: red;
-    border: none;
-    padding: 2px 4px; /* Minimal padding to avoid enlarging the cell */
-    border-radius: 4px;
-    cursor: pointer;
-    color: white;
-    font-size: 1rem; /* Ensures the icon size is appropriate */
+
+.edit-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
-  }
-  
-  .delete-button {
-    background-color: red !important;
-  }
-  
-  
-  /* Optional: Remove default margin/padding from form in table cells */
-  td form {
-    margin: 0;
-    padding: 0;
-  }
-  
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: rgba(58, 123, 213, 0.1);
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    margin-right: 0.5rem; /* Added margin to separate from the delete button */
+}
+
+.edit-button:hover {
+    background-color: var(--primary-color);
+    color: white;
+    transform: scale(1.1);
+}

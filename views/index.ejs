@@ -36,7 +36,10 @@
           <span>No active subscription</span>
         <% } %>
       </div>
-      <a href="/profile" class="profile"><i class="fas fa-user"></i> Profile</a>
+      <% if (user && user.isMaster) { %>
+        <a href="/profile" class="profile"><i class="fas fa-user"></i> Profile</a>
+      <% } %>
+      
       <a href="/documentation" class="profile"><i class="fas fa-file-alt"></i> Guide</a>
       <a href="/customerservice" class="profile"><i class="fas fa-headset"></i></a>
       <a href="/logout" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>

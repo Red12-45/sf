@@ -379,10 +379,13 @@
 
   <script>
     // Sidebar toggle functionality for responsive design
-    document.getElementById('sidebarToggle').addEventListener('click', function() {
-      document.getElementById('sidebar').classList.toggle('active');
-      document.getElementById('main-content').classList.toggle('sidebar-open');
-    });
+    var sidebarToggle = document.getElementById('sidebarToggle');
+    if (sidebarToggle) {
+      sidebarToggle.addEventListener('click', function() {
+        document.getElementById('sidebar').classList.toggle('active');
+        document.getElementById('main-content').classList.toggle('sidebar-open');
+      });
+    }
 
     // Toggle Summary Section Logic
     document.querySelectorAll('.toggleSummary').forEach(function(button) {
@@ -399,6 +402,6 @@
       });
     });
   </script>
-    <script src="/js/firebasePersistence.js" type="module"></script>
+  <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
 </html>

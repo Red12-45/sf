@@ -19,31 +19,35 @@
     <script>
       // Define the Razorpay options only if an order exists
       var options = {
-        "key": "<%= process.env.RAZORPAY_KEY_ID %>",
-        "amount": "<%= order.amount %>",
-        "currency": "<%= order.currency %>",
-        "name": "SalesFlow",
-        "description": "<%= plan %> Subscription",
-        "order_id": "<%= order.id %>",
-        "handler": function (response) {
-          // On successful payment, submit the hidden form to our callback route.
-          document.getElementById('paymentForm').submit();
-        },
-        "prefill": {
-          "name": "<%= user.name %>",
-          "email": "<%= user.email %>"
-        },
-        "theme": {
-          "color": "#3399cc"
-        }
-      };
+    "key": "<%= process.env.RAZORPAY_KEY_ID %>",
+    "amount": "<%= order.amount %>",
+    "currency": "<%= order.currency %>",
+    "name": "SalesFlow",
+    "description": "<%= plan %> Subscription",
+    "order_id": "<%= order.id %>",
+    "handler": function (response) {
+      document.getElementById('paymentForm').submit();
+    },
+    "prefill": {
+      "name": "<%= user.name %>",
+      "email": "<%= user.email %>"
+    },
+    "theme": {
+      "color": "#3399cc"
+    },
+    "modal": {
+      "ondismiss": function () {
+        // Redirect user if they close the Razorpay popup
+        window.location.href = "/"; // or use "/" to redirect to home
+      }
+    }
+  };
 
-      var rzp1 = new Razorpay(options);
+  var rzp1 = new Razorpay(options);
 
-      // Automatically open the Razorpay checkout when the page loads
-      window.onload = function() {
-        rzp1.open();
-      };
+  window.onload = function () {
+    rzp1.open();
+  };
     </script>
   <% } else { %>
     <!-- Display a message if no active order exists -->
