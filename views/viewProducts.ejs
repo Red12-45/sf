@@ -88,7 +88,7 @@
   <div class="main-content" id="main-content">
     <!-- Page Container -->
     <div class="page-container">
-      <!-- Combined Filter Form: Category & Stock Threshold -->
+      <!-- Combined Filter Form: Category, Stock Threshold & Sort Order -->
       <div class="filter-container">
         <form method="GET" action="/view-products">
           <div class="filter-controls">
@@ -107,6 +107,14 @@
               <input type="number" id="stockThreshold" name="stockThreshold" 
                     value="<%= typeof stockThreshold !== 'undefined' ? stockThreshold : '' %>" 
                     placeholder="Enter quantity threshold">
+            </div>
+            
+            <div class="filter-group">
+              <label for="sortOrder">Sort Alphabetically:</label>
+              <select id="sortOrder" name="sortOrder">
+                <option value="asc" <%= sortOrder === 'asc' ? 'selected' : '' %>>A‑Z</option>
+                <option value="desc" <%= sortOrder === 'desc' ? 'selected' : '' %>>Z‑A</option>
+              </select>
             </div>
             
             <button type="submit" class="filter-button">
@@ -131,13 +139,14 @@
             <thead>
               <tr>
                 <th class="expand-column"></th>
+                <th>Serial No.</th>
                 <th>Product Name</th>
                 <th>Wholesale Price</th>
                 <th>Retail Price</th>
                 <th>Quantity</th>
                 <th>Profit Margin</th>
-                <th>Product ID</th>
                 <th>Category</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -151,24 +160,45 @@
                       </button>
                     <% } %>
                   </td>
+                  <td class="serial-number"><%= index + 1 %></td>
                   <td class="product-name"><%= product.productName %></td>
-                  <td class="price-cell"><span class="currency">$</span><%= product.wholesalePrice %></td>
-                  <td class="price-cell"><span class="currency">$</span><%= product.retailPrice %></td>
+                  <td class="price-cell">
+                    <span class="currency">₹</span><%= Number(product.wholesalePrice).toFixed(2) %>
+                  </td>
+                  <td class="price-cell">
+                    <span class="currency">₹</span><%= Number(product.retailPrice).toFixed(2) %>
+                  </td>
                   <td class="quantity-cell <%= product.quantity <= 10 ? 'low-quantity' : '' %>">
                     <%= product.quantity %>
                     <% if (product.quantity <= 10) { %>
                       <span class="stock-badge">Low</span>
                     <% } %>
                   </td>
-                  <td class="profit-cell"><%= product.profitMargin %><span class="percent">%</span></td>
-                  <td><%= product.productId ? product.productId : '-' %></td>
-                  <td class="category-cell"><span class="category-badge"><%= product.category ? product.category : '-' %></span></td>
+                  <td class="profit-cell">
+                    <span class="currency">₹</span><%= Number(product.profitMargin).toFixed(2) %>
+                  </td>
+                  <td class="category-cell">
+                    <span class="category-badge"><%= product.category ? product.category : '-' %></span>
+                  </td>
+                  <!-- ACTIONS COLUMN -->
+                  <td class="actions-cell">
+                    <% if (product.quantity == 0 && (!product.batches || product.batches.length === 0)) { %>
+                      <form action="/delete-product/<%= product.id %>" method="POST" onsubmit="return confirm('Are you sure you want to delete this product?');">
+                        <button type="submit" class="delete-button">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </form>
+                    <% } else { %>
+                      <!-- Optionally show a placeholder or nothing -->
+                      <span>-</span>
+                    <% } %>
+                  </td>
                 </tr>
                 
                 <!-- Batches Section -->
                 <% if (product.batches && product.batches.length > 0) { %>
                 <tr class="batches-container" id="batches-<%= product.id %>">
-                  <td colspan="8" class="batches-cell">
+                  <td colspan="9" class="batches-cell">
                     <div class="batches-content">
                       <h4 class="batches-title">
                         <i class="fas fa-layer-group"></i>
@@ -182,6 +212,8 @@
                               <th>Time Added</th>
                               <th>Purchase Price</th>
                               <th>Retail Price</th>
+                              <th>Product ID</th>
+                              <th>Profit Margin</th>
                               <th>Quantity</th>
                               <th>Remaining</th>
                               <th>Actions</th>
@@ -202,8 +234,17 @@
                                 <td>
                                   <%= batchDateObj.toLocaleTimeString() %>
                                 </td>
-                                <td class="price-cell"><span class="currency">$</span><%= batch.purchasePrice.toFixed(2) %></td>
-                                <td class="price-cell"><span class="currency">$</span><%= batch.salePrice.toFixed(2) %></td>
+                                <td class="price-cell">
+                                  <span class="currency">₹</span><%= Number(batch.purchasePrice).toFixed(2) %>
+                                </td>
+                                <td class="price-cell">
+                                  <span class="currency">₹</span><%= Number(batch.salePrice).toFixed(2) %>
+                                </td>
+                                <!-- Use the batch-specific product ID if available; otherwise fallback to the master record -->
+                                <td><%= batch.batchProductId ? batch.batchProductId : (product.productId ? product.productId : '-') %></td>
+                                <td class="price-cell">
+                                  <span class="currency">₹</span><%= Number(batch.profitMargin).toFixed(2) %>
+                                </td>
                                 <td><%= batch.quantity %></td>
                                 <td class="remaining-cell <%= batch.remainingQuantity === 0 ? 'empty' : '' %>">
                                   <%= batch.remainingQuantity %>
@@ -212,19 +253,17 @@
                                   <% } %>
                                 </td>
                                 <td>
-                                  <!-- Edit icon now placed in the batch row -->
+                                  <!-- Edit icon placed in the batch row -->
                                   <a href="/edit-stock-batch/<%= batch.id %>" title="Edit this stock batch" class="edit-button">
                                     <i class="fas fa-edit"></i>
                                   </a>
-                                  <% if (batch.remainingQuantity === 0) { %>
-                                    <form action="/delete-stock-batch/<%= batch.id %>" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this stock batch?');">
-                                      <button type="submit" class="delete-button">
-                                        <i class="fas fa-trash"></i>
-                                      </button>
-                                    </form>
-                                  <% } %>
+                                  <!-- Delete button always shown with a confirmation prompt -->
+                                  <form action="/delete-stock-batch/<%= batch.id %>" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this stock batch?');">
+                                    <button type="submit" class="delete-button">
+                                      <i class="fas fa-trash"></i>
+                                    </button>
+                                  </form>
                                 </td>
-                                
                               </tr>
                             <% }); %>
                           </tbody>

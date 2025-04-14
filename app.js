@@ -207,16 +207,18 @@ app.post('/register', async (req, res) => {
     if (password !== confirmPassword) {
       return res.status(400).send("Passwords do not match");
     }
-    // Check if a user with the same email already exists
-    const userQuery = await db.collection('users').where('email', '==', email).get();
+    // Normalize the email to lower case to prevent duplicate registrations with different cases.
+    const normalizedEmail = email.trim().toLowerCase();
+    // Check if a user with the same email already exists.
+    const userQuery = await db.collection('users').where('email', '==', normalizedEmail).get();
     if (!userQuery.empty) {
       return res.status(400).send("User already exists");
     }
     const hashedPassword = await bcrypt.hash(password, 10);
-    // Create master account without accountId first
+    // Create master account without accountId first.
     const newUserRef = await db.collection('users').add({
       name,
-      email,
+      email: normalizedEmail,
       phone,
       address,
       location,
@@ -224,13 +226,14 @@ app.post('/register', async (req, res) => {
       isMaster: true,
       createdAt: new Date()
     });
-    // Set accountId to be the user's own id for the master account
+    // Set accountId to be the user's own id for the master account.
     await db.collection('users').doc(newUserRef.id).update({ accountId: newUserRef.id });
     res.redirect('/login');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
 
 // GET /login – Render the login form
 app.get('/login', (req, res) => {
@@ -248,9 +251,14 @@ app.get('/customerservice', (req, res) => {
 // POST /login – Process login, validate credentials, and check for subscription expiry.
 app.post('/login', async (req, res) => {
   try {
-    const { identifier, password } = req.body;
-
+    let { identifier, password } = req.body;
     let userDoc;
+    
+    // If the identifier looks like an email, normalize it to lower case.
+    if (identifier.includes('@')) {
+      identifier = identifier.trim().toLowerCase();
+    }
+    
     // Try to find the user by email.
     const emailQuery = await db.collection('users').where('email', '==', identifier).get();
     if (!emailQuery.empty) {
@@ -272,8 +280,8 @@ app.post('/login', async (req, res) => {
       return res.status(400).send("User not found");
     }
     const userData = userDoc.data();
-
-    // Process subscriptionExpiry (if any) so it becomes a proper Date.
+    
+    // Process subscription expiry.
     let subscriptionExpiry = null;
     if (userData.subscriptionExpiry) {
       if (typeof userData.subscriptionExpiry.toDate === 'function') {
@@ -282,7 +290,7 @@ app.post('/login', async (req, res) => {
         subscriptionExpiry = new Date(userData.subscriptionExpiry);
       }
     }
-
+    
     // For sub‑users, fetch subscriptionExpiry from master account.
     if (!userData.isMaster) {
       const masterDoc = await db.collection('users').doc(userData.accountId).get();
@@ -297,13 +305,13 @@ app.post('/login', async (req, res) => {
         }
       }
     }
-
+    
     // Validate the password.
     const validPassword = await bcrypt.compare(password, userData.password);
     if (!validPassword) {
       return res.status(400).send("Invalid password");
     }
-
+    
     // Save user details (including subscription expiry) into the session.
     req.session.user = {
       id: userDoc.id,
@@ -313,18 +321,19 @@ app.post('/login', async (req, res) => {
       accountId: userData.accountId || userDoc.id,
       subscriptionExpiry: subscriptionExpiry
     };
-
+    
     // For sub‑users, load locked routes from Firestore.
     if (!req.session.user.isMaster) {
       const permDoc = await db.collection('permissions').doc(req.session.user.accountId).get();
       req.session.lockedRoutes = permDoc.exists ? (permDoc.data().lockedRoutes || []) : [];
     }
-
+    
     res.redirect('/');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
 
 
 
@@ -473,6 +482,47 @@ app.post('/delete-user', isAuthenticated, async (req, res) => {
     res.status(500).send(error.toString());
   }
 });
+
+
+// POST /delete-product/:productId – Delete a product if its quantity is zero and there are no batches.
+app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const productId = req.params.productId;
+    
+    // Get the product document.
+    const productRef = db.collection('products').doc(productId);
+    const productDoc = await productRef.get();
+    if (!productDoc.exists) {
+      return res.status(404).send("Product not found");
+    }
+    
+    const productData = productDoc.data();
+    if (productData.accountId !== accountId) {
+      return res.status(403).send("Access denied");
+    }
+    
+    // Only allow deletion if quantity is zero.
+    if (productData.quantity !== 0) {
+      return res.status(400).send("Product cannot be deleted because its quantity is not zero");
+    }
+    
+    // Check if there are any stock batches associated with this product.
+    const batchesSnapshot = await db.collection('stockBatches')
+      .where('productId', '==', productId)
+      .get();
+    if (!batchesSnapshot.empty) {
+      return res.status(400).send("Product cannot be deleted because it has associated batches");
+    }
+    
+    // Delete the product.
+    await productRef.delete();
+    res.redirect('/view-products');
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
 
 // ----------------------
 // PERMISSION MANAGEMENT ROUTES (Master Only)
@@ -918,108 +968,178 @@ app.post('/update-opening-balance', isAuthenticated, async (req, res) => {
   }
 });
 
-// GET /add-product – Render the add product form.
+// GET /add-product – Render the add product (or stock batch) form.
+// This version includes a dropdown for filtering existing products.
 app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
   try {
+    // Get available categories.
     const categories = await getCategories(req.session.user.accountId);
+
+    // Retrieve query params for filtering and sorting.
+    const selectedCategory = req.query.category || '';
+    const sortOrder = req.query.sortOrder || 'asc'; // default ascending (A-Z)
+    
+    // Query existing products for this account.
+    let productsQuery = db.collection('products')
+      .where('accountId', '==', req.session.user.accountId);
+    if (selectedCategory.trim() !== "") {
+      productsQuery = productsQuery.where('category', '==', selectedCategory);
+    }
+    productsQuery = productsQuery.orderBy('productName', sortOrder);
+    
+    const productsSnapshot = await productsQuery.get();
+    let existingProducts = [];
+    productsSnapshot.forEach(doc => {
+      existingProducts.push({ id: doc.id, name: doc.data().productName });
+    });
+    
     res.render('addProduct', { 
-      success: req.query.success, 
+      success: req.query.success,
       errorMessage: null, // default value to prevent ReferenceError
-      categories 
+      categories,
+      existingProducts,
+      selectedCategory,
+      sortOrder
     });
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
 
-
 // POST /add-product – Process new product (or stock batch) submission.
+// This version checks if an existing product is selected (via dropdown) or if new details are provided.
 app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
-    let { productName, wholesalePrice, retailPrice, quantity, productId, selectedCategory, newCategory } = req.body;
-    wholesalePrice = parseFloat(wholesalePrice);
-    retailPrice = parseFloat(retailPrice);
-    quantity = parseInt(quantity);
+    // Destructure fields from the form:
+    // "existingProduct" will be set if a product is selected from the dropdown.
+    // If the dropdown value is "new", the master intends to create a new product.
+    const { existingProduct, productName, wholesalePrice, retailPrice, quantity, productId, selectedCategory, newCategory } = req.body;
+    const chosenWholesale = parseFloat(wholesalePrice);
+    const chosenRetail = parseFloat(retailPrice);
+    const chosenQuantity = parseInt(quantity, 10);
+
+    // Determine the category.
+    // If a new category is provided, use that; otherwise use the dropdown selection.
+    let category = (newCategory && newCategory.trim() !== "") ? newCategory.trim() : (selectedCategory || "");
+    // Process product ID input – if none, default to '-'
+    let enteredProductId = (productId && productId.trim() !== "") ? productId.trim() : '-';
     
-    const newProfitMargin = retailPrice - wholesalePrice;
-    const category = newCategory && newCategory.trim() !== "" ? newCategory.trim() : (selectedCategory || "");
-    const finalProductId = productId && productId.trim() !== "" ? productId.trim() : "-";
-
-    // Check if product exists for this account.
-    const productQuery = await db.collection('products')
-      .where('accountId', '==', accountId)
-      .where('productName', '==', productName)
-      .limit(1)
-      .get();
-
     let productDoc;
-    if (!productQuery.empty) {
-      productDoc = productQuery.docs[0];
+    // If an existing product was selected (its value is not "new"),
+    // then update that product’s record.
+    if (existingProduct && existingProduct !== "new") {
+      // Get the product document from Firestore.
+      const prodRef = db.collection('products').doc(existingProduct);
+      const prodSnapshot = await prodRef.get();
+      if (!prodSnapshot.exists) {
+        return res.status(404).send("Selected product not found");
+      }
+      productDoc = prodSnapshot;
       const productData = productDoc.data();
+      
+      // Update aggregated quantity and weighted average pricing.
       const currentQuantity = productData.quantity || 0;
-      const newQuantityTotal = currentQuantity + quantity;
-      const currentWholesale = productData.wholesalePrice || wholesalePrice;
-      const currentRetail = productData.retailPrice || retailPrice;
-      const weightedWholesale = ((currentQuantity * currentWholesale) + (quantity * wholesalePrice)) / newQuantityTotal;
-      const weightedRetail = ((currentQuantity * currentRetail) + (quantity * retailPrice)) / newQuantityTotal;
+      const newQuantityTotal = currentQuantity + chosenQuantity;
+      const currentWholesale = productData.wholesalePrice || chosenWholesale;
+      const currentRetail = productData.retailPrice || chosenRetail;
+      const weightedWholesale = ((currentQuantity * currentWholesale) + (chosenQuantity * chosenWholesale)) / newQuantityTotal;
+      const weightedRetail = ((currentQuantity * currentRetail) + (chosenQuantity * chosenRetail)) / newQuantityTotal;
       const weightedProfitMargin = weightedRetail - weightedWholesale;
       
-      const oldestWholesale = productData.oldestWholesale !== undefined 
-                                ? productData.oldestWholesale 
-                                : wholesalePrice;
-      const oldestBatchQty = productData.oldestBatchQty !== undefined 
-                                ? productData.oldestBatchQty 
-                                : currentQuantity;
-      const oldestRetail = productData.oldestRetail !== undefined 
-                                ? productData.oldestRetail 
-                                : retailPrice;
-      const secondWholesale = wholesalePrice;
-      const secondRetail = retailPrice;
+      const oldestWholesale = productData.oldestWholesale !== undefined ? productData.oldestWholesale : chosenWholesale;
+      const oldestBatchQty = productData.oldestBatchQty !== undefined ? productData.oldestBatchQty : currentQuantity;
+      const oldestRetail = productData.oldestRetail !== undefined ? productData.oldestRetail : chosenRetail;
+      const secondWholesale = chosenWholesale;
       
       await db.collection('products').doc(productDoc.id).update({
         quantity: newQuantityTotal,
         wholesalePrice: weightedWholesale,
         retailPrice: weightedRetail,
         profitMargin: weightedProfitMargin,
-        category: category,
         updatedAt: new Date(),
         oldestWholesale: oldestWholesale,
         oldestBatchQty: oldestBatchQty,
         secondWholesale: secondWholesale,
         oldestRetail: oldestRetail,
-        secondRetail: secondRetail
+        secondRetail: chosenRetail,
+        // Optionally update the category if provided.
+        category: category ? category : productData.category
       });
     } else {
-      const productData = {
-        productName,
-        wholesalePrice,
-        retailPrice,
-        quantity,
-        profitMargin: newProfitMargin,
-        category,
-        createdAt: new Date(),
-        productId: finalProductId,
-        accountId,
-        oldestWholesale: wholesalePrice,
-        oldestBatchQty: quantity,
-        secondWholesale: null,
-        oldestRetail: retailPrice,
-        secondRetail: null
-      };
-      const docRef = await db.collection('products').add(productData);
-      productDoc = { id: docRef.id, data: () => productData };
+      // Otherwise, no existing product was chosen.
+      // Check if a product with the submitted name already exists.
+      const productQuery = await db.collection('products')
+        .where('accountId', '==', accountId)
+        .where('productName', '==', productName)
+        .limit(1)
+        .get();
+      if (!productQuery.empty) {
+        // Product exists – update its quantity and averages.
+        productDoc = productQuery.docs[0];
+        const productData = productDoc.data();
+        const currentQuantity = productData.quantity || 0;
+        const newQuantityTotal = currentQuantity + chosenQuantity;
+        const currentWholesale = productData.wholesalePrice || chosenWholesale;
+        const currentRetail = productData.retailPrice || chosenRetail;
+        const weightedWholesale = ((currentQuantity * currentWholesale) + (chosenQuantity * chosenWholesale)) / newQuantityTotal;
+        const weightedRetail = ((currentQuantity * currentRetail) + (chosenQuantity * chosenRetail)) / newQuantityTotal;
+        const weightedProfitMargin = weightedRetail - weightedWholesale;
+        
+        const oldestWholesale = productData.oldestWholesale !== undefined ? productData.oldestWholesale : chosenWholesale;
+        const oldestBatchQty = productData.oldestBatchQty !== undefined ? productData.oldestBatchQty : currentQuantity;
+        const oldestRetail = productData.oldestRetail !== undefined ? productData.oldestRetail : chosenRetail;
+        const secondWholesale = chosenWholesale;
+        
+        await db.collection('products').doc(productDoc.id).update({
+          quantity: newQuantityTotal,
+          wholesalePrice: weightedWholesale,
+          retailPrice: weightedRetail,
+          profitMargin: weightedProfitMargin,
+          updatedAt: new Date(),
+          oldestWholesale: oldestWholesale,
+          oldestBatchQty: oldestBatchQty,
+          secondWholesale: secondWholesale,
+          oldestRetail: oldestRetail,
+          secondRetail: chosenRetail,
+          category: category ? category : productData.category
+        });
+      } else {
+        // Create a new product.
+        const productData = {
+          productName,
+          wholesalePrice: chosenWholesale,
+          retailPrice: chosenRetail,
+          quantity: chosenQuantity,
+          profitMargin: chosenRetail - chosenWholesale,
+          category, // Use category as determined above.
+          createdAt: new Date(),
+          productId: enteredProductId,  // Save the entered product ID.
+          accountId,
+          oldestWholesale: chosenWholesale,
+          oldestBatchQty: chosenQuantity,
+          secondWholesale: null,
+          oldestRetail: chosenRetail,
+          secondRetail: null
+        };
+        const docRef = await db.collection('products').add(productData);
+        // For later references, create a productDoc-like object.
+        productDoc = { id: docRef.id, data: () => productData };
+      }
     }
     
+    // Create the stock batch record.
+    // When an existing product was used, we get its name from Firestore.
     const stockBatchData = {
       productId: productDoc.id,
-      productName,
-      purchasePrice: wholesalePrice,
-      salePrice: retailPrice,
-      quantity: quantity,
-      remainingQuantity: quantity,
+      productName: (existingProduct && existingProduct !== "new") ? productDoc.data().productName : productName,
+      purchasePrice: chosenWholesale,
+      salePrice: chosenRetail,
+      quantity: chosenQuantity,
+      remainingQuantity: chosenQuantity,
       batchDate: new Date(),
-      accountId
+      accountId,
+      batchProductId: enteredProductId
     };
     await db.collection('stockBatches').add(stockBatchData);
     
@@ -1029,13 +1149,20 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
   }
 });
 
+
+
 // ----------------------
 // GET /view-products – View all products with an optional category filter.
+// GET /view-products – View all products with an optional category filter and sort order.
+// GET /view-products – View all products with an optional category filter and sort order.
 app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
     const filterCategory = req.query.filterCategory || '';
     const stockThreshold = req.query.stockThreshold || '';
+    // New sortOrder query parameter; defaults to ascending order
+    const sortOrder = req.query.sortOrder || 'asc';
+    
     let productsQuery = db.collection('products').where('accountId', '==', accountId);
 
     if (filterCategory && filterCategory.trim() !== '') {
@@ -1044,6 +1171,9 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
     if (stockThreshold && stockThreshold.trim() !== '') {
       productsQuery = productsQuery.where('quantity', '<', parseInt(stockThreshold));
     }
+    
+    // Add ordering by product name according to the specified sortOrder.
+    productsQuery = productsQuery.orderBy('productName', sortOrder);
 
     const productsSnapshot = await productsQuery.get();
     let products = [];
@@ -1055,20 +1185,27 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
         .get();
       let batches = [];
       batchesSnapshot.forEach(batchDoc => {
-        batches.push({ id: batchDoc.id, ...batchDoc.data() });
+        let batchData = batchDoc.data();
+        // Compute the profit margin for the batch (salePrice minus purchasePrice)
+        batchData.profitMargin = batchData.salePrice - batchData.purchasePrice;
+        batches.push({ id: batchDoc.id, ...batchData });
       });
       product.batches = batches;
       products.push(product);
     }
 
     const categories = await getCategories(accountId);
-    res.render('viewProducts', { products, categories, filterCategory, stockThreshold });
+    res.render('viewProducts', { products, categories, filterCategory, stockThreshold, sortOrder });
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
 
+
+
 // NEW ROUTE: Delete a stock batch with zero remaining quantity.
+// NEW ROUTE: Delete a stock batch with zero remaining quantity.
+// Modified Route: Delete a stock batch regardless of remaining quantity.
 app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
@@ -1085,16 +1222,21 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
       return res.status(403).send("Access denied: You do not have permission to delete this batch");
     }
 
-    if (batchData.remainingQuantity !== 0) {
-      return res.status(400).send("Only stock batches with zero remaining quantity can be deleted");
-    }
+    // Get the product ID before deleting the batch.
+    const productId = batchData.productId;
 
+    // Delete the stock batch.
     await batchRef.delete();
+
+    // Recalculate the product aggregates automatically.
+    await recalcProductFromBatches(productId);
+
     res.redirect('/view-products');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
 
 
 
@@ -1152,12 +1294,20 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     }
     const productData = productDoc.data();
 
-    res.render('editStockBatch', { batch: { id: batchDoc.id, ...batchData }, product: { id: productDoc.id, ...productData } });
+    // Get available categories for this account.
+    const categories = await getCategories(accountId);
+
+    res.render('editStockBatch', { 
+      batch: { id: batchDoc.id, ...batchData }, 
+      product: { id: productDoc.id, ...productData },
+      categories
+    });
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
 
+// POST /edit-stock-batch/:batchId – Process stock batch update.
 // POST /edit-stock-batch/:batchId – Process stock batch update.
 app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
@@ -1175,21 +1325,52 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     }
 
     // Extract new values from the form.
+    // Allow editing of product name:
+    const newProductName = req.body.productName && req.body.productName.trim() !== "" 
+                           ? req.body.productName.trim() 
+                           : batchData.productName;
     const purchasePrice = parseFloat(req.body.purchasePrice);
     const salePrice = parseFloat(req.body.salePrice);
     const quantity = parseInt(req.body.quantity, 10);
 
-    // For simplicity, update both original quantity and remainingQuantity
-    // (You can adjust this if you need to handle cases with already sold items.)
+    // Get the batch-specific Product ID from the form; if left empty, use default.
+    const batchProductId = req.body.productId && req.body.productId.trim() !== ""
+                           ? req.body.productId.trim()
+                           : "-";
+
+    // Category update: use the new category if provided; otherwise, use the selected category.
+    const selectedCategory = req.body.selectedCategory;
+    const newCategory = req.body.newCategory && req.body.newCategory.trim() !== ""
+                        ? req.body.newCategory.trim()
+                        : "";
+    const category = newCategory !== "" ? newCategory : selectedCategory;
+
+    // Update the stock batch record with the new details including productName.
     await batchRef.update({
       purchasePrice,
       salePrice,
       quantity,
-      remainingQuantity: quantity, // resetting remainingQuantity to new quantity
+      remainingQuantity: quantity, // reset remaining quantity to new quantity
+      batchProductId,
+      updatedAt: new Date(),
+      productName: newProductName  // update the batch's stored product name
+    });
+
+    // Fetch the master product document to update its name and category.
+    const productRef = db.collection('products').doc(batchData.productId);
+    const productDoc = await productRef.get();
+    if (!productDoc.exists) {
+      return res.status(404).send("Parent product not found");
+    }
+
+    // Update the master product record with the new product name and category.
+    await productRef.update({
+      productName: newProductName,
+      category: category,
       updatedAt: new Date()
     });
 
-    // Recalculate the parent product's values based on all its batches.
+    // Recalculate the parent product's aggregates based on its batches.
     await recalcProductFromBatches(batchData.productId);
 
     res.redirect('/view-products');
@@ -1198,54 +1379,6 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   }
 });
 
-
-// // GET /edit-product/:id – Retrieve edit form for a product.
-// app.get('/edit-product/:id', isAuthenticated, restrictRoute('/edit-product'), async (req, res) => {
-//   try {
-//     const accountId = req.session.user.accountId;
-//     const productId = req.params.id;
-//     const productDoc = await db.collection('products').doc(productId).get();
-//     if (!productDoc.exists || productDoc.data().accountId !== accountId) {
-//       return res.status(404).send("Product not found or unauthorized");
-//     }
-//     const product = { id: productDoc.id, ...productDoc.data() };
-//     const categories = await getCategories(accountId);
-//     res.render('editProduct', { product, categories });
-//   } catch (error) {
-//     res.status(500).send(error.toString());
-//   }
-// });
-
-// // POST /edit-product/:id – Process the edit product form submission.
-// app.post('/edit-product/:id', isAuthenticated, restrictRoute('/edit-product'), async (req, res) => {
-//   try {
-//     const accountId = req.session.user.accountId;
-//     const productId = req.params.id;
-//     const productDoc = await db.collection('products').doc(productId).get();
-//     if (!productDoc.exists || productDoc.data().accountId !== accountId) {
-//       return res.status(404).send("Product not found or unauthorized");
-//     }
-//     let { productName, wholesalePrice, retailPrice, quantity, selectedCategory, newCategory } = req.body;
-//     wholesalePrice = parseFloat(wholesalePrice);
-//     retailPrice = parseFloat(retailPrice);
-//     quantity = parseInt(quantity);
-//     const category = newCategory && newCategory.trim() !== "" ? newCategory.trim() : selectedCategory;
-//     const profitMargin = retailPrice - wholesalePrice;
-//     const updatedData = {
-//       productName,
-//       wholesalePrice,
-//       retailPrice,
-//       quantity,
-//       profitMargin,
-//       category,
-//       updatedAt: new Date()
-//     };
-//     await db.collection('products').doc(productId).update(updatedData);
-//     res.redirect('/view-products');
-//   } catch (error) {
-//     res.status(500).send(error.toString());
-//   }
-// });
 
 
 // GET /sales – Sales Report and Filtering Route.

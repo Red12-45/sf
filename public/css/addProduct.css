@@ -518,3 +518,64 @@ body {
     width: 100%;
   }
 }
+
+
+/* Filter Section Styles */
+.filter-section {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background-color: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.filter-section form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  width: 100%;
+}
+
+.filter-section label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.filter-section select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  color: var(--text-dark);
+  background-color: #f9fafb;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.filter-section select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.filter-section button {
+  padding: 0.6rem 1.2rem;
+  background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+  border: none;
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-section button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
