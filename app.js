@@ -1017,7 +1017,8 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
     const { existingProduct, productName, wholesalePrice, retailPrice, quantity, productId, selectedCategory, newCategory } = req.body;
     const chosenWholesale = parseFloat(wholesalePrice);
     const chosenRetail = parseFloat(retailPrice);
-    const chosenQuantity = parseInt(quantity, 10);
+    // Modified: using parseFloat to allow decimals for quantity received.
+    const chosenQuantity = parseFloat(quantity);
 
     // Determine the category.
     // If a new category is provided, use that; otherwise use the dropdown selection.
@@ -1148,7 +1149,6 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
     res.status(500).send(error.toString());
   }
 });
-
 
 
 // ----------------------

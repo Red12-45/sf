@@ -168,7 +168,8 @@
           <div class="form-row">
             <div class="form-group">
               <label for="quantity" class="required">Quantity Received</label>
-              <input type="number" id="quantity" name="quantity" required placeholder="0">
+              <!-- Modified to allow decimals -->
+              <input type="number" step="0.01" id="quantity" name="quantity" required placeholder="0">
             </div>
             <div class="form-group">
               <label for="selectedCategory">Choose Category for New Product (optional)</label>
