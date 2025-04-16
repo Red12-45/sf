@@ -2,17 +2,606 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Employee Monthly Report</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="/css/employeeReport.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ====== GLOBAL STYLES ====== */
+    :root {
+      /* Color Palette */
+      --primary-color: #5469d4;
+      --primary-dark: #4054b2;
+      --primary-light: #7b8ce4;
+      --secondary-color: #ff7043;
+      --success-color: #2ac769;
+      --danger-color: #e53935;
+      --warning-color: #ffa726;
+      --info-color: #29b6f6;
+      --text-color: #333333;
+      --text-light: #6c757d;
+      --background-light: #f8f9fa;
+      --background-white: #ffffff;
+      --background-dark: #343a40;
+      --border-color: #e0e0e0;
+      
+      /* Gradients */
+      --gradient-primary: linear-gradient(135deg, #5469d4 0%, #7b8ce4 100%);
+      --gradient-secondary: linear-gradient(135deg, #ff7043 0%, #ff9a76 100%);
+      --gradient-info: linear-gradient(135deg, #29b6f6 0%, #73d0ff 100%);
+      
+      /* Shadows */
+      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background-color: #f5f7fa;
+      color: var(--text-color);
+      line-height: 1.6;
+      min-height: 100vh;
+      position: relative;
+      padding-bottom: 70px; /* Space for footer */
+    }
+
+    /* ====== HEADER & NAVIGATION ====== */
+    nav {
+      background: var(--gradient-primary);
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: var(--shadow-md);
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    .nav-brand i {
+      margin-right: 0.8rem;
+      font-size: 1.8rem;
+      filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-5px); }
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 1rem;
+    }
+
+    .nav-links a {
+      color: rgba(255, 255, 255, 0.85);
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+
+    .nav-links a i {
+      margin-right: 0.5rem;
+    }
+
+    .nav-links a:hover {
+      color: white;
+      background-color: rgba(255, 255, 255, 0.1);
+      transform: translateY(-2px);
+    }
+
+    /* ====== CONTAINER ====== */
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      color: var(--primary-color);
+      margin-bottom: 2rem;
+      text-align: center;
+      position: relative;
+      padding-bottom: 0.5rem;
+    }
+
+    h1:after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 4px;
+      background: var(--gradient-primary);
+      border-radius: 2px;
+    }
+
+    /* ====== FILTER FORM ====== */
+    form {
+      background: var(--background-white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    form:before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: var(--gradient-info);
+    }
+
+    form div {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+      flex: 1;
+    }
+
+    label {
+      font-weight: 500;
+      color: var(--primary-dark);
+      font-size: 1.1rem;
+    }
+
+    input[type="month"] {
+      padding: 0.7rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: var(--background-light);
+      font-family: 'Poppins', sans-serif;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    input[type="month"]:focus {
+      outline: none;
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(84, 105, 212, 0.15);
+    }
+
+    form button {
+      background: var(--gradient-info);
+      color: white;
+      border: none;
+      padding: 0.7rem 1.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    form button:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    form button:active {
+      transform: translateY(0);
+    }
+
+    /* ====== MONTHLY STATS CARDS ====== */
+    .stats-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--background-white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .stat-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1rem;
+      font-size: 1.8rem;
+      color: white;
+    }
+
+    .stat-hours { background: var(--gradient-primary); }
+    .stat-employees { background: var(--gradient-info); }
+    .stat-days { background: var(--gradient-secondary); }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+      color: var(--text-light);
+      text-align: center;
+    }
+
+    /* ====== TABLE STYLES ====== */
+    .table-container {
+      background: var(--background-white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .table-header {
+      background-color: rgba(84, 105, 212, 0.1);
+      padding: 1.2rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .table-title {
+      font-size: 1.3rem;
+      color: var(--primary-color);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .table-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .action-btn {
+      background-color: var(--background-light);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-light);
+    }
+
+    .action-btn:hover {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background-color: rgba(84, 105, 212, 0.05);
+    }
+
+    th {
+      padding: 1.2rem 1rem;
+      text-align: left;
+      color: var(--primary-dark);
+      font-weight: 600;
+      border-bottom: 2px solid var(--primary-light);
+      position: relative;
+    }
+
+    th i {
+      margin-right: 0.5rem;
+      color: var(--primary-color);
+    }
+
+    th:after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: var(--primary-light);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s ease;
+    }
+
+    th:hover:after {
+      transform: scaleX(1);
+    }
+
+    td {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    tbody tr {
+      transition: all 0.3s ease;
+    }
+
+    tbody tr:hover {
+      background-color: rgba(84, 105, 212, 0.05);
+      transform: translateX(5px);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .employee-name {
+      font-weight: 500;
+      color: var(--primary-color);
+    }
+
+    .report-date {
+      color: var(--text-color);
+      font-weight: 400;
+    }
+
+    .check-in {
+      color: var(--success-color);
+      font-weight: 500;
+    }
+
+    .check-out {
+      color: var(--secondary-color);
+      font-weight: 500;
+    }
+
+    .duration {
+      background-color: rgba(42, 199, 105, 0.1);
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      font-weight: 500;
+      color: var(--success-color);
+      display: inline-block;
+    }
+
+    .no-checkout {
+      color: var(--warning-color);
+      font-style: italic;
+    }
+
+    /* Empty state styling */
+    .no-data {
+      background-color: var(--background-white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      padding: 3rem 2rem;
+      text-align: center;
+      color: var(--text-light);
+    }
+
+    .no-data i {
+      font-size: 4rem;
+      color: var(--border-color);
+      margin-bottom: 1.5rem;
+    }
+
+    .no-data p {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+    }
+
+    .no-data small {
+      display: block;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+    .no-checkin {
+  color: var(--warning-color);
+  font-style: italic;
+}
+
+    /* ====== FOOTER ====== */
+    .app-footer {
+      background-color: var(--background-dark);
+      color: white;
+      padding: 1.5rem 2rem;
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .footer-links a {
+      color: rgba(255, 255, 255, 0.7);
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    .footer-links a:hover {
+      color: white;
+    }
+
+    /* ====== RESPONSIVE DESIGN ====== */
+    @media screen and (max-width: 768px) {
+      nav {
+        flex-direction: column;
+        padding: 1rem;
+      }
+
+      .nav-brand {
+        margin-bottom: 1rem;
+      }
+
+      .nav-links {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      form {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      form div {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      label {
+        margin-bottom: 0.3rem;
+      }
+
+      .stats-container {
+        grid-template-columns: 1fr;
+      }
+
+      th, td {
+        padding: 0.8rem 0.5rem;
+        font-size: 0.9rem;
+      }
+
+      .footer-content {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+      }
+
+      .footer-links {
+        justify-content: center;
+      }
+    }
+
+    /* Custom scrollbar for tables */
+    .table-container {
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--primary-light) var(--background-light);
+    }
+
+    .table-container::-webkit-scrollbar {
+      height: 8px;
+    }
+
+    .table-container::-webkit-scrollbar-track {
+      background: var(--background-light);
+      border-radius: 4px;
+    }
+
+    .table-container::-webkit-scrollbar-thumb {
+      background: var(--primary-light);
+      border-radius: 4px;
+    }
+
+    /* Print styles */
+    @media print {
+      nav, form, .app-footer, .table-actions {
+        display: none;
+      }
+
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .container {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 1rem;
+      }
+
+      .table-container, .stats-container {
+        box-shadow: none;
+      }
+
+      h1 {
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+      }
+
+      table {
+        page-break-inside: auto;
+      }
+
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+    }
+  </style>
 </head>
 <body>
   <!-- Navigation Bar -->
   <nav>
     <div class="nav-brand">
       <i class="fas fa-file-alt"></i>
-      <span>Employee Monthly Report</span>
+      <span>SalesFlow</span>
     </div>
     <div class="nav-links">
       <a href="/"><i class="fas fa-home"></i> Dashboard</a>
@@ -21,39 +610,279 @@
       <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
     </div>
   </nav>
+  
   <div class="container">
     <h1>Employee Monthly Report</h1>
+    
+    <!-- Filter Form -->
     <form method="GET" action="/employeeReport">
       <div>
         <label for="month">Select Month:</label>
         <input type="month" id="month" name="month" value="<%= month %>">
-        <button type="submit"><i class="fas fa-filter"></i> Filter</button>
+        <button type="submit"><i class="fas fa-filter"></i> Generate Report</button>
       </div>
     </form>
-    <% if (reports && reports.length > 0) { %>
+    
+    <% 
+      // Calculate statistics if there are reports
+      if (reports && reports.length > 0) { 
+        // Count unique employees
+        const uniqueEmployees = [...new Set(reports.map(report => report.employeeName))].length;
+        
+        // Count unique dates
+        const uniqueDates = [...new Set(reports.map(report => report.reportDate))].length;
+        
+        // Calculate total hours (if both check-in and check-out exist)
+        let totalHours = 0;
+        let totalWorkEntries = 0;
+        reports.forEach(report => {
+          if (report.reportTime && report.leaveTime) {
+            // Updated parseTime function to handle cases when the period is missing
+            const parseTime = (timeStr) => {
+              const parts = timeStr.split(' ');
+              let hours, minutes;
+              if (parts.length === 1) {
+                // No AM/PM provided — assume time is in 24-hour format
+                [hours, minutes] = timeStr.split(':').map(Number);
+              } else {
+                const [time, period] = parts;
+                [hours, minutes] = time.split(':').map(Number);
+                if (period && period.toLowerCase() === 'pm' && hours !== 12) {
+                  hours += 12;
+                } else if (period && period.toLowerCase() === 'am' && hours === 12) {
+                  hours = 0;
+                }
+              }
+              return { hours, minutes };
+            };
+        
+            const checkIn = parseTime(report.reportTime);
+            const checkOut = parseTime(report.leaveTime);
+        
+            // Calculate total minutes
+            const startMinutes = checkIn.hours * 60 + checkIn.minutes;
+            const endMinutes = checkOut.hours * 60 + checkOut.minutes;
+            let totalMinutes = endMinutes - startMinutes;
+        
+            // Handle overnight shifts
+            if (totalMinutes < 0) {
+              totalMinutes += 24 * 60;
+            }
+        
+            totalHours += totalMinutes / 60;
+            totalWorkEntries++;
+          }
+        });
+        
+    %>
+    
+    <!-- Statistics Cards -->
+    <div class="stats-container">
+      <div class="stat-card">
+        <div class="stat-icon stat-hours">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-value"><%= totalHours.toFixed(1) %></div>
+        <div class="stat-label">Total Hours Worked</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon stat-employees">
+          <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-value"><%= uniqueEmployees %></div>
+        <div class="stat-label">Active Employees</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-icon stat-days">
+          <i class="fas fa-calendar-day"></i>
+        </div>
+        <div class="stat-value"><%= uniqueDates %></div>
+        <div class="stat-label">Days With Activity</div>
+      </div>
+    </div>
+    
+    <!-- Reports Table -->
+    <div class="table-container">
+      <div class="table-header">
+        <div class="table-title">
+          <i class="fas fa-history"></i>
+          <span>Monthly Time Entries</span>
+        </div>
+        <div class="table-actions">
+          <button class="action-btn" onclick="window.print()" title="Print Report">
+            <i class="fas fa-print"></i>
+          </button>
+          <button class="action-btn" onclick="exportTable()" title="Export as CSV">
+            <i class="fas fa-file-csv"></i>
+          </button>
+        </div>
+      </div>
+      
       <table>
         <thead>
           <tr>
-            <th>Employee Name</th>
-            <th>Report Date</th>
-            <th>Check-In Time</th>
-            <th>Check-Out Time</th>
+            <th><i class="fas fa-user"></i> Employee</th>
+            <th><i class="fas fa-calendar-day"></i> Date</th>
+            <th><i class="fas fa-sign-in-alt"></i> Check In</th>
+            <th><i class="fas fa-sign-out-alt"></i> Check Out</th>
+            <th><i class="fas fa-hourglass-half"></i> Duration</th>
           </tr>
         </thead>
         <tbody>
-          <% reports.forEach(function(report){ %>
-            <tr>
-              <td><%= report.employeeName %></td>
-              <td><%= report.reportDate %></td>
-              <td><%= report.reportTime %></td>
-              <td><%= report.leaveTime ? report.leaveTime : "-" %></td>
-            </tr>
+          <% reports.forEach(function(report){ 
+            // Calculate duration if both times exist
+            let duration = '-';
+            if (report.reportTime && report.leaveTime) {
+              const parseTime = (timeStr) => {
+                const parts = timeStr.split(' ');
+                let hours, minutes;
+                if (parts.length === 1) {
+                  // No period provided – assume time is in 24-hour format
+                  [hours, minutes] = timeStr.split(':').map(Number);
+                } else {
+                  const [time, period] = parts;
+                  [hours, minutes] = time.split(':').map(Number);
+                  if (period && period.toLowerCase() === 'pm' && hours !== 12) {
+                    hours += 12;
+                  } else if (period && period.toLowerCase() === 'am' && hours === 12) {
+                    hours = 0;
+                  }
+                }
+                return { hours, minutes };
+              };
+              const checkIn = parseTime(report.reportTime);
+              const checkOut = parseTime(report.leaveTime);
+              
+              // Calculate total minutes
+              const startMinutes = checkIn.hours * 60 + checkIn.minutes;
+              const endMinutes = checkOut.hours * 60 + checkOut.minutes;
+              let totalMinutes = endMinutes - startMinutes;
+              
+              // Handle overnight shifts
+              if (totalMinutes < 0) {
+                totalMinutes += 24 * 60;
+              }
+              
+              const hours = Math.floor(totalMinutes / 60);
+              const minutes = totalMinutes % 60;
+              duration = `${hours}h ${minutes}m`;
+            }
+            
+            // Format date to be more readable
+            const formatDate = (dateStr) => {
+              const date = new Date(dateStr);
+              return date.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric'
+              });
+            };
+          %>
+          <tr>
+            <td class="employee-name"><%= report.employeeName %></td>
+            <td class="report-date"><%= formatDate(report.reportDate) %></td>
+            <td class="check-in">
+              <%- report.reportTime ? report.reportTime : '<span class="no-checkin">Not checked in</span>' %>
+            </td>
+            <td class="check-out">
+              <%- report.leaveTime ? report.leaveTime : '<span class="no-checkout">Not checked out</span>' %>
+            </td>
+            <td>
+              <% if (report.reportTime && report.leaveTime) { %>
+                <span class="duration"><%= duration %></span>
+              <% } else { %>
+                <span class="no-checkout">-</span>
+              <% } %>
+            </td>
+          </tr>
+          
           <% }); %>
         </tbody>
       </table>
+    </div>
     <% } else { %>
-      <p>No reports found for the selected month.</p>
+      <!-- No Data State -->
+      <div class="no-data">
+        <i class="fas fa-chart-area"></i>
+        <p>No reports found for the selected month.</p>
+        <small>Try selecting a different month or verify that employees have logged time during this period.</small>
+      </div>
     <% } %>
   </div>
+  
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <p>&copy; <%= new Date().getFullYear() %> SalesFlow. All rights reserved.</p>
+      <div class="footer-links">
+        <a href="/help">Help</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Function to export table data as CSV
+    function exportTable() {
+      const table = document.querySelector('table');
+      if (!table) return;
+      
+      let csvContent = "data:text/csv;charset=utf-8,";
+      
+      // Add headers
+      const headers = [];
+      table.querySelectorAll('thead th').forEach(th => {
+        // Remove the icon from the header text
+        const headerText = th.textContent.trim();
+        headers.push(headerText);
+      });
+      csvContent += headers.join(",") + "\r\n";
+      
+      // Add rows
+      table.querySelectorAll('tbody tr').forEach(tr => {
+        const row = [];
+        tr.querySelectorAll('td').forEach(td => {
+          // Get text content and escape any commas
+          let cellText = td.textContent.trim();
+          if (cellText.includes(',')) {
+            cellText = `"${cellText}"`;
+          }
+          row.push(cellText);
+        });
+        csvContent += row.join(",") + "\r\n";
+      });
+      
+      // Create download link
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `employee-report-${document.getElementById('month').value}.csv`);
+      document.body.appendChild(link);
+      
+      // Trigger download and clean up
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    // Add animation to filter button
+    document.querySelector('form button').addEventListener('click', function() {
+      this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    });
+    
+    // Set the current month if not already selected
+    window.addEventListener('DOMContentLoaded', () => {
+      const monthInput = document.getElementById('month');
+      if (!monthInput.value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        monthInput.value = `${year}-${month}`;
+      }
+    });
+  </script>
 </body>
 </html>
