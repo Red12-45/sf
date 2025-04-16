@@ -964,36 +964,47 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     if (!batchDoc.exists) return res.status(404).send("Stock batch not found");
     const batchData = batchDoc.data();
     if (batchData.accountId !== accountId) return res.status(403).send("Access denied");
+    
     const newProductName = (req.body.productName && req.body.productName.trim() !== "")
       ? req.body.productName.trim() : batchData.productName;
     const purchasePrice = parseFloat(req.body.purchasePrice);
     const salePrice = parseFloat(req.body.salePrice);
-    const quantity = parseInt(req.body.quantity, 10);
+    // Modified here: use parseFloat instead of parseInt to allow decimals.
+    const quantity = parseFloat(req.body.quantity);
     const batchProductId = (req.body.productId && req.body.productId.trim() !== "")
       ? req.body.productId.trim() : "-";
     const selectedCategory = req.body.selectedCategory;
     const newCategory = (req.body.newCategory && req.body.newCategory.trim() !== "")
       ? req.body.newCategory.trim() : "";
     const category = newCategory || selectedCategory;
+    
     await batchRef.update({
-      purchasePrice, salePrice, quantity,
-      remainingQuantity: quantity,
-      batchProductId, updatedAt: new Date(), productName: newProductName
+      purchasePrice,
+      salePrice,
+      quantity,
+      remainingQuantity: quantity, // Reset remaining to the new decimal value.
+      batchProductId,
+      updatedAt: new Date(),
+      productName: newProductName
     });
+    
     const productRef = db.collection('products').doc(batchData.productId);
     const productDoc = await productRef.get();
     if (!productDoc.exists) return res.status(404).send("Parent product not found");
+    
     await productRef.update({
       productName: newProductName,
       category: category,
       updatedAt: new Date()
     });
+    
     await recalcProductFromBatches(batchData.productId);
     res.redirect('/view-products');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
 
 // -----------------------------------------------------------------------------
 // SALES & PROFIT REPORTING

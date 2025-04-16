@@ -68,7 +68,6 @@
           <div class="form-row">
             <div class="form-group">
               <label for="productName">Product Name:</label>
-              <!-- Removed the readonly attribute to allow editing -->
               <input type="text" id="productName" name="productName" value="<%= product.productName %>" required>
             </div>
           </div>
@@ -108,7 +107,8 @@
             </div>
             <div class="form-group">
               <label for="quantity">Quantity:</label>
-              <input type="number" id="quantity" name="quantity" value="<%= batch.quantity %>" required>
+              <!-- Modified step attribute for decimal input -->
+              <input type="number" step="any" id="quantity" name="quantity" value="<%= batch.quantity %>" required>
             </div>
           </div>
           <button type="submit">Update Batch</button>
