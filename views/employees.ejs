@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Employee Time Report</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/css/employees.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    .now-button {
+      background-color: #333;
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      margin-left: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9em;
+    }
+    .now-button:hover {
+      background-color: #555;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="nav-brand">
+      <i class="fas fa-user-clock"></i>
+      <span>Employee Report</span>
+    </div>
+    <div class="nav-links">
+      <a href="/"><i class="fas fa-home"></i> Dashboard</a>
+      <a href="/create-employee"><i class="fas fa-user-plus"></i> Create Employee</a>
+      <a href="/employeeReport"><i class="fas fa-file-alt"></i> Report</a>
+      <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+  </nav>
+  
+  <div class="container">
+    <h1>Employee Time Report</h1>
+    
+    <!-- Check-In Form -->
+    <div class="report-form">
+      <h2>Check-In</h2>
+      <form action="/employee/checkin" method="POST">
+        <div>
+          <label for="checkinEmployeeId">Employee:</label>
+          <select id="checkinEmployeeId" name="employeeId" required>
+            <option value="">-- Select Employee --</option>
+            <% employees.forEach(function(emp){ %>
+              <option value="<%= emp.id %>"><%= emp.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div>
+          <label for="reportTime">Report Time:</label>
+          <!-- Mark the input as read-only so users can't edit manually -->
+          <input type="text" id="reportTime" name="reportTime" placeholder="e.g. 3:23 pm" readonly required>
+          <button type="button" id="fillReportTime" class="now-button">Now</button>
+        </div>
+        <div>
+          <label for="reportDate">Report Date:</label>
+          <input type="date" id="reportDate" name="reportDate" value="<%= new Date().toISOString().substring(0,10) %>" required>
+        </div>
+        <button type="submit"><i class="fas fa-sign-in-alt"></i> Check-In</button>
+      </form>
+    </div>
+    
+    <!-- Check-Out Form -->
+    <div class="report-form">
+      <h2>Check-Out</h2>
+      <form action="/employee/checkout" method="POST">
+        <div>
+          <label for="checkoutEmployeeId">Employee:</label>
+          <select id="checkoutEmployeeId" name="employeeId" required>
+            <option value="">-- Select Employee --</option>
+            <% employees.forEach(function(emp){ %>
+              <option value="<%= emp.id %>"><%= emp.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div>
+          <label for="leaveTime">Leave Time:</label>
+          <!-- Read-only input so employees must use the button -->
+          <input type="text" id="leaveTime" name="leaveTime" placeholder="e.g. 4:45 pm" readonly required>
+          <button type="button" id="fillLeaveTime" class="now-button">Now</button>
+        </div>
+        <div>
+          <label for="reportDateCheckout">Report Date:</label>
+          <input type="date" id="reportDateCheckout" name="reportDate" value="<%= new Date().toISOString().substring(0,10) %>" required>
+        </div>
+        <button type="submit"><i class="fas fa-sign-out-alt"></i> Check-Out</button>
+      </form>
+    </div>
+    
+    <!-- Existing Reports Table -->
+    <h2>Existing Time Reports</h2>
+    <% if (reports && reports.length > 0) { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Employee Name</th>
+            <th>Report Date</th>
+            <th>Check-In Time</th>
+            <th>Check-Out Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% reports.forEach(function(report) { %>
+            <tr>
+              <td><%= report.employeeName %></td>
+              <td><%= report.reportDate %></td>
+              <td><%= report.reportTime %></td>
+              <td><%= report.leaveTime ? report.leaveTime : "-" %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } else { %>
+      <p>No reports submitted yet.</p>
+    <% } %>
+  </div>
+  
+  <script>
+    // Function to get current time in 12-hour format with am/pm
+    function getCurrentTimeString() {
+      const now = new Date();
+      // Format options: hour (numeric), minute (2-digit) in 12-hour format.
+      return now.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }).toLowerCase();
+    }
+
+    // Fill check-in time input when "Now" is clicked.
+    document.getElementById('fillReportTime').addEventListener('click', () => {
+      document.getElementById('reportTime').value = getCurrentTimeString();
+    });
+
+    // Fill check-out time input when "Now" is clicked.
+    document.getElementById('fillLeaveTime').addEventListener('click', () => {
+      document.getElementById('leaveTime').value = getCurrentTimeString();
+    });
+  </script>
+</body>
+</html>

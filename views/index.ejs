@@ -207,14 +207,28 @@
           <div>
             <label for="openingTime">Opening Time:</label>
             <input type="time" id="openingTime" name="openingTime" value="<%= openingTime %>">
+            <i class="fas fa-clock clickable" id="fillOpeningTime" style="cursor: pointer; margin-left: 8px;"></i>
           </div>
           <div>
             <label for="closingTime">Closing Time:</label>
             <input type="time" id="closingTime" name="closingTime" value="<%= closingTime %>">
+            <i class="fas fa-clock clickable" id="fillClosingTime" style="cursor: pointer; margin-left: 8px;"></i>
           </div>
+          
           <input type="hidden" name="saleDate" value="<%= saleDate %>">
           <button type="submit"><i class="fas fa-sync-alt"></i> Update Balance</button>
         </form>
+      </div>
+
+
+
+
+      <div class="formBox">
+        <h1><i class="fas fa-user-clock"></i> Report Time</h1>
+        <!-- A button or link to navigate to the employees page -->
+        <a href="/employees" class="button">
+          <i class="fas fa-chevron-right"></i> Go to Report Time
+        </a>
       </div>
     </div>
 
@@ -553,6 +567,23 @@ if (!isSubscribed) {
 }
 
   </script>
+<script>
+function getCurrentTimeString() {
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+document.getElementById('fillOpeningTime').addEventListener('click', () => {
+  document.getElementById('openingTime').value = getCurrentTimeString();
+});
+
+document.getElementById('fillClosingTime').addEventListener('click', () => {
+  document.getElementById('closingTime').value = getCurrentTimeString();
+});
+
+</script>
   <script src="/js/firebasePersistence.js" type="module"></script>
 
 </body>

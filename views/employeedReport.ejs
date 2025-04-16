@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Employee Monthly Report</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/css/employeeReport.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="nav-brand">
+      <i class="fas fa-file-alt"></i>
+      <span>Employee Monthly Report</span>
+    </div>
+    <div class="nav-links">
+      <a href="/"><i class="fas fa-home"></i> Dashboard</a>
+      <a href="/create-employee"><i class="fas fa-user-plus"></i> Create Employee</a>
+      <a href="/employees"><i class="fas fa-user-clock"></i> Time Entry</a>
+      <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+  </nav>
+  <div class="container">
+    <h1>Employee Monthly Report</h1>
+    <form method="GET" action="/employeeReport">
+      <div>
+        <label for="month">Select Month:</label>
+        <input type="month" id="month" name="month" value="<%= month %>">
+        <button type="submit"><i class="fas fa-filter"></i> Filter</button>
+      </div>
+    </form>
+    <% if (reports && reports.length > 0) { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Employee Name</th>
+            <th>Report Date</th>
+            <th>Check-In Time</th>
+            <th>Check-Out Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% reports.forEach(function(report){ %>
+            <tr>
+              <td><%= report.employeeName %></td>
+              <td><%= report.reportDate %></td>
+              <td><%= report.reportTime %></td>
+              <td><%= report.leaveTime ? report.leaveTime : "-" %></td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } else { %>
+      <p>No reports found for the selected month.</p>
+    <% } %>
+  </div>
+</body>
+</html>

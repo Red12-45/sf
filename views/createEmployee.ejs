@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create Employee</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/css/create-employee.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <div class="nav-brand">
+      <i class="fas fa-user-plus"></i>
+      <span>Create Employee</span>
+    </div>
+    <div class="nav-links">
+      <!-- Link back to the reporting page -->
+      <a href="/employees"><i class="fas fa-user-clock"></i> Report Time</a>
+      <a href="/"><i class="fas fa-home"></i> Dashboard</a>
+      <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Create New Employee</h1>
+    <form action="/create-employee" method="POST">
+      <div>
+        <label for="name">Employee Name:</label>
+        <input type="text" id="name" name="name" placeholder="Enter employee name" required>
+      </div>
+      <button type="submit"><i class="fas fa-check-circle"></i> Create Employee</button>
+    </form>
+
+    <!-- List existing employees with Delete functionality -->
+    <h2>Existing Employees</h2>
+    <% if (employees && employees.length > 0) { %>
+      <table>
+        <thead>
+          <tr>
+            <th>Employee Name</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% employees.forEach(function(emp) { %>
+            <tr>
+              <td><%= emp.name %></td>
+              <td>
+                <!-- Delete Form -->
+                <form action="/delete-employee" method="POST" onsubmit="return confirm('Are you sure you want to delete this employee?');" style="display:inline;">
+                  <input type="hidden" name="employeeId" value="<%= emp.id %>">
+                  <button type="submit" class="delete-btn">
+                    <i class="fas fa-trash"></i> Delete
+                  </button>
+                </form>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } else { %>
+      <p>No employees created yet.</p>
+    <% } %>
+  </div>
+</body>
+</html>

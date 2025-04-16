@@ -1,7 +1,6 @@
-// app.js – Optimized version preserving all logic, routes, and features
+// app.js – Ultimate Optimized version preserving all logic, routes, and features
 
 const express = require('express');
-const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
 const path = require('path');
 const bcrypt = require('bcrypt');
@@ -9,7 +8,13 @@ const session = require('express-session');
 const { FirestoreStore } = require('@google-cloud/connect-firestore');
 const favicon = require('serve-favicon');
 const Razorpay = require('razorpay');
+const compression = require('compression'); // added for response compression
 require('dotenv').config();
+
+// -----------------------------------------------------------------------------
+// NODE-CACHE: Setup a caching layer for certain repetitive Firestore queries.
+const NodeCache = require('node-cache');
+const cache = new NodeCache({ stdTTL: 300, checkperiod: 120 }); // Cache TTL set to 5 minutes
 
 // Initialize Firebase Admin SDK (ensure serviceAccountKey.json is in your root directory)
 const serviceAccount = require('./serviceAccountKey.json');
@@ -20,76 +25,88 @@ const db = admin.firestore();
 
 const app = express();
 
-// Use your environment variables securely.
-const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
+// Enable compression middleware for all responses.
+app.use(compression());
 
-// -----------------------------------------------------------------------------
-// MIDDLEWARE & EXPRESS SETUP
-// -----------------------------------------------------------------------------
-
-// Serve static files and favicon.
-app.use(express.static('public'));
+// Serve static files with caching and favicon.
+app.use(express.static('public', { maxAge: '1d' }));
 app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 
-// Setup session middleware with a one‑month duration.
+// Setup session middleware with FirestoreStore and a one‑month duration.
 app.use(session({
   store: new FirestoreStore({
     dataset: admin.firestore(),
-    kind: 'express-sessions'     
+    kind: 'express-sessions'
   }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    maxAge: 30 * 24 * 60 * 60 * 1000  // 30 days cookie lifespan
-  }
+  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 days
 }));
 
-// Use body‑parser middleware.
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
+// Use built‑in body parsing middleware.
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
 
 // Set view engine and views folder.
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Global reCAPTCHA verification endpoint.
-app.post('/verify-captcha', async (req, res) => {
-  const token = req.body.token; // The token from your client‑side reCAPTCHA
-  const verificationUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${RECAPTCHA_SECRET_KEY}&response=${token}`;
-  try {
-    const response = await fetch(verificationUrl, { method: 'POST' });
-    const data = await response.json();
-    if (data.success) {
-      res.json({ message: 'Captcha verification successful!' });
-    } else {
-      res.status(400).json({ message: 'Captcha verification failed.', errors: data['error-codes'] });
-    }
-  } catch (error) {
-    console.error('Error verifying reCAPTCHA:', error);
-    res.status(500).json({ message: 'Server error verifying reCAPTCHA.' });
-  }
-});
+// Enable view caching in production.
+if (process.env.NODE_ENV === 'production') {
+  app.set('view cache', true);
+}
+
+// Use environment variables securely.
+const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
+
+// -----------------------------------------------------------------------------
+// HELPER FUNCTIONS (defined once for reuse)
+// -----------------------------------------------------------------------------
+
+// Pad helper for date formatting.
+const pad = num => String(num).padStart(2, '0');
+
+// Optimized getCategories using cache, map and Set.
+const getCategories = async (accountId) => {
+  const cacheKey = `categories_${accountId}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const snapshot = await db.collection('products').where('accountId', '==', accountId).get();
+  const categories = snapshot.docs
+    .map(doc => doc.data().category)
+    .filter(category => category);
+  const uniqueCategories = [...new Set(categories)];
+  cache.set(cacheKey, uniqueCategories);
+  return uniqueCategories;
+};
+
+// New helper: Cache and return permissions (locked routes) for an account.
+const getPermissions = async (accountId) => {
+  const cacheKey = `permissions_${accountId}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+  const permDoc = await db.collection('permissions').doc(accountId).get();
+  const lockedRoutes = permDoc.exists ? (permDoc.data().lockedRoutes || []) : [];
+  cache.set(cacheKey, lockedRoutes);
+  return lockedRoutes;
+};
+
+// -----------------------------------------------------------------------------
+// GLOBAL ENDPOINTS & MIDDLEWARE
+// -----------------------------------------------------------------------------
+
 
 // Global subscription check middleware.
-// (Only routes outside the allowedPaths will be checked for an active subscription.)
+// (Routes that are not in allowedPaths will be checked for active subscription.)
 app.use((req, res, next) => {
   if (!req.session || !req.session.user) return next();
-
   const allowedPaths = [
-    '/', 
-    '/login', 
-    '/register', 
-    '/documentation', 
-    '/pricing',
-    '/subscribe/monthly', 
-    '/subscribe/half-yearly', 
-    '/subscribe/yearly',
-    '/payment-success',
-    '/logout'
+    '/', '/login', '/register', '/documentation', '/pricing',
+    '/subscribe/monthly', '/subscribe/half-yearly', '/subscribe/yearly',
+    '/payment-success', '/logout'
   ];
   if (allowedPaths.includes(req.path)) return next();
-
   const subscriptionExpiry = req.session.user.subscriptionExpiry;
   if (!subscriptionExpiry || new Date(subscriptionExpiry) <= new Date()) {
     return res.redirect('/pricing');
@@ -98,7 +115,7 @@ app.use((req, res, next) => {
 });
 
 // -----------------------------------------------------------------------------
-// HELPER FUNCTIONS & MIDDLEWARE
+// AUTHORIZATION MIDDLEWARE & CONFIGURABLE ROUTES
 // -----------------------------------------------------------------------------
 
 // Only master users can access.
@@ -108,17 +125,6 @@ const requireMaster = (req, res, next) =>
 // Check for authentication.
 const isAuthenticated = (req, res, next) =>
   req.session && req.session.user ? next() : res.redirect('/login');
-
-// Get distinct product categories for a given account.
-const getCategories = async (accountId) => {
-  const snapshot = await db.collection('products').where('accountId', '==', accountId).get();
-  const categorySet = new Set();
-  snapshot.forEach(doc => {
-    const { category } = doc.data();
-    if (category) categorySet.add(category);
-  });
-  return Array.from(categorySet);
-};
 
 // Configurable restricted routes for sub‑users.
 const availableRestrictedRoutes = [
@@ -148,7 +154,7 @@ const razorpay = new Razorpay({
 // AUTHENTICATION ROUTES
 // -----------------------------------------------------------------------------
 
-// GET /register – Render the registration form.
+// GET /register – Render registration form.
 app.get('/register', async (req, res) => res.render('register'));
 
 // POST /register – Process registration and create master account.
@@ -156,24 +162,16 @@ app.post('/register', async (req, res) => {
   try {
     const { name, email, phone, address, location, password, confirmPassword } = req.body;
     if (password !== confirmPassword) return res.status(400).send("Passwords do not match");
-
     const normalizedEmail = email.trim().toLowerCase();
     const userQuery = await db.collection('users').where('email', '==', normalizedEmail).get();
     if (!userQuery.empty) return res.status(400).send("User already exists");
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = {
-      name,
-      email: normalizedEmail,
-      phone,
-      address,
-      location,
-      password: hashedPassword,
-      isMaster: true,
-      createdAt: new Date()
+      name, email: normalizedEmail, phone, address, location,
+      password: hashedPassword, isMaster: true, createdAt: new Date()
     };
     const newUserRef = await db.collection('users').add(newUser);
-    // Set the accountId as the same as the new user's document ID.
+    // Set accountId same as document ID.
     await db.collection('users').doc(newUserRef.id).update({ accountId: newUserRef.id });
     res.redirect('/login');
   } catch (error) {
@@ -181,64 +179,52 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// GET /login – Render the login form.
+// GET /login – Render login form.
 app.get('/login', (req, res) => {
   if (req.session && req.session.user) return res.redirect('/');
   res.render('login');
 });
 
 // GET /customerservice – Render customer service page.
-app.get('/customerservice', (req, res) => {
-  res.render('cs');
-});
+app.get('/customerservice', (req, res) => res.render('cs'));
 
-// POST /login – Process login, validate credentials, and check for subscription expiry.
+// POST /login – Process login and check subscription.
 app.post('/login', async (req, res) => {
   try {
     let { identifier, password } = req.body;
     let userDoc = null;
     if (identifier.includes('@')) identifier = identifier.trim().toLowerCase();
-
-    // Execute multiple queries concurrently.
     const [emailQuery, subUserQuery, phoneQuery] = await Promise.all([
       db.collection('users').where('email', '==', identifier).get(),
       db.collection('users').where('subUserId', '==', identifier).get(),
       db.collection('users').where('phone', '==', identifier).get()
     ]);
-
-    if (!emailQuery.empty) {
-      userDoc = emailQuery.docs[0];
-    } else if (!subUserQuery.empty) {
-      userDoc = subUserQuery.docs[0];
-    } else if (!phoneQuery.empty) {
-      userDoc = phoneQuery.docs[0];
-    }
+    if (!emailQuery.empty) userDoc = emailQuery.docs[0];
+    else if (!subUserQuery.empty) userDoc = subUserQuery.docs[0];
+    else if (!phoneQuery.empty) userDoc = phoneQuery.docs[0];
     if (!userDoc) return res.status(400).send("User not found");
 
     const userData = userDoc.data();
     let subscriptionExpiry = null;
     if (userData.subscriptionExpiry) {
-      subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function') ?
-                           userData.subscriptionExpiry.toDate() : new Date(userData.subscriptionExpiry);
+      subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function')
+                           ? userData.subscriptionExpiry.toDate() : new Date(userData.subscriptionExpiry);
     }
     if (!userData.isMaster) {
       const masterDoc = await db.collection('users').doc(userData.accountId).get();
       if (masterDoc.exists) {
         const masterData = masterDoc.data();
         if (masterData.subscriptionExpiry) {
-          subscriptionExpiry = (typeof masterData.subscriptionExpiry.toDate === 'function') ?
-                               masterData.subscriptionExpiry.toDate() : new Date(masterData.subscriptionExpiry);
+          subscriptionExpiry = (typeof masterData.subscriptionExpiry.toDate === 'function')
+                               ? masterData.subscriptionExpiry.toDate() : new Date(masterData.subscriptionExpiry);
         }
       }
     }
     const validPassword = await bcrypt.compare(password, userData.password);
     if (!validPassword) return res.status(400).send("Invalid password");
 
-    // Save relevant user data in the session.
     req.session.user = {
-      id: userDoc.id,
-      name: userData.name,
-      email: userData.email,
+      id: userDoc.id, name: userData.name, email: userData.email,
       isMaster: userData.isMaster || false,
       accountId: userData.accountId || userDoc.id,
       subscriptionExpiry
@@ -255,38 +241,34 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// GET /logout – Log out the current user.
+// GET /logout – Log out current user.
 app.get('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login');
 });
 
-// GET /documentation – Render the documentation page.
-app.get('/documentation', (req, res) => {
-  res.render('documentations');
-});
+// GET /documentation – Render documentation page.
+app.get('/documentation', (req, res) => res.render('documentations'));
 
 // -----------------------------------------------------------------------------
 // USER MANAGEMENT ROUTES (Master Only)
 // -----------------------------------------------------------------------------
 
-// GET /create-user – Render the create sub‑user form.
+// GET /create-user – Render create sub‑user form.
 app.get('/create-user', isAuthenticated, async (req, res) => {
   if (!req.session.user.isMaster) return res.status(403).send("Access denied");
   try {
     const snapshot = await db.collection('users')
-      .where('accountId', '==', req.session.user.accountId)
-      .get();
-    const users = [];
-    snapshot.forEach(doc => {
+      .where('accountId', '==', req.session.user.accountId).get();
+    const users = snapshot.docs.map(doc => {
       const data = doc.data();
-      users.push({
+      return {
         id: doc.id,
         name: data.name,
         email: data.email,
         isMaster: data.isMaster,
         subUserId: data.subUserId
-      });
+      };
     });
     res.render('createuser', { users });
   } catch (error) {
@@ -294,33 +276,25 @@ app.get('/create-user', isAuthenticated, async (req, res) => {
   }
 });
 
-// POST /create-user – Create a sub‑user (master only).
+// POST /create-user – Create sub‑user (master only).
 app.post('/create-user', isAuthenticated, async (req, res) => {
   if (!req.session.user.isMaster) return res.status(403).send("Access denied");
   try {
     const subUsersQuery = await db.collection('users')
       .where('accountId', '==', req.session.user.accountId)
-      .where('isMaster', '==', false)
-      .get();
+      .where('isMaster', '==', false).get();
     if (subUsersQuery.size >= 2) return res.status(400).send("Sub‑user limit reached. Maximum 2 sub‑users allowed.");
-    
     const { name, password, confirmPassword, subUserId } = req.body;
     if (password !== confirmPassword) return res.status(400).send("Passwords do not match");
     if (!subUserId || subUserId.trim() === "") return res.status(400).send("Sub‑user ID is required");
-
     const subUserQuery = await db.collection('users')
       .where('subUserId', '==', subUserId)
-      .where('accountId', '==', req.session.user.accountId)
-      .get();
+      .where('accountId', '==', req.session.user.accountId).get();
     if (!subUserQuery.empty) return res.status(400).send("Sub‑user ID already exists. Please generate a new one.");
-
     const hashedPassword = await bcrypt.hash(password, 10);
     await db.collection('users').add({
-      name,
-      password: hashedPassword,
-      isMaster: false,
-      accountId: req.session.user.accountId,
-      subUserId,
+      name, password: hashedPassword, isMaster: false,
+      accountId: req.session.user.accountId, subUserId,
       createdAt: new Date()
     });
     res.redirect('/');
@@ -329,22 +303,19 @@ app.post('/create-user', isAuthenticated, async (req, res) => {
   }
 });
 
-// POST /edit-user – Update a sub‑user's name and/or password (master only).
+// POST /edit-user – Update sub‑user's name/password (master only).
 app.post('/edit-user', isAuthenticated, async (req, res) => {
   if (!req.session.user.isMaster) return res.status(403).send("Access denied");
   try {
     const { userId, name, password, confirmPassword } = req.body;
     if (password && password !== confirmPassword) return res.status(400).send("Passwords do not match");
-
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
     if (!userDoc.exists || userDoc.data().accountId !== req.session.user.accountId) {
       return res.status(403).send("Access denied");
     }
     const updateData = { name };
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10);
-    }
+    if (password) updateData.password = await bcrypt.hash(password, 10);
     await userRef.update(updateData);
     res.redirect('/create-user');
   } catch (error) {
@@ -352,7 +323,7 @@ app.post('/edit-user', isAuthenticated, async (req, res) => {
   }
 });
 
-// POST /delete-user – Delete a sub‑user account (master only).
+// POST /delete-user – Delete sub‑user account (master only).
 app.post('/delete-user', isAuthenticated, async (req, res) => {
   if (!req.session.user.isMaster) return res.status(403).send("Access denied");
   try {
@@ -369,7 +340,7 @@ app.post('/delete-user', isAuthenticated, async (req, res) => {
   }
 });
 
-// POST /delete-product/:productId – Delete a product if its quantity is zero and it has no batches.
+// POST /delete-product/:productId – Delete product if quantity is zero and no batches exist.
 app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
@@ -377,16 +348,11 @@ app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
     const productRef = db.collection('products').doc(productId);
     const productDoc = await productRef.get();
     if (!productDoc.exists) return res.status(404).send("Product not found");
-
     const productData = productDoc.data();
     if (productData.accountId !== accountId) return res.status(403).send("Access denied");
     if (productData.quantity !== 0) return res.status(400).send("Product cannot be deleted because its quantity is not zero");
-    
-    const batchesSnapshot = await db.collection('stockBatches')
-      .where('productId', '==', productId)
-      .get();
+    const batchesSnapshot = await db.collection('stockBatches').where('productId', '==', productId).get();
     if (!batchesSnapshot.empty) return res.status(400).send("Product cannot be deleted because it has associated batches");
-    
     await productRef.delete();
     res.redirect('/view-products');
   } catch (error) {
@@ -398,12 +364,11 @@ app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
 // PERMISSION MANAGEMENT ROUTES (Master Only)
 // -----------------------------------------------------------------------------
 
-// GET /permission – Render the permission management page.
+// GET /permission – Render permission management page.
 app.get('/permission', isAuthenticated, restrictRoute('/permission'), async (req, res) => {
   if (!req.session.user.isMaster) return res.status(403).send("Access denied");
   try {
-    const permDoc = await db.collection('permissions').doc(req.session.user.accountId).get();
-    const lockedRoutes = permDoc.exists ? (permDoc.data().lockedRoutes || []) : [];
+    const lockedRoutes = await getPermissions(req.session.user.accountId);
     res.render('permission', { lockedRoutes, availableRoutes: availableRestrictedRoutes, success: req.query.success });
   } catch (error) {
     res.status(500).send(error.toString());
@@ -417,8 +382,8 @@ app.post('/permission', isAuthenticated, restrictRoute('/permission'), async (re
     let lockedRoutes = req.body.lockedRoutes;
     if (!lockedRoutes) lockedRoutes = [];
     else if (!Array.isArray(lockedRoutes)) lockedRoutes = [lockedRoutes];
-    
     await db.collection('permissions').doc(req.session.user.accountId).set({ lockedRoutes }, { merge: true });
+    cache.del(`permissions_${req.session.user.accountId}`); // Invalidate cached permissions
     res.redirect('/permission?success=1');
   } catch (error) {
     res.status(500).send(error.toString());
@@ -434,41 +399,59 @@ app.get('/', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
     const today = new Date();
-    const pad = num => String(num).padStart(2, '0');
     const defaultDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
     const saleDate = req.query.saleDate || defaultDate;
 
-    // Execute queries concurrently.
-    const [productsSnapshot, salesSnapshot, expenseSnapshot, categories, obDoc] = await Promise.all([
-      db.collection('products').where('accountId', '==', accountId).get(),
-      db.collection('sales').where('accountId', '==', accountId).where('saleDate', '==', saleDate).orderBy('createdAt', 'desc').get(),
-      db.collection('expenses').where('accountId', '==', accountId).where('saleDate', '==', saleDate).orderBy('createdAt', 'desc').get(),
+    // Fetch products and batch-fetch stock batches with "in" query chunking.
+    const productsSnapshot = await db.collection('products').where('accountId', '==', accountId).get();
+    const products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const productIds = products.map(p => p.id);
+    let batchesMap = {};
+    if (productIds.length > 0) {
+      const chunkSize = 10; // Firestore "in" query limit.
+      const batchPromises = [];
+      for (let i = 0; i < productIds.length; i += chunkSize) {
+        const chunk = productIds.slice(i, i + chunkSize);
+        batchPromises.push(
+          db.collection('stockBatches')
+            .where('productId', 'in', chunk)
+            .where('remainingQuantity', '>', 0)
+            .orderBy('batchDate', 'asc')
+            .get()
+        );
+      }
+      const batchSnapshots = await Promise.all(batchPromises);
+      batchSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const pid = data.productId;
+          if (!batchesMap[pid]) batchesMap[pid] = [];
+          batchesMap[pid].push({
+            wholesale: data.purchasePrice,
+            retail: data.salePrice,
+            qty: data.remainingQuantity
+          });
+        });
+      });
+    }
+    products.forEach(product => {
+      product.batches = batchesMap[product.id] || [];
+    });
+
+    // Concurrently fetch sales, expenses, categories, and opening balance.
+    const [salesSnapshot, expenseSnapshot, categories, obDoc] = await Promise.all([
+      db.collection('sales').where('accountId', '==', accountId)
+        .where('saleDate', '==', saleDate).orderBy('createdAt', 'desc').get(),
+      db.collection('expenses').where('accountId', '==', accountId)
+        .where('saleDate', '==', saleDate).orderBy('createdAt', 'desc').get(),
       getCategories(accountId),
       db.collection('openingBalances').doc(`${accountId}_${saleDate}`).get()
     ]);
 
-    // Process products and fetch their batches concurrently.
-    const products = await Promise.all(productsSnapshot.docs.map(async doc => {
-      let product = { id: doc.id, ...doc.data() };
-      const batchesSnapshot = await db.collection('stockBatches')
-        .where('productId', '==', doc.id)
-        .where('remainingQuantity', '>', 0)
-        .orderBy('batchDate', 'asc')
-        .get();
-      product.batches = batchesSnapshot.docs.map(batchDoc => {
-        const { purchasePrice: wholesale, salePrice: retail, remainingQuantity: qty } = batchDoc.data();
-        return { wholesale, retail, qty };
-      });
-      return product;
-    }));
-
-    // Process sales and expenses.
-    let sales = [];
+    const sales = [];
     salesSnapshot.forEach(doc => sales.push({ id: doc.id, ...doc.data() }));
-    let expenses = [];
+    const expenses = [];
     expenseSnapshot.forEach(doc => expenses.push(doc.data()));
-
-    // Opening balance information.
     let openingBalance = 0, openingTime = "", closingTime = "";
     if (obDoc.exists) {
       const obData = obDoc.data();
@@ -483,7 +466,7 @@ app.get('/', isAuthenticated, async (req, res) => {
       totalProfit += sale.profit;
       const saleAmount = sale.retailPrice * sale.saleQuantity;
       totalSales += saleAmount;
-      switch(sale.status) {
+      switch (sale.status) {
         case 'Paid Cash':
           totalCashSales += saleAmount;
           break;
@@ -509,11 +492,10 @@ app.get('/', isAuthenticated, async (req, res) => {
           break;
       }
     }
-
     let totalCashExpenses = 0, totalOnlineExpenses = 0;
     for (const exp of expenses) {
       const expenseAmount = exp.expenseCost;
-      switch(exp.expenseStatus) {
+      switch (exp.expenseStatus) {
         case 'Paid Cash':
           totalCashExpenses += expenseAmount;
           break;
@@ -542,25 +524,12 @@ app.get('/', isAuthenticated, async (req, res) => {
       const diffTime = new Date(req.session.user.subscriptionExpiry) - new Date();
       subscriptionRemaining = Math.max(Math.ceil(diffTime / (1000 * 60 * 60 * 24)), 0);
     }
-    
-    res.render('index', { 
-      products, 
-      sales, 
-      expenses, 
-      saleDate, 
-      categories, 
-      openingBalance,
-      openingTime,
-      closingTime,
-      totalProfit,
-      totalSales,
-      totalCashSales,
-      totalOnlineSales,
-      totalNotPaidSales,
-      totalCashExpenses,
-      totalOnlineExpenses,
-      finalCash,
-      subscriptionRemaining,
+
+    res.render('index', {
+      products, sales, expenses, saleDate, categories,
+      openingBalance, openingTime, closingTime,
+      totalProfit, totalSales, totalCashSales, totalOnlineSales, totalNotPaidSales,
+      totalCashExpenses, totalOnlineExpenses, finalCash, subscriptionRemaining,
       user: req.session.user
     });
   } catch (error) {
@@ -574,7 +543,7 @@ app.get('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res)
     const accountId = req.session.user.accountId;
     const today = new Date();
     const currentYear = today.getFullYear();
-    const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
+    const currentMonth = pad(today.getMonth() + 1);
     const defaultMonth = `${currentYear}-${currentMonth}`;
     const monthParam = req.query.month || defaultMonth;
     const startDate = monthParam + '-01';
@@ -582,7 +551,7 @@ app.get('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res)
     let nextMonthNum = parseInt(mon, 10) + 1;
     let nextYear = parseInt(year, 10);
     if (nextMonthNum > 12) { nextMonthNum = 1; nextYear++; }
-    const nextMonth = `${nextYear}-${String(nextMonthNum).padStart(2, '0')}-01`;
+    const nextMonth = `${nextYear}-${pad(nextMonthNum)}-01`;
 
     const expenseSnapshot = await db.collection('expenses')
       .where('accountId', '==', accountId)
@@ -592,18 +561,16 @@ app.get('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res)
       .get();
     const expenses = expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     const totalExpense = expenses.reduce((sum, exp) => sum + exp.expenseCost, 0);
-
     const groupedExpenses = {};
     expenses.forEach(exp => {
       let createdAt = (exp.createdAt && typeof exp.createdAt.toDate === 'function')
-                      ? exp.createdAt.toDate() : new Date(exp.createdAt);
+        ? exp.createdAt.toDate() : new Date(exp.createdAt);
       if (!isNaN(createdAt.getTime())) {
         const dateStr = createdAt.toISOString().substring(0, 10);
         groupedExpenses[dateStr] = groupedExpenses[dateStr] || [];
         groupedExpenses[dateStr].push(exp);
       }
     });
-
     res.render('expense', { month: monthParam, groupedExpenses, totalExpense });
   } catch (error) {
     res.status(500).send(error.toString());
@@ -618,24 +585,17 @@ app.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res
     const { redirectTo } = req.body;
     let { expenseReason, expenseCost, expenseStatus, expenseDetail1, expenseDetail2 } = req.body;
     if (!Array.isArray(expenseReason)) {
-      expenseReason = [expenseReason];
-      expenseCost = [expenseCost];
-      expenseStatus = [expenseStatus];
-      expenseDetail1 = [expenseDetail1];
+      expenseReason = [expenseReason]; expenseCost = [expenseCost];
+      expenseStatus = [expenseStatus]; expenseDetail1 = [expenseDetail1];
       expenseDetail2 = [expenseDetail2];
     }
     await Promise.all(expenseReason.map(async (reason, i) => {
       const cost = parseFloat(expenseCost[i]);
       const status = expenseStatus[i] || 'Paid Cash';
-      const detail1 = expenseDetail1[i];
-      const detail2 = expenseDetail2[i];
+      const detail1 = expenseDetail1[i]; const detail2 = expenseDetail2[i];
       let expenseData = {
-        expenseReason: reason,
-        expenseCost: cost,
-        expenseStatus: status,
-        saleDate,
-        accountId,
-        createdAt: new Date()
+        expenseReason: reason, expenseCost: cost, expenseStatus: status,
+        saleDate, accountId, createdAt: new Date()
       };
       if (detail1 !== undefined && detail1 !== "") expenseData.expenseDetail1 = parseFloat(detail1);
       if (detail2 !== undefined && detail2 !== "") expenseData.expenseDetail2 = parseFloat(detail2);
@@ -648,16 +608,14 @@ app.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res
   }
 });
 
-// POST /sale – Process sale transactions with FIFO and weighted average.
+// POST /sale – Process sale transactions with FIFO and weighted average, using write batches.
 app.post('/sale', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
     let { productId, customProductId, retailPrice, saleQuantity, saleDate, status, extraInfo, paymentDetail1, paymentDetail2 } = req.body;
     const selectedProductId = (customProductId && customProductId.trim()) ? customProductId : productId;
-    
     saleQuantity = parseInt(saleQuantity);
     const chosenRetailPrice = parseFloat(retailPrice);
-
     const productRef = db.collection('products').doc(selectedProductId);
     const productDoc = await productRef.get();
     if (!productDoc.exists) return res.status(404).send("Product not found");
@@ -670,9 +628,7 @@ app.post('/sale', isAuthenticated, async (req, res) => {
       .orderBy('batchDate', 'asc')
       .get();
     let remainingToSell = saleQuantity;
-    let totalWholesaleCost = 0;
-    let weightedRetailTotal = 0;
-    let updatedBatches = [];
+    let totalWholesaleCost = 0, weightedRetailTotal = 0, updatedBatches = [];
     batchesSnapshot.forEach(batchDoc => {
       if (remainingToSell <= 0) return;
       const batchData = batchDoc.data();
@@ -685,17 +641,21 @@ app.post('/sale', isAuthenticated, async (req, res) => {
       updatedBatches.push({ id: batchDoc.id, newRemaining: available - qtyFromBatch });
     });
     if (remainingToSell > 0) return res.status(400).send("Not enough quantity in stock (batches)");
-    
+
     const avgWholesale = totalWholesaleCost / saleQuantity;
     const avgRetailDefault = weightedRetailTotal / saleQuantity;
     const profitPerUnit = chosenRetailPrice - avgWholesale;
     const totalProfit = profitPerUnit * saleQuantity;
     const totalSale = chosenRetailPrice * saleQuantity;
-    
-    await Promise.all(updatedBatches.map(b =>
-      db.collection('stockBatches').doc(b.id).update({ remainingQuantity: b.newRemaining })
-    ));
-    
+
+    // Update stock batches using a Firestore write batch.
+    const writeBatch = db.batch();
+    updatedBatches.forEach(b => {
+      const batchDocRef = db.collection('stockBatches').doc(b.id);
+      writeBatch.update(batchDocRef, { remainingQuantity: b.newRemaining });
+    });
+    await writeBatch.commit();
+
     const newProductQuantity = product.quantity - saleQuantity;
     if (newProductQuantity < 0) return res.status(400).send("Not enough quantity in product stock");
     await productRef.update({ quantity: newProductQuantity });
@@ -709,21 +669,13 @@ app.post('/sale', isAuthenticated, async (req, res) => {
       wholesalePrice: avgWholesale,
       retailPrice: chosenRetailPrice,
       defaultRetail: avgRetailDefault,
-      saleQuantity,
-      profit: totalProfit,
-      profitPerUnit,
-      totalSale,
-      saleDate,
-      status,
-      extraInfo,
-      openingBalance,
-      createdAt: new Date(),
-      accountId,
+      saleQuantity, profit: totalProfit, profitPerUnit, totalSale,
+      saleDate, status, extraInfo, openingBalance,
+      createdAt: new Date(), accountId,
       customProductId: (product.productId && product.productId.trim() !== "") ? product.productId.trim() : "-"
     };
     if (paymentDetail1 !== undefined && paymentDetail1 !== "") saleData.paymentDetail1 = parseFloat(paymentDetail1);
     if (paymentDetail2 !== undefined && paymentDetail2 !== "") saleData.paymentDetail2 = parseFloat(paymentDetail2);
-    
     await db.collection('sales').add(saleData);
     res.redirect(`/?saleDate=${saleDate}`);
   } catch (error) {
@@ -756,20 +708,15 @@ app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (r
     const categories = await getCategories(req.session.user.accountId);
     const selectedCategory = req.query.category || '';
     const sortOrder = req.query.sortOrder || 'asc';
-    
     let productsQuery = db.collection('products').where('accountId', '==', req.session.user.accountId);
     if (selectedCategory.trim() !== "") productsQuery = productsQuery.where('category', '==', selectedCategory);
     productsQuery = productsQuery.orderBy('productName', sortOrder);
     const productsSnapshot = await productsQuery.get();
     const existingProducts = productsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().productName }));
-    
-    res.render('addProduct', { 
+    res.render('addProduct', {
       success: req.query.success,
       errorMessage: null,
-      categories,
-      existingProducts,
-      selectedCategory,
-      sortOrder
+      categories, existingProducts, selectedCategory, sortOrder
     });
   } catch (error) {
     res.status(500).send(error.toString());
@@ -786,7 +733,6 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
     const chosenQuantity = parseFloat(quantity);
     const category = (newCategory && newCategory.trim() !== "") ? newCategory.trim() : (selectedCategory || "");
     const enteredProductId = (productId && productId.trim() !== "") ? productId.trim() : '-';
-    
     let productDoc;
     if (existingProduct && existingProduct !== "new") {
       const prodRef = db.collection('products').doc(existingProduct);
@@ -801,22 +747,17 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
       const weightedWholesale = ((currentQuantity * currentWholesale) + (chosenQuantity * chosenWholesale)) / newQuantityTotal;
       const weightedRetail = ((currentQuantity * currentRetail) + (chosenQuantity * chosenRetail)) / newQuantityTotal;
       const weightedProfitMargin = weightedRetail - weightedWholesale;
-      
       const oldestWholesale = (productData.oldestWholesale !== undefined) ? productData.oldestWholesale : chosenWholesale;
       const oldestBatchQty = (productData.oldestBatchQty !== undefined) ? productData.oldestBatchQty : currentQuantity;
       const oldestRetail = (productData.oldestRetail !== undefined) ? productData.oldestRetail : chosenRetail;
       const secondWholesale = chosenWholesale;
-      
       await db.collection('products').doc(productDoc.id).update({
         quantity: newQuantityTotal,
         wholesalePrice: weightedWholesale,
         retailPrice: weightedRetail,
         profitMargin: weightedProfitMargin,
         updatedAt: new Date(),
-        oldestWholesale,
-        oldestBatchQty,
-        secondWholesale,
-        oldestRetail,
+        oldestWholesale, oldestBatchQty, secondWholesale, oldestRetail,
         secondRetail: chosenRetail,
         category: category || productData.category
       });
@@ -836,22 +777,17 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
         const weightedWholesale = ((currentQuantity * currentWholesale) + (chosenQuantity * chosenWholesale)) / newQuantityTotal;
         const weightedRetail = ((currentQuantity * currentRetail) + (chosenQuantity * chosenRetail)) / newQuantityTotal;
         const weightedProfitMargin = weightedRetail - weightedWholesale;
-        
         const oldestWholesale = (productData.oldestWholesale !== undefined) ? productData.oldestWholesale : chosenWholesale;
         const oldestBatchQty = (productData.oldestBatchQty !== undefined) ? productData.oldestBatchQty : currentQuantity;
         const oldestRetail = (productData.oldestRetail !== undefined) ? productData.oldestRetail : chosenRetail;
         const secondWholesale = chosenWholesale;
-        
         await db.collection('products').doc(productDoc.id).update({
           quantity: newQuantityTotal,
           wholesalePrice: weightedWholesale,
           retailPrice: weightedRetail,
           profitMargin: weightedProfitMargin,
           updatedAt: new Date(),
-          oldestWholesale,
-          oldestBatchQty,
-          secondWholesale,
-          oldestRetail,
+          oldestWholesale, oldestBatchQty, secondWholesale, oldestRetail,
           secondRetail: chosenRetail,
           category: category || productData.category
         });
@@ -876,10 +812,10 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
         productDoc = { id: docRef.id, data: () => newProductData };
       }
     }
-    
     const stockBatchData = {
       productId: productDoc.id,
-      productName: (existingProduct && existingProduct !== "new") ? productDoc.data().productName : productName,
+      productName: (existingProduct && existingProduct !== "new")
+                   ? productDoc.data().productName : productName,
       purchasePrice: chosenWholesale,
       salePrice: chosenRetail,
       quantity: chosenQuantity,
@@ -889,7 +825,6 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
       batchProductId: enteredProductId
     };
     await db.collection('stockBatches').add(stockBatchData);
-    
     res.redirect('/add-product?success=1');
   } catch (error) {
     res.status(500).send(error.toString());
@@ -907,25 +842,40 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
     const filterCategory = req.query.filterCategory || '';
     const stockThreshold = req.query.stockThreshold || '';
     const sortOrder = req.query.sortOrder || 'asc';
-    
     let productsQuery = db.collection('products').where('accountId', '==', accountId);
     if (filterCategory.trim() !== '') productsQuery = productsQuery.where('category', '==', filterCategory);
     if (stockThreshold.trim() !== '') productsQuery = productsQuery.where('quantity', '<', parseInt(stockThreshold));
     productsQuery = productsQuery.orderBy('productName', sortOrder);
     const productsSnapshot = await productsQuery.get();
-    
-    const products = await Promise.all(productsSnapshot.docs.map(async doc => {
-      let product = { id: doc.id, ...doc.data() };
-      const batchesSnapshot = await db.collection('stockBatches')
-        .where('productId', '==', doc.id)
-        .get();
-      product.batches = batchesSnapshot.docs.map(batchDoc => {
-        let batchData = batchDoc.data();
-        batchData.profitMargin = batchData.salePrice - batchData.purchasePrice;
-        return { id: batchDoc.id, ...batchData };
+    // Optimize: batch fetch all stock batches for these products.
+    const products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const productIds = products.map(p => p.id);
+    let batchesMap = {};
+    if (productIds.length > 0) {
+      const chunkSize = 10;
+      const batchPromises = [];
+      for (let i = 0; i < productIds.length; i += chunkSize) {
+        const chunk = productIds.slice(i, i + chunkSize);
+        batchPromises.push(
+          db.collection('stockBatches')
+            .where('productId', 'in', chunk)
+            .get()
+        );
+      }
+      const batchSnapshots = await Promise.all(batchPromises);
+      batchSnapshots.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const pid = data.productId;
+          if (!batchesMap[pid]) batchesMap[pid] = [];
+          data.profitMargin = data.salePrice - data.purchasePrice;
+          batchesMap[pid].push({ id: doc.id, ...data });
+        });
       });
-      return product;
-    }));
+    }
+    products.forEach(product => {
+      product.batches = batchesMap[product.id] || [];
+    });
     const categories = await getCategories(accountId);
     res.render('viewProducts', { products, categories, filterCategory, stockThreshold, sortOrder });
   } catch (error) {
@@ -945,10 +895,8 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     const batchRef = db.collection('stockBatches').doc(batchId);
     const batchDoc = await batchRef.get();
     if (!batchDoc.exists) return res.status(404).send("Stock batch not found");
-
     const batchData = batchDoc.data();
     if (batchData.accountId !== accountId) return res.status(403).send("Access denied: You do not have permission to delete this batch");
-
     await batchRef.delete();
     await recalcProductFromBatches(batchData.productId);
     res.redirect('/view-products');
@@ -961,7 +909,7 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 async function recalcProductFromBatches(productId) {
   const snapshot = await db.collection('stockBatches').where('productId', '==', productId).get();
   let totalRemaining = 0, totalWholesale = 0, totalRetail = 0;
-  snapshot.forEach(doc => {
+  snapshot.docs.forEach(doc => {
     const data = doc.data();
     totalRemaining += data.remainingQuantity;
     totalWholesale += data.remainingQuantity * data.purchasePrice;
@@ -990,17 +938,14 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     const batchRef = db.collection('stockBatches').doc(batchId);
     const batchDoc = await batchRef.get();
     if (!batchDoc.exists) return res.status(404).send("Stock batch not found");
-
     const batchData = batchDoc.data();
     if (batchData.accountId !== accountId) return res.status(403).send("Access denied");
-
     const productDoc = await db.collection('products').doc(batchData.productId).get();
     if (!productDoc.exists) return res.status(404).send("Parent product not found");
     const productData = productDoc.data();
     const categories = await getCategories(accountId);
-
-    res.render('editStockBatch', { 
-      batch: { id: batchDoc.id, ...batchData }, 
+    res.render('editStockBatch', {
+      batch: { id: batchDoc.id, ...batchData },
       product: { id: productDoc.id, ...productData },
       categories
     });
@@ -1019,30 +964,25 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     if (!batchDoc.exists) return res.status(404).send("Stock batch not found");
     const batchData = batchDoc.data();
     if (batchData.accountId !== accountId) return res.status(403).send("Access denied");
-
-    const newProductName = (req.body.productName && req.body.productName.trim() !== "") ? req.body.productName.trim() : batchData.productName;
+    const newProductName = (req.body.productName && req.body.productName.trim() !== "")
+      ? req.body.productName.trim() : batchData.productName;
     const purchasePrice = parseFloat(req.body.purchasePrice);
     const salePrice = parseFloat(req.body.salePrice);
     const quantity = parseInt(req.body.quantity, 10);
-    const batchProductId = (req.body.productId && req.body.productId.trim() !== "") ? req.body.productId.trim() : "-";
+    const batchProductId = (req.body.productId && req.body.productId.trim() !== "")
+      ? req.body.productId.trim() : "-";
     const selectedCategory = req.body.selectedCategory;
-    const newCategory = (req.body.newCategory && req.body.newCategory.trim() !== "") ? req.body.newCategory.trim() : "";
+    const newCategory = (req.body.newCategory && req.body.newCategory.trim() !== "")
+      ? req.body.newCategory.trim() : "";
     const category = newCategory || selectedCategory;
-
     await batchRef.update({
-      purchasePrice,
-      salePrice,
-      quantity,
+      purchasePrice, salePrice, quantity,
       remainingQuantity: quantity,
-      batchProductId,
-      updatedAt: new Date(),
-      productName: newProductName
+      batchProductId, updatedAt: new Date(), productName: newProductName
     });
-
     const productRef = db.collection('products').doc(batchData.productId);
     const productDoc = await productRef.get();
     if (!productDoc.exists) return res.status(404).send("Parent product not found");
-
     await productRef.update({
       productName: newProductName,
       category: category,
@@ -1064,9 +1004,10 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
   try {
     const accountId = req.session.user.accountId;
     const { saleDate, month, status } = req.query;
-    let salesQuery = db.collection('sales').where('accountId', '==', accountId).orderBy('createdAt', 'desc');
-    let expenseQuery = db.collection('expenses').where('accountId', '==', accountId).orderBy('createdAt', 'desc');
-
+    let salesQuery = db.collection('sales').where('accountId', '==', accountId)
+      .orderBy('createdAt', 'desc');
+    let expenseQuery = db.collection('expenses').where('accountId', '==', accountId)
+      .orderBy('createdAt', 'desc');
     if (saleDate) {
       salesQuery = salesQuery.where('saleDate', '==', saleDate);
       expenseQuery = expenseQuery.where('saleDate', '==', saleDate);
@@ -1076,24 +1017,22 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
       let nextMonthNum = parseInt(monthNum) + 1;
       let nextYear = parseInt(year);
       if (nextMonthNum > 12) { nextMonthNum = 1; nextYear++; }
-      const nextMonth = `${nextYear}-${String(nextMonthNum).padStart(2, '0')}-01`;
-      salesQuery = salesQuery.where('saleDate', '>=', startDate).where('saleDate', '<', nextMonth);
-      expenseQuery = expenseQuery.where('saleDate', '>=', startDate).where('saleDate', '<', nextMonth);
+      const nextMonth = `${nextYear}-${pad(nextMonthNum)}-01`;
+      salesQuery = salesQuery.where('saleDate', '>=', startDate)
+        .where('saleDate', '<', nextMonth);
+      expenseQuery = expenseQuery.where('saleDate', '>=', startDate)
+        .where('saleDate', '<', nextMonth);
     }
     if (status && status.trim() !== "" && status !== "All") {
       salesQuery = salesQuery.where('status', '==', status);
     }
-
     const [salesSnapshot, expenseSnapshot] = await Promise.all([salesQuery.get(), expenseQuery.get()]);
-
     const sales = salesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     const expenses = expenseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
     const allDatesSet = new Set();
     sales.forEach(sale => allDatesSet.add(sale.saleDate));
     expenses.forEach(exp => allDatesSet.add(exp.saleDate));
     const allDates = Array.from(allDatesSet);
-
     const openingTimes = {};
     await Promise.all(allDates.map(async (date) => {
       const obDoc = await db.collection('openingBalances').doc(`${accountId}_${date}`).get();
@@ -1102,20 +1041,12 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
         closingTime: obDoc.data().closingTime || ""
       } : { openingTime: "", closingTime: "" };
     }));
-
     const profitWithoutExpenses = sales.reduce((sum, sale) => sum + sale.profit, 0);
     const totalExpensesAmount = expenses.reduce((sum, exp) => sum + exp.expenseCost, 0);
     const profitAfterExpenses = profitWithoutExpenses - totalExpensesAmount;
-
-    res.render('sales', { 
-      sales, 
-      expenses, 
-      saleDate, 
-      month, 
-      status,
-      profitWithoutExpenses,
-      totalExpensesAmount,
-      profitAfterExpenses,
+    res.render('sales', {
+      sales, expenses, saleDate, month, status,
+      profitWithoutExpenses, totalExpensesAmount, profitAfterExpenses,
       openingTimes
     });
   } catch (error) {
@@ -1130,59 +1061,49 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
     const { month, year } = req.query;
     let salesQuery = db.collection('sales').where('accountId', '==', accountId);
     let expenseQuery = db.collection('expenses').where('accountId', '==', accountId);
-    
     if (month) {
       const [y, m] = month.split('-');
       const startDate = `${month}-01`;
       let nextMonthNum = parseInt(m) + 1;
       let nextYear = parseInt(y);
       if (nextMonthNum > 12) { nextMonthNum = 1; nextYear++; }
-      const nextMonth = `${nextYear}-${String(nextMonthNum).padStart(2, '0')}-01`;
+      const nextMonth = `${nextYear}-${pad(nextMonthNum)}-01`;
       salesQuery = salesQuery.where('saleDate', '>=', startDate).where('saleDate', '<', nextMonth);
       expenseQuery = expenseQuery.where('saleDate', '>=', startDate).where('saleDate', '<', nextMonth);
     } else if (year) {
       const startDate = `${year}-01-01`;
-      const endDate = `${parseInt(year)+1}-01-01`;
+      const endDate = `${parseInt(year) + 1}-01-01`;
       salesQuery = salesQuery.where('saleDate', '>=', startDate).where('saleDate', '<', endDate);
       expenseQuery = expenseQuery.where('saleDate', '>=', startDate).where('saleDate', '<', endDate);
     } else {
       const currentYear = new Date().getFullYear();
       const startDate = `${currentYear}-01-01`;
-      const endDate = `${currentYear+1}-01-01`;
+      const endDate = `${currentYear + 1}-01-01`;
       salesQuery = salesQuery.where('saleDate', '>=', startDate).where('saleDate', '<', endDate);
       expenseQuery = expenseQuery.where('saleDate', '>=', startDate).where('saleDate', '<', endDate);
     }
-    
     const [salesSnapshot, expenseSnapshot] = await Promise.all([salesQuery.get(), expenseQuery.get()]);
     const sales = salesSnapshot.docs.map(doc => doc.data());
     const expenses = expenseSnapshot.docs.map(doc => doc.data());
-    
     const totalProfit = sales.reduce((sum, sale) => sum + sale.profit, 0);
     const totalExpenses = expenses.reduce((sum, exp) => sum + exp.expenseCost, 0);
     const netProfit = totalProfit - totalExpenses;
-    
     const profitByMonth = {};
     sales.forEach(sale => {
-      const saleMonth = sale.saleDate.substring(0,7);
+      const saleMonth = sale.saleDate.substring(0, 7);
       if (!profitByMonth[saleMonth]) profitByMonth[saleMonth] = { profit: 0, expenses: 0, netProfit: 0 };
       profitByMonth[saleMonth].profit += sale.profit;
     });
     expenses.forEach(exp => {
-      const expMonth = exp.saleDate.substring(0,7);
+      const expMonth = exp.saleDate.substring(0, 7);
       if (!profitByMonth[expMonth]) profitByMonth[expMonth] = { profit: 0, expenses: 0, netProfit: 0 };
       profitByMonth[expMonth].expenses += exp.expenseCost;
     });
     Object.keys(profitByMonth).forEach(m => {
       profitByMonth[m].netProfit = profitByMonth[m].profit - profitByMonth[m].expenses;
     });
-    
-    res.render('profit', { 
-      sales, 
-      expenses, 
-      totalProfit, 
-      totalExpenses, 
-      netProfit, 
-      profitByMonth,
+    res.render('profit', {
+      sales, expenses, totalProfit, totalExpenses, netProfit, profitByMonth,
       monthFilter: month || '',
       yearFilter: req.query.year || ''
     });
@@ -1198,11 +1119,11 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
 // GET /pricing – Render subscription plans page.
 app.get('/pricing', isAuthenticated, (req, res) => {
   const now = new Date();
-  if (req.session.user.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now) return res.redirect('/');
+  if (req.session.user.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now)
+    return res.redirect('/');
   res.render('pricing', { user: req.session.user });
 });
 
-// Subscription routes – Create Razorpay order and render payment page.
 app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
   const amount = 400 * 100;
   const currency = 'INR';
@@ -1239,7 +1160,7 @@ app.get('/subscribe/yearly', isAuthenticated, async (req, res) => {
   }
 });
 
-// Payment success callback.
+// POST /payment-success – Payment callback update.
 app.post('/payment-success', isAuthenticated, async (req, res) => {
   try {
     const { plan } = req.body;
@@ -1248,12 +1169,11 @@ app.post('/payment-success', isAuthenticated, async (req, res) => {
     else if (plan === 'Half-Yearly') subscriptionDurationDays = 182;
     else if (plan === 'Yearly') subscriptionDurationDays = 365;
     else return res.status(400).send("Invalid subscription plan");
-    
     const currentTime = new Date();
-    let newExpiry = req.session.user.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > currentTime
-                    ? new Date(req.session.user.subscriptionExpiry) : currentTime;
+    let newExpiry = req.session.user.subscriptionExpiry &&
+      new Date(req.session.user.subscriptionExpiry) > currentTime
+      ? new Date(req.session.user.subscriptionExpiry) : currentTime;
     newExpiry.setDate(newExpiry.getDate() + subscriptionDurationDays);
-    
     await db.collection('users').doc(req.session.user.id).update({ subscriptionExpiry: newExpiry });
     req.session.user.subscriptionExpiry = newExpiry;
     res.redirect('/');
@@ -1262,15 +1182,15 @@ app.post('/payment-success', isAuthenticated, async (req, res) => {
   }
 });
 
-// GET /profile – Render the profile page (master only).
+// GET /profile – Render profile page (master only).
 app.get('/profile', isAuthenticated, requireMaster, async (req, res) => {
   try {
     const userDoc = await db.collection('users').doc(req.session.user.id).get();
     if (!userDoc.exists) return res.status(404).send("User not found");
     let userData = userDoc.data();
     if (userData.subscriptionExpiry) {
-      userData.subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function') ?
-                                    userData.subscriptionExpiry.toDate() : new Date(userData.subscriptionExpiry);
+      userData.subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function')
+        ? userData.subscriptionExpiry.toDate() : new Date(userData.subscriptionExpiry);
     }
     res.render('profile', { user: userData });
   } catch (error) {
@@ -1285,8 +1205,8 @@ app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
     if (!userDoc.exists) return res.status(404).send("User not found");
     let userData = userDoc.data();
     if (userData.subscriptionExpiry) {
-      userData.subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function') ?
-                                    userData.subscriptionExpiry.toDate() : new Date(userData.subscriptionExpiry);
+      userData.subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function')
+        ? userData.subscriptionExpiry.toDate() : new Date(userData.subscriptionExpiry);
     }
     res.render('billing', { user: userData });
   } catch (error) {
@@ -1294,10 +1214,177 @@ app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
   }
 });
 
+
+
+// GET /employees – Render the Employee Report Time page.
+app.get('/employees', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    // Fetch employee reports and employee list.
+    const [reportsSnapshot, employeesSnapshot] = await Promise.all([
+      db.collection('employeeReports')
+        .where('accountId', '==', accountId)
+        .orderBy('reportDate', 'desc')
+        .get(),
+      db.collection('employees')
+        .where('accountId', '==', accountId)
+        .orderBy('name', 'asc')
+        .get()
+    ]);
+    const reports = reportsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const employees = employeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.render('employees', { reports, employees });
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+
+
+app.post('/employee/checkin', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const { employeeId, reportTime, reportDate } = req.body;
+    // Check if there is already a check-in record for this employee on the report date.
+    const existingReports = await db.collection('employeeReports')
+      .where('accountId', '==', accountId)
+      .where('employeeId', '==', employeeId)
+      .where('reportDate', '==', reportDate)
+      .get();
+    if (!existingReports.empty) {
+      return res.status(400).send("Check-in already recorded for this date.");
+    }
+    // Retrieve employee name.
+    const empDoc = await db.collection('employees').doc(employeeId).get();
+    if (!empDoc.exists) return res.status(400).send("Employee not found");
+    const newReport = {
+      employeeId,
+      employeeName: empDoc.data().name,
+      reportTime,
+      leaveTime: "", // leaveTime will be updated later
+      reportDate,
+      accountId,
+      createdAt: new Date()
+    };
+    await db.collection('employeeReports').add(newReport);
+    res.redirect('/employees');
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+app.post('/employee/checkout', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const { employeeId, leaveTime, reportDate } = req.body;
+    // Find an existing check-in record for this employee on the given date.
+    const reportQuery = await db.collection('employeeReports')
+      .where('accountId', '==', accountId)
+      .where('employeeId', '==', employeeId)
+      .where('reportDate', '==', reportDate)
+      .get();
+    if (reportQuery.empty) {
+      return res.status(400).send("No check-in record found for this date.");
+    }
+    // Update the first found record with the leave time.
+    const reportDoc = reportQuery.docs[0];
+    await reportDoc.ref.update({
+      leaveTime,
+      updatedAt: new Date()
+    });
+    res.redirect('/employees');
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+app.get('/employeeReport', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    let month = req.query.month; // Expected format: "YYYY-MM"
+    let reportsQuery = db.collection('employeeReports')
+      .where('accountId', '==', accountId)
+      .orderBy('reportDate', 'desc');
+    if (month && month.trim() !== "") {
+      const [year, mon] = month.split('-');
+      const startDate = `${month}-01`;
+      let nextMonthNum = parseInt(mon, 10) + 1;
+      let nextYear = parseInt(year, 10);
+      if (nextMonthNum > 12) { nextMonthNum = 1; nextYear++; }
+      const nextMonth = `${nextYear}-${('0' + nextMonthNum).slice(-2)}-01`;
+      reportsQuery = reportsQuery.where('reportDate', '>=', startDate)
+                                 .where('reportDate', '<', nextMonth);
+    }
+    const reportsSnapshot = await reportsQuery.get();
+    const reports = reportsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.render('employeedReport', { reports, month: month || "" });
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+
+
+// GET /create-employee – Render the Create Employee page.
+app.get('/create-employee', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const employeesSnapshot = await db.collection('employees')
+      .where('accountId', '==', accountId)
+      .orderBy('name', 'asc')
+      .get();
+    const employees = employeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.render('createEmployee', { employees });
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+
+// POST /create-employee – Process new employee creation.
+app.post('/create-employee', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const { name } = req.body;
+    // Optionally, check if an employee with the same name already exists.
+    await db.collection('employees').add({
+      name,
+      accountId,
+      createdAt: new Date()
+    });
+    res.redirect('/create-employee');
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
+
+
+app.post('/delete-employee', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const { employeeId } = req.body;
+
+    // Retrieve employee document from Firestore.
+    const empRef = db.collection('employees').doc(employeeId);
+    const empDoc = await empRef.get();
+
+    // Ensure the employee exists and belongs to the current account.
+    if (!empDoc.exists || empDoc.data().accountId !== accountId) {
+      return res.status(403).send("Access denied or Employee not found");
+    }
+
+    // Delete the employee document.
+    await empRef.delete();
+
+    // Redirect back to the create employee page.
+    res.redirect('/create-employee');
+  } catch (error) {
+    res.status(500).send(error.toString());
+  }
+});
 // -----------------------------------------------------------------------------
 // START THE SERVER
 // -----------------------------------------------------------------------------
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on port ${PORT}`);
