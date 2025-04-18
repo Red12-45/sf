@@ -1,19 +1,18 @@
 // public/js/firebasePersistence.js
-// Use type="module" in your script tag when importing this file.
+// Make sure to use: <script type="module" src="/js/firebasePersistence.js"></script>
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.19.1/firebase-app.js";
 import { getFirestore, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/9.19.1/firebase-firestore.js";
-require('dotenv').config();
 
-// Your Firebase project config
+// ✅ Safe to expose — this is the public Firebase config
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: "AIzaSyDxiyCQx35omEQOJAVEcOT3Xfjsf5ANSac",
+  authDomain: "saleflow-63fb0.firebaseapp.com",
+  projectId: "saleflow-63fb0",
+  storageBucket: "saleflow-63fb0.appspot.com",
+  messagingSenderId: "18857800436",
+  appId: "1:18857800436:web:58f3523b7e6f1764e6e4a1",
+  measurementId: "G-ZWZ7GLCH2D"
 };
 
 // Initialize Firebase
@@ -25,14 +24,14 @@ export const db = getFirestore(app);
 // Enable offline persistence
 enableIndexedDbPersistence(db)
   .then(() => {
-    console.log("Offline persistence enabled.");
+    console.log("✅ Offline persistence enabled.");
   })
   .catch((err) => {
     if (err.code === "failed-precondition") {
-      console.error("Persistence failed – multiple tabs open.");
+      console.error("⚠️ Persistence failed: multiple tabs open.");
     } else if (err.code === "unimplemented") {
-      console.error("Persistence is not available in this browser.");
+      console.error("❌ Persistence not supported by this browser.");
     } else {
-      console.error("Error enabling persistence:", err);
+      console.error("❌ Error enabling persistence:", err);
     }
   });

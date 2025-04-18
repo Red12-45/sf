@@ -5,119 +5,124 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Edit Stock Batch</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  <!-- Link to external stylesheet -->
   <link rel="stylesheet" href="/css/editProduct.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>.hidden{display:none}</style>
 </head>
 <body>
-  <div class="page-wrapper">
-    <!-- Sidebar Navigation -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo">Edit Stock Batch</div>
+<div class="page-wrapper">
+  <!-- ── Sidebar (unchanged) ───────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-header"><div class="logo">Edit Stock Batch</div></div>
+    <nav>
+      <div class="sidebar-section">
+        <div class="section-title">Navigation</div>
+        <ul>
+          <li><a href="/"><span class="nav-icon">🏠</span>Dashboard</a></li>
+          <li><a href="/add-product"><span class="nav-icon">➕</span>Add New Product</a></li>
+          <li><a href="/expense"><span class="nav-icon">📜</span>Expense</a></li>
+          <li><a href="/view-products" class="active"><span class="nav-icon">📋</span>View Products</a></li>
+          <li><a href="/sales"><span class="nav-icon">🏷️</span>Sales</a></li>
+        </ul>
       </div>
-      <nav>
-        <div class="sidebar-section">
-          <div class="section-title">Navigation</div>
-          <ul>
-            <li>
-              <a href="/"><span class="nav-icon">🏠</span>Dashboard</a>
-            </li>
-            <li>
-              <a href="/add-product"><span class="nav-icon">➕</span> Add New Product</a>
-            </li>
-            <li>
-              <a href="/expense"><span class="nav-icon">📜</span>Expense</a>
-            </li>
-            <li>
-              <a href="/view-products" class="active"><span class="nav-icon">📋</span> View Products</a>
-            </li>
-            <li>
-              <a href="/sales"><span class="nav-icon">🏷️</span>Sales</a>
-            </li>
-          </ul>
-        </div>
-        <div class="sidebar-section">
-          <div class="section-title">Management</div>
-          <ul>
-            <li>
-              <a href="/profile"><span class="nav-icon">💼</span> Profile</a>
-            </li>
-            <li>
-              <a href="/logout"><span class="nav-icon">↪</span> Logout</a>
-            </li>
-          </ul>
-        </div>
-      </nav>
-      <div class="sidebar-footer">
-        &copy; 2025 SalesFlow
+      <div class="sidebar-section">
+        <div class="section-title">Management</div>
+        <ul>
+          <li><a href="/profile"><span class="nav-icon">💼</span>Profile</a></li>
+          <li><a href="/logout"><span class="nav-icon">↪</span>Logout</a></li>
+        </ul>
       </div>
-    </aside>
+    </nav>
+    <div class="sidebar-footer">© 2025 SalesFlow</div>
+  </aside>
 
-    <!-- Main Content -->
-    <main class="content">
-      <header class="page-header">
-        <h1>Edit Stock Batch for "<%= product.productName %>"</h1>
-      </header>
-      <section class="form-container">
-        <!-- Form to edit the specific stock batch -->
-        <form action="/edit-stock-batch/<%= batch.id %>" method="POST">
-          <!-- Editable Product Name Field -->
-          <div class="form-row">
-            <div class="form-group">
-              <label for="productName">Product Name:</label>
-              <input type="text" id="productName" name="productName" value="<%= product.productName %>" required>
-            </div>
+  <!-- ── Main Content ──────────────────────────────────────────────────── -->
+  <main class="content">
+    <header class="page-header">
+      <h1>Edit Stock Batch for "<%= product.productName %>"</h1>
+    </header>
+
+    <section class="form-container">
+      <form action="/edit-stock-batch/<%= batch.id %>" method="POST">
+        <!-- ── Product name / ID ─────────────────────────────────────── -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="productName">Product Name</label>
+            <input type="text" id="productName" name="productName"
+                   value="<%= product.productName %>" required>
           </div>
-          <!-- New fields for Product ID and Category -->
-          <div class="form-row">
-            <div class="form-group">
-              <label for="productId">Product ID:</label>
-              <input type="text" id="productId" name="productId" 
-                value="<%= batch.batchProductId ? batch.batchProductId : (product.productId || '-') %>">
-            </div>
-            <div class="form-group">
-              <label for="selectedCategory">Category:</label>
-              <select id="selectedCategory" name="selectedCategory">
-                <option value="">-- Select Category --</option>
-                <% categories.forEach(function(cat) { %>
-                  <option value="<%= cat %>" <%= product.category === cat ? 'selected' : '' %>><%= cat %></option>
-                <% }); %>
-              </select>
-            </div>
+          <div class="form-group">
+            <label for="productId">Product ID</label>
+            <input type="text" id="productId" name="productId"
+                   value="<%= batch.batchProductId ? batch.batchProductId : (product.productId || '-') %>">
           </div>
-          <!-- Field to enter a new category if needed -->
-          <div class="form-row">
-            <div class="form-group full-width">
-              <label for="newCategory">Or Enter New Category:</label>
-              <input type="text" id="newCategory" name="newCategory" placeholder="Enter new category">
-            </div>
+        </div>
+
+        <!-- ── Category choose / create ──────────────────────────────── -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="selectedCategory">Choose Category</label>
+            <select id="selectedCategory" name="selectedCategory">
+              <option value="">-- Select Category --</option>
+              <% categories.forEach(cat=>{ %>
+                <option value="<%= cat %>" <%= product.category===cat?'selected':'' %>>
+                  <%= cat %>
+                </option>
+              <% }) %>
+            </select>
           </div>
-          <!-- Batch details: Purchase Price, Retail Price, Quantity -->
-          <div class="form-row">
-            <div class="form-group">
-              <label for="purchasePrice">Purchase Price:</label>
-              <input type="number" step="0.01" id="purchasePrice" name="purchasePrice" value="<%= batch.purchasePrice %>" required>
-            </div>
-            <div class="form-group">
-              <label for="salePrice">Retail Price:</label>
-              <input type="number" step="0.01" id="salePrice" name="salePrice" value="<%= batch.salePrice %>" required>
-            </div>
-            <div class="form-group">
-              <label for="quantity">Quantity:</label>
-              <!-- Modified step attribute for decimal input -->
-              <input type="number" step="any" id="quantity" name="quantity" value="<%= batch.quantity %>" required>
-            </div>
+          <div class="form-group">
+            <label for="newCategory">Or Create Category</label>
+            <input type="text" id="newCategory" name="newCategory"
+                   placeholder="New category">
           </div>
-          <button type="submit">Update Batch</button>
-        </form>
-        <br>
-        <a href="/view-products" class="back-link">Back to Products List</a>
-      </section>
-    </main>
-  </div>
-  <script src="/js/firebasePersistence.js" type="module"></script>
+        </div>
+
+        <!-- ── Unit choose / create (same as Add Product) ─────────────── -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="selectedUnit">Choose Unit</label>
+            <select id="selectedUnit" name="selectedUnit">
+              <option value="">-- Select Unit --</option>
+              <% units.forEach(u=>{ %>
+                <option value="<%= u %>" <%= (product.unit||'').toLowerCase()===u?'selected':'' %>>
+                  <%= u %>
+                </option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="newUnit">Or Create Unit</label>
+            <input type="text" id="newUnit" name="newUnit" placeholder="e.g. kg, pcs">
+          </div>
+        </div>
+
+        <!-- ── Pricing & Quantity ─────────────────────────────────────── -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="purchasePrice">Purchase Price</label>
+            <input type="number" step="0.01" id="purchasePrice" name="purchasePrice"
+                   value="<%= batch.purchasePrice %>" required>
+          </div>
+          <div class="form-group">
+            <label for="salePrice">Retail Price</label>
+            <input type="number" step="0.01" id="salePrice" name="salePrice"
+                   value="<%= batch.salePrice %>" required>
+          </div>
+          <div class="form-group">
+            <label for="quantity">Quantity</label>
+            <input type="number" step="any" id="quantity" name="quantity"
+                   value="<%= batch.quantity %>" required>
+          </div>
+        </div>
+
+        <button type="submit">Update Batch</button>
+      </form>
+      <br>
+      <a href="/view-products" class="back-link">Back to Products List</a>
+    </section>
+  </main>
+</div>
+<script src="/js/firebasePersistence.js" type="module"></script>
 </body>
 </html>

@@ -6,11 +6,11 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
   <title>SalesFlow Dashboard</title>
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/css/index.css">
-  
 </head>
+
 <body>
   <!-- Navigation -->
   <nav>
@@ -39,7 +39,6 @@
       <% if (user && user.isMaster) { %>
         <a href="/profile" class="profile"><i class="fas fa-user"></i> Profile</a>
       <% } %>
-      
       <a href="/documentation" class="profile"><i class="fas fa-file-alt"></i> Guide</a>
       <a href="/customerservice" class="profile"><i class="fas fa-headset"></i></a>
       <a href="/logout" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
@@ -53,18 +52,17 @@
       <div id="toggleSidebar" class="collapse-arrow">
         <i class="fas fa-chevron-left"></i>
       </div>
-      
 
       <!-- Sales Entry Form -->
       <div class="formBox">
         <h1><i class="fas fa-shopping-bag"></i> Sale Transaction</h1>
-        <form action="/sale" method="POST">
+        <form id="saleForm" action="/sale" method="POST">
           <!-- Category -->
           <div>
             <label for="categorySelect">Category:</label>
             <select id="categorySelect">
               <option value="">-- Select a category --</option>
-              <% categories.forEach(function(cat){ %>
+              <% categories.sort((a, b) => a.localeCompare(b)).forEach(function(cat) { %>
                 <option value="<%= cat %>"><%= cat %></option>
               <% }); %>
             </select>
@@ -74,7 +72,7 @@
             <label for="productSelect">Product:</label>
             <select id="productSelect" name="productId" required>
               <option value="">-- Select a product --</option>
-              <% products.forEach(function(product){ %>
+              <% products.sort((a, b) => a.productName.localeCompare(b.productName)).forEach(function(product){ %>
                 <option value="<%= product.id %>" 
                   data-retail="<%= product.retailPrice %>" 
                   data-category="<%= product.category %>"
@@ -161,7 +159,7 @@
       <!-- Expense Entry Form -->
       <div class="formBox">
         <h1><i class="fas fa-file-invoice-dollar"></i> Expense Transaction</h1>
-        <form action="/expense" method="POST">
+        <form id="expenseForm" action="/expense" method="POST">
           <input type="hidden" name="saleDate" value="<%= saleDate %>">
           <div>
             <label for="expenseReason">Reason:</label>
@@ -199,35 +197,30 @@
       <!-- Opening Balance Form -->
       <div class="formBox">
         <h1><i class="fas fa-wallet"></i> Opening Balance</h1>
-        <form action="/update-opening-balance" method="POST">
+        <form id="openingForm" action="/update-opening-balance" method="POST">
           <div>
             <label for="openingBalance">Opening Balance:</label>
             <input type="number" step="0.01" id="openingBalance" name="openingBalance" value="<%= openingBalance %>" required>
           </div>
           <div>
             <label for="openingTime">Opening Time:</label>
-            <input type="time" id="openingTime" name="openingTime" value="<%= openingTime %>">
+            <input type="text" id="openingTime" name="openingTime" value="<%= openingTime %>">
             <i class="fas fa-clock clickable" id="fillOpeningTime" style="cursor: pointer; margin-left: 8px;"></i>
           </div>
           <div>
             <label for="closingTime">Closing Time:</label>
-            <input type="time" id="closingTime" name="closingTime" value="<%= closingTime %>">
+            <input type="text" id="closingTime" name="closingTime" value="<%= closingTime %>">
             <i class="fas fa-clock clickable" id="fillClosingTime" style="cursor: pointer; margin-left: 8px;"></i>
           </div>
-          
           <input type="hidden" name="saleDate" value="<%= saleDate %>">
           <button type="submit"><i class="fas fa-sync-alt"></i> Update Balance</button>
         </form>
       </div>
 
-
-
-
       <div class="formBox">
         <h1><i class="fas fa-user-clock"></i> Report Time</h1>
-        <!-- A button or link to navigate to the employees page -->
-        <a href="/employees" class="button">
-          <i class="fas fa-chevron-right"></i> Go to Report Time
+        <a href="/employees" class="go-report-link">
+          <i class="fas fa-user-clock"></i> Go to Report Time
         </a>
       </div>
     </div>
@@ -237,7 +230,7 @@
       <!-- Sales Table -->
       <div>
         <h2>
-          <span>Sales for <%= saleDate %></span>
+          <span>Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)</span>
           <span class="date-info">
             <% if (openingTime) { %>
               <i class="far fa-clock"></i> Open: <%= openingTime %>
@@ -253,7 +246,7 @@
             <p>No sales recorded for this date.</p>
           </div>
         <% } else { %>
-          <table>
+          <table id="salesTable">
             <thead>
               <tr>
                 <th>ID</th>
@@ -261,12 +254,14 @@
                 <th>FIFO Avg. Wholesale</th>
                 <th>Sale Price</th>
                 <th>Qty</th>
+                <th>Unit</th>
                 <th>Total Sale</th>
                 <th>Profit/Unit</th>
                 <th>Total Profit</th>
                 <th>Status</th>
                 <th>Info</th>
                 <th>Time</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -277,6 +272,7 @@
                   <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
                   <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
                   <td><%= sale.saleQuantity %></td>
+                  <td><%= sale.unit || "-" %></td>
                   <td>
                     <% let totalSale = sale.totalSale || (sale.retailPrice * sale.saleQuantity); %>
                     <%= parseFloat(totalSale).toFixed(2) %>
@@ -317,6 +313,10 @@
                     %>
                     <%= saleTime %>
                   </td>
+              
+                  <td style="text-align: center;">
+                    <i class="fas fa-trash-alt delete-sale-icon" data-id="<%= sale.id %>"></i>
+                  </td>
                 </tr>
               <% }); %>
             </tbody>
@@ -326,9 +326,20 @@
 
       <!-- Expenses Table -->
       <div>
-        <h2>Expenses for <%= saleDate %></h2>
+        <% 
+          let totalExpenseAmount = 0;
+          if (expenses && expenses.length > 0) {
+            totalExpenseAmount = expenses.reduce((sum, exp) => sum + parseFloat(exp.expenseCost || 0), 0);
+          }
+        %>
+        <h2>
+          Expenses for <%= saleDate %>
+          <% if (expenses.length > 0) { %>
+            (Expense Amount: ₹<%= totalExpenseAmount.toFixed(2) %>)
+          <% } %>
+        </h2>
         <% if (expenses && expenses.length > 0) { %>
-          <table>
+          <table id="expenseTable">
             <thead>
               <tr>
                 <th>Expense Reason</th>
@@ -375,22 +386,38 @@
         <h2>Summary for <%= saleDate %></h2>
         <button id="toggleSummary">Show Daily Summary</button>
         <div id="summaryContent" style="display: none;">
-          <p data-label="Total Sales: "><%= totalSales.toFixed(2) %></p>
-          <p data-label="Total Profit: "><%= totalProfit.toFixed(2) %></p>
-          <p data-label="Total Cash Sales: "><%= totalCashSales.toFixed(2) %></p>
-          <p data-label="Total Online Sales: "><%= totalOnlineSales.toFixed(2) %></p>
-          <p data-label="Total Not Paid Sales: "><%= totalNotPaidSales.toFixed(2) %></p>
-          <p data-label="Total Cash Expenses: "><%= totalCashExpenses.toFixed(2) %></p>
-          <p data-label="Total Online Expenses: "><%= totalOnlineExpenses.toFixed(2) %></p>
-          <p data-label="Final Cash: "><%= finalCash.toFixed(2) %></p>
+          <p data-label="Total Sales: " data-key="totalSales"><%= totalSales.toFixed(2) %></p>
+          <p data-label="Total Profit: " data-key="totalProfit"><%= totalProfit.toFixed(2) %></p>
+          <p data-label="Total Cash Sales: " data-key="totalCashSales"><%= totalCashSales.toFixed(2) %></p>
+          <p data-label="Total Online Sales: " data-key="totalOnlineSales"><%= totalOnlineSales.toFixed(2) %></p>
+          <p data-label="Total Not Paid Sales: " data-key="totalNotPaidSales"><%= totalNotPaidSales.toFixed(2) %></p>
+          <p data-label="Total Cash Expenses: " data-key="totalCashExpenses"><%= totalCashExpenses.toFixed(2) %></p>
+          <p data-label="Total Online Expenses: " data-key="totalOnlineExpenses"><%= totalOnlineExpenses.toFixed(2) %></p>
+          <p data-label="Final Cash: " data-key="finalCash"><%= finalCash.toFixed(2) %></p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Client-Side Script -->
+  <!-- Client‑Side Script -->
   <script>
-    // References to DOM elements.
+    /* -------------------------------------------------------------- */
+    /* Everything below this line until the next comment == ORIGINAL   */
+    /* -------------------------------------------------------------- */
+    document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.delete-sale-btn');
+  if (!btn) return;
+
+  if (!confirm('Delete this sale and restore stock?')) return;
+  try {
+    const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
+    /* remove row */
+    btn.closest('tr').remove();
+    /* refresh summary numbers */
+    refreshSummary(res.summary);
+  } catch (err) { alert(err.message); }
+});
+
     const categorySelect = document.getElementById('categorySelect');
     const productSelect = document.getElementById('productSelect');
     const productIdSelect = document.getElementById('productIdSelect');
@@ -401,7 +428,6 @@
     const paymentLabel1 = document.getElementById('paymentLabel1');
     const paymentLabel2 = document.getElementById('paymentLabel2');
 
-    // Filter product dropdown by selected category.
     categorySelect.addEventListener('change', function() {
       const selectedCategory = categorySelect.value;
       for (let i = 0; i < productSelect.options.length; i++) {
@@ -419,7 +445,6 @@
       updateSaleCalculations();
     });
 
-    // Handle Product ID selection.
     productIdSelect.addEventListener('change', function() {
       const customSelection = productIdSelect.value;
       if (customSelection) {
@@ -428,7 +453,6 @@
       }
     });
 
-    // Payment status handling.
     statusSelect.addEventListener('change', function() {
       const status = statusSelect.value;
       if (status === "Half Cash + Half Online") {
@@ -451,30 +475,25 @@
     });
     statusSelect.dispatchEvent(new Event('change'));
 
-    // Toggle summary section.
-    const toggleSummaryButton = document.getElementById('toggleSummary');
-    const summaryContent = document.getElementById('summaryContent');
-    toggleSummaryButton.addEventListener('click', function() {
+    document.getElementById('toggleSummary').addEventListener('click', function() {
+      const summaryContent = document.getElementById('summaryContent');
       if (summaryContent.style.display === 'none') {
         summaryContent.style.display = 'block';
-        toggleSummaryButton.textContent = 'Hide Summary';
+        this.textContent = 'Hide Summary';
       } else {
         summaryContent.style.display = 'none';
-        toggleSummaryButton.textContent = 'Show Daily Summary';
+        this.textContent = 'Show Daily Summary';
       }
     });
 
-    // Toggle sidebar.
-    const toggleSidebarButton = document.getElementById('toggleSidebar');
-    const formsSidebar = document.querySelector('.forms-sidebar');
-    toggleSidebarButton.addEventListener('click', function() {
+    document.getElementById('toggleSidebar').addEventListener('click', function() {
+      const formsSidebar = document.querySelector('.forms-sidebar');
       formsSidebar.classList.toggle('collapsed');
-      toggleSidebarButton.innerHTML = formsSidebar.classList.contains('collapsed')
+      this.innerHTML = formsSidebar.classList.contains('collapsed')
         ? '<i class="fas fa-angle-double-right"></i>'
         : '<i class="fas fa-angle-double-left"></i>';
     });
 
-    // Helper function to compute FIFO weighted averages over all batches.
     function computeFIFO(batches, saleQty) {
       let remaining = saleQty;
       let totalWholesaleCost = 0;
@@ -492,7 +511,6 @@
       return { wholesale: totalWholesaleCost / totalUnitsUsed, retail: totalRetailTotal / totalUnitsUsed };
     }
 
-    // Updated FIFO Calculation using batches array.
     function updateSaleCalculations() {
       const selectedOption = productSelect.options[productSelect.selectedIndex];
       if (!selectedOption || selectedOption.value === "") {
@@ -502,18 +520,13 @@
         retailInput.placeholder = "";
         return;
       }
-      
-      // Parse batches array from data-batches attribute.
       let batches = [];
       try {
         batches = JSON.parse(selectedOption.getAttribute('data-batches'));
       } catch (e) {
         batches = [];
       }
-      
       const saleQty = parseInt(saleQuantityInput.value) || 0;
-      
-      // If no sale quantity entered, clear computed values.
       if (saleQty === 0) {
         document.getElementById('wholesalePrice').value = "";
         document.getElementById('profitPerUnit').value = "";
@@ -521,70 +534,191 @@
         retailInput.placeholder = "";
         return;
       }
-      
-      // Compute FIFO averages.
       const computed = computeFIFO(batches, saleQty);
       const computedWholesale = computed.wholesale;
       const computedRetail = computed.retail;
-      
-      // Set retail input placeholder to computed retail.
       retailInput.placeholder = computedRetail.toFixed(2);
-      
-      // Use user's retail input if provided; otherwise, use computed retail.
       const userRetail = parseFloat(retailInput.value);
       const effectiveRetail = (!isNaN(userRetail) && userRetail > 0) ? userRetail : computedRetail;
-      
       const profitPerUnit = effectiveRetail - computedWholesale;
       const totalProfit = profitPerUnit * saleQty;
-      
       document.getElementById('wholesalePrice').value = computedWholesale.toFixed(2);
       document.getElementById('profitPerUnit').value = profitPerUnit.toFixed(2);
       document.getElementById('totalProfit').value = totalProfit.toFixed(2);
     }
 
-    // Attach updateSaleCalculations to input events.
     retailInput.addEventListener('input', updateSaleCalculations);
     saleQuantityInput.addEventListener('input', updateSaleCalculations);
     productSelect.addEventListener('change', updateSaleCalculations);
 
-    const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining > 0) ? 'true' : 'false' %>;
+    /* -------------------------------------------------------------- */
+    /* -----------------  AJAX LIVE‑UPDATE PATCH  ------------------- */
+    /* -------------------------------------------------------------- */
+   
 
-if (!isSubscribed) {
-  // Default timeout is 5000 ms (5 seconds)
-  let timeoutValue = 5000;
-  // Detect if this navigation comes from a browser back/forward event.
-  // Using the Performance Navigation Timing API:
-  const navEntries = performance.getEntriesByType("navigation");
-  if (navEntries.length > 0 && navEntries[0].type === "back_forward") {
-    // If the page is loaded from the back/forward cache, we extend the delay to 10 seconds.
-    timeoutValue = 10000;
-  }
-
-  setTimeout(() => {
-    // Redirect the user to the pricing route.
-    window.location.href = '/pricing';
-  }, timeoutValue);
+function ensureTableExists (wrapperSelector, tableId, theadHtml) {
+  if (document.querySelector(tableId)) return;      // table already there
+  const wrap = document.querySelector(wrapperSelector);
+  if (!wrap) return;                                // safety – wrapper missing
+  wrap.innerHTML = `
+    <table id="${tableId.substring(1)}">
+      ${theadHtml}
+      <tbody></tbody>
+    </table>`;
 }
 
+
+    // quick helpers
+    const cash = n => Number(n).toFixed(2);
+    const postJSON = async (url, obj) => {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(obj)
+      });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || 'Unknown error');
+      return j;
+    };
+    const refreshSummary = s => {
+      for (const [k, v] of Object.entries(s)) {
+        const el = document.querySelector(`#summaryContent [data-key="${k}"]`);
+        if (el) el.textContent = el.textContent.replace(/[-+]?\d+(\.\d+)?$/, cash(v));
+      }
+      document.getElementById('summaryContent').style.display = 'block';
+      document.getElementById('toggleSummary').textContent = 'Hide Summary';
+    };
+
+    // SALE form
+    document.getElementById('saleForm').addEventListener('submit', async e => {
+      if (e.submitter?.classList.contains('noAjax')) return; // optional fallback
+      e.preventDefault();
+      try {
+        const obj = Object.fromEntries(new FormData(e.target).entries());
+        const res = await postJSON('/api/sale', obj);
+        const s = res.sale;
+        const row = document.createElement('tr');
+        // ⬇️ put this *before* you build the <tr>
+const pillClass = {
+  'Paid Cash'   : 'status-cash',
+  'Paid Online' : 'status-online',
+  'Not Paid'    : 'status-notpaid'
+}[s.status] || 'status-mixed';
+
+row.innerHTML = `
+  <td>${s.customProductId || '-'}</td>
+  <td>${s.productName}</td>
+  <td>${cash(s.wholesalePrice)}</td>
+  <td>${cash(s.retailPrice)}</td>
+  <td>${s.saleQuantity}</td>
+  <td>${s.unit || '-'}</td>
+  <td>${cash(s.totalSale)}</td>
+  <td>${cash(s.profitPerUnit)}</td>
+  <td>${cash(s.profit)}</td>
+  <td>
+      <span class="status-pill ${pillClass}">${s.status}</span>
+      ${(s.paymentDetail1 || s.paymentDetail2)
+        ? `<br><small>${s.paymentDetail1 ? 'Detail1: '+s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: '+s.paymentDetail2 : ''}</small>` 
+        : ''}
+  </td>
+  <td>${s.extraInfo || '-'}</td>
+  <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
+  <td>
+    <button type="button" class="delete-sale-btn" data-id="${s.id}">
+      <i class="fas fa-trash"></i>
+    </button>
+  </td>`;
+
+
+          // make sure the sales table exists (replaces the .no-data card at first sale)
+          ensureTableExists(
+  '.tables-content div:first-child',   // wrapper holding the sales panel
+  '#salesTable',
+  `<thead>
+     <tr>
+       <th>ID</th><th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
+       <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
+       <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
+       <th>Action</th>
+     </tr>
+   </thead>`
+);
+
+
+        document.querySelector('#salesTable tbody').prepend(row);
+        refreshSummary(res.summary);
+        e.target.reset();
+        updateSaleCalculations();
+      } catch (err) { alert(err.message); }
+    });
+
+// EXPENSE form
+document.getElementById('expenseForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  try {
+    const obj = Object.fromEntries(new FormData(e.target).entries());
+    const res = await postJSON('/api/expense', obj);
+    const ex  = res.expense;
+
+    /* ensure the table exists (replaces the .no‑data card at first expense) */
+    ensureTableExists(
+      '.tables-content div:nth-child(2)',
+      '#expenseTable',
+      `<thead>
+         <tr>
+           <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
+           <th>Detail 1</th><th>Detail 2</th><th>Time</th>
+         </tr>
+       </thead>`
+    );
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${ex.expenseReason}</td>
+      <td>${cash(ex.expenseCost)}</td>
+      <td>${ex.expenseStatus}</td>
+      <td>${ex.expenseDetail1 || '-'}</td>
+      <td>${ex.expenseDetail2 || '-'}</td>
+      <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>`;
+    document.querySelector('#expenseTable tbody').prepend(row);
+
+    refreshSummary(res.summary);
+    e.target.reset();
+  } catch (err) { alert(err.message); }
+});
+
+    // OPENING BALANCE form
+    document.getElementById('openingForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const obj = Object.fromEntries(new FormData(e.target).entries());
+        const res = await postJSON('/api/opening-balance', obj);
+        document.querySelector('h2 span').innerHTML =
+          `Sales for ${obj.saleDate} (Opening Balance: ₹${cash(res.openingBalance)})`;
+        refreshSummary(res.summary);
+      } catch (err) { alert(err.message); }
+    });
   </script>
+  <script>
+    /* ---  fillOpening/Closing time convenience (restored)  --- */
+    function getCurrentTimeString(){
+      const d=new Date();
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    }
+    document.getElementById('fillOpeningTime') .onclick=()=>(
+      document.getElementById('openingTime').value = getCurrentTimeString());
+    document.getElementById('fillClosingTime') .onclick=()=>(
+      document.getElementById('closingTime').value = getCurrentTimeString());
+    </script>
+    <!-- optional: restore client‑side subscription redirect -->
 <script>
-function getCurrentTimeString() {
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
-}
-
-document.getElementById('fillOpeningTime').addEventListener('click', () => {
-  document.getElementById('openingTime').value = getCurrentTimeString();
-});
-
-document.getElementById('fillClosingTime').addEventListener('click', () => {
-  document.getElementById('closingTime').value = getCurrentTimeString();
-});
-
-</script>
+  const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining>0) ? 'true':'false' %>;
+  if(!isSubscribed){
+    const nav = performance.getEntriesByType("navigation")[0]||{};
+    setTimeout(()=>location.href='/pricing', nav.type==="back_forward"?10000:5000);
+  }
+  </script>
+  
   <script src="/js/firebasePersistence.js" type="module"></script>
-
 </body>
 </html>

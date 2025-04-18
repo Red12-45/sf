@@ -239,7 +239,6 @@ form label {
 form input[type="text"],
 form input[type="number"],
 form input[type="date"],
-form input[type="time"],
 form select,
 form textarea {
   width: calc(100% - 120px);
@@ -620,5 +619,63 @@ table tr:hover {
 
 .collapse-arrow:hover {
   background-color: var(--primary-dark);
+  transform: scale(1.1);
+}
+
+
+.styled-input {
+  width: calc(100% - 120px);
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-dark);
+  background-color: var(--light-bg);
+}
+
+.styled-input:focus {
+  outline: none;
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.2);
+}
+
+.go-report-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+  color: var(--text-white);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 1rem;
+  transition: var(--transition);
+  box-shadow: var(--shadow-md);
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.go-report-link:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  background: linear-gradient(to right, var(--primary-light), var(--secondary-color));
+}
+
+.go-report-link i {
+  font-size: 1rem;
+}
+.delete-sale-icon {
+  color: var(--danger-color);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.delete-sale-icon:hover {
+  color: #dc2626; /* darker red */
   transform: scale(1.1);
 }

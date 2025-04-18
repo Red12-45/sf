@@ -127,36 +127,3 @@ table tbody tr:nth-child(even) {
 }
 
 
-/* Wrap each label + field so all fields share the same width */
-.field-wrapper {
-  margin-bottom: 1.25rem;
-  display: flex;
-  align-items: center;
-}
-
-/* Ensure the label keeps its set width */
-.field-wrapper label {
-  width: 120px;
-}
-
-/* Wrapper for inputs that need an icon inside */
-.input-with-icon {
-  position: relative;
-  width: calc(100% - 120px); /* match the current input width minus label width */
-}
-
-/* Force equal length on the inputs within the wrapper */
-.input-with-icon input {
-  width: 100%;
-  padding-right: 2.5rem; /* add space for the icon */
-}
-
-/* Position the icon inside the input field */
-.input-with-icon i {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  cursor: pointer;
-  color: var(--text-dark);
-}
