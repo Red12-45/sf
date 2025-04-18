@@ -990,6 +990,65 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   }
 });
 
+// In app.js, update your inline-edit handler:
+app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const { field, value } = req.body;
+    const batchRef = db.collection('stockBatches').doc(batchId);
+    const batchDoc = await batchRef.get();
+    if (!batchDoc.exists) throw new Error('Batch not found');
+    if (batchDoc.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
+
+    // Parse and apply field update
+    const update = { updatedAt: new Date() };
+    if (field === 'purchasePrice' || field === 'salePrice') {
+      update[field] = parseFloat(value);
+    } else if (field === 'quantity') {
+      const qty = parseInt(value, 10);
+      update.quantity = qty;
+      update.remainingQuantity = qty;
+    } else {
+      throw new Error('Invalid field');
+    }
+    await batchRef.update(update);
+
+    // Recalc profitMargin on batch
+    const updatedBatchSnap = await batchRef.get();
+    const updatedBatch = updatedBatchSnap.data();
+    const profitMargin = updatedBatch.salePrice - updatedBatch.purchasePrice;
+    await batchRef.update({ profitMargin });
+
+    // Recalc product aggregates
+    await recalcProductFromBatches(updatedBatch.productId);
+
+    // Fetch updated product
+    const prodDoc = await db.collection('products').doc(updatedBatch.productId).get();
+    const prod = prodDoc.data();
+
+    res.json({
+      success: true,
+      batch: {
+        productId: updatedBatch.productId,
+        purchasePrice: updatedBatch.purchasePrice,
+        salePrice:     updatedBatch.salePrice,
+        quantity:      updatedBatch.quantity,
+        remainingQuantity: updatedBatch.remainingQuantity,
+        profitMargin
+      },
+      product: {
+        wholesalePrice: prod.wholesalePrice,
+        retailPrice:    prod.retailPrice,
+        quantity:       prod.quantity,
+        profitMargin:   prod.profitMargin
+      }
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.toString() });
+  }
+});
+
+
 // POST /edit-stock-batch/:batchId
 app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
@@ -1488,6 +1547,50 @@ app.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res
   }
 });
 
+
+app.post('/api/delete-expense', isAuthenticated, async (req, res) => {
+  const { expenseId } = req.body;
+  try {
+    const expRef = db.collection('expenses').doc(expenseId);
+    const expDoc = await expRef.get();
+    if (!expDoc.exists) throw new Error('Expense not found');
+    const exp = expDoc.data();
+    if (exp.accountId !== req.session.user.accountId) throw new Error('Access denied');
+
+    // delete the expense
+    await expRef.delete();
+
+    // recompute summary for that date
+    const { summary } = await computeDailySummary(
+      req.session.user.accountId,
+      exp.saleDate
+    );
+
+    res.json({ success: true, summary });
+  } catch (e) {
+    res.json({ success: false, error: e.toString() });
+  }
+});
+app.post('/api/expense', isAuthenticated, async (req, res) => {
+  try {
+    const saved = await processExpense(req.body, req.session.user);
+    // saved does *not* include its own ID yet — grab it:
+    const snap = await db.collection('expenses')
+                         .where('accountId','==',req.session.user.accountId)
+                         .orderBy('createdAt','desc')
+                         .limit(1)
+                         .get();
+    const doc = snap.docs[0];
+    const expense = { id: doc.id, ...doc.data() };
+
+    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
+    res.json({ success: true, expense, summary });
+  } catch (e) {
+    res.json({ success: false, error: e.toString() });
+  }
+});
+
+
 // AJAX: POST /api/sale
 app.post('/api/sale', isAuthenticated, async (req, res) => {
   try {
@@ -1499,16 +1602,8 @@ app.post('/api/sale', isAuthenticated, async (req, res) => {
   }
 });
 
-// AJAX: POST /api/expense
-app.post('/api/expense', isAuthenticated, async (req, res) => {
-  try {
-    const expense = await processExpense(req.body, req.session.user);
-    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
-    res.json({ success: true, expense, summary });
-  } catch (e) {
-    res.json({ success: false, error: e.toString() });
-  }
-});
+
+
 
 // AJAX: POST /api/opening-balance
 app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
