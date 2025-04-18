@@ -20,12 +20,12 @@
     </div>
     <div class="nav-links">
       <a href="/add-product"><i class="fas fa-plus-circle"></i> Add Product</a>
-      <a href="/view-products"><i class="fas fa-boxes"></i> View Porducts</a>
+      <a href="/view-products"><i class="fas fa-boxes"></i> View Products</a>
       <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
       <a href="/expense"><i class="fas fa-receipt"></i> Expenses</a>
       <% if (user && user.isMaster) { %>
         <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
-        <a href="/permission"><i class="fas fa-lock"></i>Permissions</a>
+        <a href="/permission"><i class="fas fa-lock"></i> Permissions</a>
       <% } %>
       <div class="subscription-info">
         <% if (user.subscriptionExpiry) { %>
@@ -67,6 +67,7 @@
               <% }); %>
             </select>
           </div>
+
           <!-- Product -->
           <div>
             <label for="productSelect">Product:</label>
@@ -82,30 +83,19 @@
               <% }); %>
             </select>
           </div>
-          <!-- Product ID (Optional) -->
-          <div>
-            <label for="productIdSelect">Product ID:</label>
-            <select id="productIdSelect" name="customProductId">
-              <option value="">Product ID (Optional)</option>
-              <% products.forEach(function(product) { %>
-                <% if (product.productId && product.productId.trim() !== "" && product.productId.trim() !== "-") { %>
-                  <option value="<%= product.id %>">
-                    <%= product.productId %> (Stock: <%= product.quantity %>)
-                  </option>
-                <% } %>
-              <% }); %>
-            </select>
-          </div>
+
           <!-- Retail Price Entry -->
           <div>
             <label for="retailPrice">Retail Price:</label>
             <input type="number" step="0.01" id="retailPrice" name="retailPrice" placeholder="Enter sale price" required>
           </div>
+
           <!-- Sale Quantity -->
           <div>
             <label for="saleQuantity">Quantity:</label>
             <input type="number" id="saleQuantity" name="saleQuantity" required>
           </div>
+
           <!-- Computed Fields -->
           <div>
             <label for="wholesalePrice">Wholesale Price:</label>
@@ -119,11 +109,13 @@
             <label for="totalProfit">Total Profit:</label>
             <input type="text" id="totalProfit" name="totalProfit" placeholder="Computed total profit" readonly>
           </div>
+
           <!-- Sale Date -->
           <div>
             <label for="saleDate">Sale Date:</label>
             <input type="date" id="saleDate" name="saleDate" value="<%= saleDate %>" required>
           </div>
+
           <!-- Payment Status -->
           <div>
             <label for="status">Payment Status:</label>
@@ -136,6 +128,7 @@
               <option value="Half Online + Not Paid">Half Online + Not Paid</option>
             </select>
           </div>
+
           <!-- Combined Payment Details -->
           <div id="combinedPaymentFields">
             <div>
@@ -147,11 +140,13 @@
               <input type="number" step="0.01" id="paymentDetail2" name="paymentDetail2" placeholder="Amount">
             </div>
           </div>
+
           <!-- Extra Info -->
           <div>
             <label for="extraInfo">Extra Info:</label>
             <textarea id="extraInfo" name="extraInfo" rows="3" cols="30"></textarea>
           </div>
+
           <button type="submit"><i class="fas fa-check-circle"></i> Process Sale</button>
         </form>
       </div>
@@ -249,7 +244,6 @@
           <table id="salesTable">
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Product</th>
                 <th>FIFO Avg. Wholesale</th>
                 <th>Sale Price</th>
@@ -267,7 +261,6 @@
             <tbody>
               <% sales.forEach(function(sale){ %>
                 <tr>
-                  <td><%= sale.customProductId ? sale.customProductId : "-" %></td>
                   <td><%= sale.productName %></td>
                   <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
                   <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
@@ -299,9 +292,7 @@
                       </small>
                     <% } %>
                   </td>
-                  <td>
-                    <%= sale.extraInfo ? sale.extraInfo : "-" %>
-                  </td>
+                  <td><%= sale.extraInfo ? sale.extraInfo : "-" %></td>
                   <td>
                     <% 
                       let saleTime;
@@ -313,7 +304,6 @@
                     %>
                     <%= saleTime %>
                   </td>
-              
                   <td style="text-align:center;">
                     <i class="fas fa-trash-alt delete-sale-btn" data-id="<%= sale.id %>"></i>
                   </td>
@@ -348,7 +338,7 @@
                 <th>Detail 1</th>
                 <th>Detail 2</th>
                 <th>Time</th>
-                <th>Action</th> 
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -367,13 +357,11 @@
                     <%= expenseTime %>
                   </td>
                   <td style="text-align:center;">
-                    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="<%= expense.id %>"></i>
+                    <i class="fas fa-trash-alt delete-expense-btn" data-id="<%= expense.id %>"></i>
                   </td>
-                       
                 </tr>
               <% }); %>
             </tbody>
-            
           </table>
         <% } else { %>
           <div class="no-data">
@@ -403,52 +391,37 @@
 
   <!-- Client‑Side Script -->
   <script>
-    /* -------------------------------------------------------------- */
-    /* Everything below this line until the next comment == ORIGINAL   */
-    /* -------------------------------------------------------------- */
     document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.delete-sale-btn');
-  if (!btn) return;
-
-  if (!confirm('Delete this sale and restore stock?')) return;
-  try {
-    const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
-    /* remove row */
-    btn.closest('tr').remove();
-    /* refresh summary numbers */
-    refreshSummary(res.summary);
-  } catch (err) { alert(err.message); }
-});
-// expense delete
-document.addEventListener('click', async e => {
-  const btn = e.target.closest('.delete-expense-btn');
-  if (!btn) return;
-
-  if (!confirm('Delete this expense and update the summary?')) return;
-
-  try {
-    const res = await postJSON('/api/delete-expense', {
-      expenseId: btn.dataset.id
+      const btn = e.target.closest('.delete-sale-btn');
+      if (btn) {
+        if (!confirm('Delete this sale and restore stock?')) return;
+        try {
+          const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
+          btn.closest('tr').remove();
+          refreshSummary(res.summary);
+        } catch (err) { alert(err.message); }
+      }
+      const expBtn = e.target.closest('.delete-expense-btn');
+      if (expBtn) {
+        if (!confirm('Delete this expense and update the summary?')) return;
+        try {
+          const res = await postJSON('/api/delete-expense', { expenseId: expBtn.dataset.id });
+          expBtn.closest('tr').remove();
+          refreshSummary(res.summary);
+        } catch (err) { alert(err.message); }
+      }
     });
-    btn.closest('tr').remove();
-    refreshSummary(res.summary);
-  } catch (err) {
-    alert(err.message);
-  }
-});
 
-
-    const categorySelect = document.getElementById('categorySelect');
-    const productSelect = document.getElementById('productSelect');
-    const productIdSelect = document.getElementById('productIdSelect');
-    const retailInput = document.getElementById('retailPrice');
-    const saleQuantityInput = document.getElementById('saleQuantity');
-    const statusSelect = document.getElementById('status');
+    const categorySelect   = document.getElementById('categorySelect');
+    const productSelect    = document.getElementById('productSelect');
+    const retailInput      = document.getElementById('retailPrice');
+    const saleQuantityInput= document.getElementById('saleQuantity');
+    const statusSelect     = document.getElementById('status');
     const combinedPaymentFields = document.getElementById('combinedPaymentFields');
-    const paymentLabel1 = document.getElementById('paymentLabel1');
-    const paymentLabel2 = document.getElementById('paymentLabel2');
+    const paymentLabel1    = document.getElementById('paymentLabel1');
+    const paymentLabel2    = document.getElementById('paymentLabel2');
 
-    categorySelect.addEventListener('change', function() {
+    categorySelect.addEventListener('change', () => {
       const selectedCategory = categorySelect.value;
       for (let i = 0; i < productSelect.options.length; i++) {
         const option = productSelect.options[i];
@@ -456,41 +429,29 @@ document.addEventListener('click', async e => {
         option.style.display = (!selectedCategory || option.getAttribute('data-category') === selectedCategory) ? "" : "none";
       }
       productSelect.selectedIndex = 0;
-      productIdSelect.value = "";
       updateSaleCalculations();
     });
 
-    productSelect.addEventListener('change', function() {
-      productIdSelect.value = "";
-      updateSaleCalculations();
-    });
+    productSelect.addEventListener('change', updateSaleCalculations);
 
-    productIdSelect.addEventListener('change', function() {
-      const customSelection = productIdSelect.value;
-      if (customSelection) {
-        productSelect.value = customSelection;
-        productSelect.dispatchEvent(new Event('change'));
-      }
-    });
-
-    statusSelect.addEventListener('change', function() {
+    statusSelect.addEventListener('change', () => {
       const status = statusSelect.value;
-      if (status === "Half Cash + Half Online") {
-        combinedPaymentFields.style.display = "block";
-        paymentLabel1.textContent = "Cash Amount:";
-        paymentLabel2.textContent = "Online Amount:";
-      } else if (status === "Half Cash + Not Paid") {
-        combinedPaymentFields.style.display = "block";
-        paymentLabel1.textContent = "Cash Amount:";
-        paymentLabel2.textContent = "Not Paid Amount:";
-      } else if (status === "Half Online + Not Paid") {
-        combinedPaymentFields.style.display = "block";
-        paymentLabel1.textContent = "Online Amount:";
-        paymentLabel2.textContent = "Not Paid Amount:";
+      if (status.includes('Half')) {
+        combinedPaymentFields.style.display = 'block';
+        if (status === 'Half Cash + Half Online') {
+          paymentLabel1.textContent = 'Cash Amount:';
+          paymentLabel2.textContent = 'Online Amount:';
+        } else if (status === 'Half Cash + Not Paid') {
+          paymentLabel1.textContent = 'Cash Amount:';
+          paymentLabel2.textContent = 'Not Paid Amount:';
+        } else {
+          paymentLabel1.textContent = 'Online Amount:';
+          paymentLabel2.textContent = 'Not Paid Amount:';
+        }
       } else {
-        combinedPaymentFields.style.display = "none";
-        document.getElementById('paymentDetail1').value = "";
-        document.getElementById('paymentDetail2').value = "";
+        combinedPaymentFields.style.display = 'none';
+        paymentDetail1.value = "";
+        paymentDetail2.value = "";
       }
     });
     statusSelect.dispatchEvent(new Event('change'));
@@ -515,93 +476,74 @@ document.addEventListener('click', async e => {
     });
 
     function computeFIFO(batches, saleQty) {
-      let remaining = saleQty;
-      let totalWholesaleCost = 0;
-      let totalRetailTotal = 0;
-      let totalUnitsUsed = 0;
-      for (let i = 0; i < batches.length && remaining > 0; i++) {
-        const batch = batches[i];
-        const units = Math.min(batch.qty, remaining);
-        totalWholesaleCost += batch.wholesale * units;
-        totalRetailTotal += batch.retail * units;
-        totalUnitsUsed += units;
-        remaining -= units;
+      let remaining = saleQty, totalWholesaleCost = 0, totalRetailTotal = 0, unitsUsed = 0;
+      for (let batch of batches) {
+        if (remaining <= 0) break;
+        const take = Math.min(batch.qty, remaining);
+        totalWholesaleCost += batch.wholesale * take;
+        totalRetailTotal    += batch.retail    * take;
+        unitsUsed += take;
+        remaining -= take;
       }
-      if (totalUnitsUsed === 0) return { wholesale: 0, retail: 0 };
-      return { wholesale: totalWholesaleCost / totalUnitsUsed, retail: totalRetailTotal / totalUnitsUsed };
+      return unitsUsed
+        ? { wholesale: totalWholesaleCost / unitsUsed, retail: totalRetailTotal / unitsUsed }
+        : { wholesale: 0, retail: 0 };
     }
 
     function updateSaleCalculations() {
-      const selectedOption = productSelect.options[productSelect.selectedIndex];
-      if (!selectedOption || selectedOption.value === "") {
-        document.getElementById('wholesalePrice').value = "";
-        document.getElementById('profitPerUnit').value = "";
-        document.getElementById('totalProfit').value = "";
+      const opt = productSelect.options[productSelect.selectedIndex];
+      if (!opt || !opt.value) {
+        wholesalePrice.value = profitPerUnit.value = totalProfit.value = "";
         retailInput.placeholder = "";
         return;
       }
       let batches = [];
-      try {
-        batches = JSON.parse(selectedOption.getAttribute('data-batches'));
-      } catch (e) {
-        batches = [];
-      }
-      const saleQty = parseInt(saleQuantityInput.value) || 0;
-      if (saleQty === 0) {
-        document.getElementById('wholesalePrice').value = "";
-        document.getElementById('profitPerUnit').value = "";
-        document.getElementById('totalProfit').value = "";
+      try { batches = JSON.parse(opt.getAttribute('data-batches')); }
+      catch { batches = []; }
+      const qty = parseInt(saleQuantityInput.value) || 0;
+      if (!qty) {
+        wholesalePrice.value = profitPerUnit.value = totalProfit.value = "";
         retailInput.placeholder = "";
         return;
       }
-      const computed = computeFIFO(batches, saleQty);
-      const computedWholesale = computed.wholesale;
-      const computedRetail = computed.retail;
-      retailInput.placeholder = computedRetail.toFixed(2);
+      const { wholesale, retail } = computeFIFO(batches, qty);
+      retailInput.placeholder = retail.toFixed(2);
       const userRetail = parseFloat(retailInput.value);
-      const effectiveRetail = (!isNaN(userRetail) && userRetail > 0) ? userRetail : computedRetail;
-      const profitPerUnit = effectiveRetail - computedWholesale;
-      const totalProfit = profitPerUnit * saleQty;
-      document.getElementById('wholesalePrice').value = computedWholesale.toFixed(2);
-      document.getElementById('profitPerUnit').value = profitPerUnit.toFixed(2);
-      document.getElementById('totalProfit').value = totalProfit.toFixed(2);
+      const effRetail  = (!isNaN(userRetail) && userRetail>0) ? userRetail : retail;
+      const ppu        = effRetail - wholesale;
+      const totProfit  = ppu * qty;
+      wholesalePrice.value = wholesale.toFixed(2);
+      profitPerUnit.value  = ppu.toFixed(2);
+      totalProfit.value    = totProfit.toFixed(2);
     }
 
     retailInput.addEventListener('input', updateSaleCalculations);
     saleQuantityInput.addEventListener('input', updateSaleCalculations);
-    productSelect.addEventListener('change', updateSaleCalculations);
 
-    /* -------------------------------------------------------------- */
-    /* -----------------  AJAX LIVE‑UPDATE PATCH  ------------------- */
-    /* -------------------------------------------------------------- */
-   
+    function ensureTableExists(wrapperSel, tableId, theadHtml) {
+      if (document.querySelector(tableId)) return;
+      const wrap = document.querySelector(wrapperSel);
+      if (!wrap) return;
+      wrap.innerHTML = `
+        <table id="${tableId.slice(1)}">
+          ${theadHtml}
+          <tbody></tbody>
+        </table>`;
+    }
 
-function ensureTableExists (wrapperSelector, tableId, theadHtml) {
-  if (document.querySelector(tableId)) return;      // table already there
-  const wrap = document.querySelector(wrapperSelector);
-  if (!wrap) return;                                // safety – wrapper missing
-  wrap.innerHTML = `
-    <table id="${tableId.substring(1)}">
-      ${theadHtml}
-      <tbody></tbody>
-    </table>`;
-}
-
-
-    // quick helpers
     const cash = n => Number(n).toFixed(2);
     const postJSON = async (url, obj) => {
       const r = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify(obj)
       });
       const j = await r.json();
-      if (!j.success) throw new Error(j.error || 'Unknown error');
+      if (!j.success) throw new Error(j.error||'Unknown error');
       return j;
     };
     const refreshSummary = s => {
-      for (const [k, v] of Object.entries(s)) {
+      for (let [k,v] of Object.entries(s)) {
         const el = document.querySelector(`#summaryContent [data-key="${k}"]`);
         if (el) el.textContent = el.textContent.replace(/[-+]?\d+(\.\d+)?$/, cash(v));
       }
@@ -609,60 +551,53 @@ function ensureTableExists (wrapperSelector, tableId, theadHtml) {
       document.getElementById('toggleSummary').textContent = 'Hide Summary';
     };
 
-    // SALE form
+    // SALE form AJAX
     document.getElementById('saleForm').addEventListener('submit', async e => {
-      if (e.submitter?.classList.contains('noAjax')) return; // optional fallback
+      if (e.submitter?.classList.contains('noAjax')) return;
       e.preventDefault();
       try {
         const obj = Object.fromEntries(new FormData(e.target).entries());
         const res = await postJSON('/api/sale', obj);
         const s = res.sale;
+        const pillClass = {
+          'Paid Cash'   : 'status-cash',
+          'Paid Online' : 'status-online',
+          'Not Paid'    : 'status-notpaid'
+        }[s.status] || 'status-mixed';
+
+        ensureTableExists(
+          '.tables-content div:first-child', 
+          '#salesTable',
+          `<thead>
+             <tr>
+               <th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
+               <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
+               <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th><th>Action</th>
+             </tr>
+           </thead>`
+        );
+
         const row = document.createElement('tr');
-        // ⬇️ put this *before* you build the <tr>
-const pillClass = {
-  'Paid Cash'   : 'status-cash',
-  'Paid Online' : 'status-online',
-  'Not Paid'    : 'status-notpaid'
-}[s.status] || 'status-mixed';
-
-row.innerHTML = `
-  <td>${s.customProductId || '-'}</td>
-  <td>${s.productName}</td>
-  <td>${cash(s.wholesalePrice)}</td>
-  <td>${cash(s.retailPrice)}</td>
-  <td>${s.saleQuantity}</td>
-  <td>${s.unit || '-'}</td>
-  <td>${cash(s.totalSale)}</td>
-  <td>${cash(s.profitPerUnit)}</td>
-  <td>${cash(s.profit)}</td>
-  <td>
-      <span class="status-pill ${pillClass}">${s.status}</span>
-      ${(s.paymentDetail1 || s.paymentDetail2)
-        ? `<br><small>${s.paymentDetail1 ? 'Detail1: '+s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: '+s.paymentDetail2 : ''}</small>` 
-        : ''}
-  </td>
-  <td>${s.extraInfo || '-'}</td>
-  <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
-   <td style="text-align:center;">
-    <i class="fas fa-trash-alt delete-sale-btn" data-id="${s.id}"></i>
-  </td>`;
-
-
-          // make sure the sales table exists (replaces the .no-data card at first sale)
-          ensureTableExists(
-  '.tables-content div:first-child',   // wrapper holding the sales panel
-  '#salesTable',
-  `<thead>
-     <tr>
-       <th>ID</th><th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
-       <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
-       <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
-       <th>Action</th>
-     </tr>
-   </thead>`
-);
-
-
+        row.innerHTML = `
+          <td>${s.productName}</td>
+          <td>${cash(s.wholesalePrice)}</td>
+          <td>${cash(s.retailPrice)}</td>
+          <td>${s.saleQuantity}</td>
+          <td>${s.unit||'-'}</td>
+          <td>${cash(s.totalSale)}</td>
+          <td>${cash(s.profitPerUnit)}</td>
+          <td>${cash(s.profit)}</td>
+          <td>
+            <span class="status-pill ${pillClass}">${s.status}</span>
+            ${(s.paymentDetail1||s.paymentDetail2)
+              ? `<br><small>${s.paymentDetail1? 'Detail1:'+s.paymentDetail1:''}${s.paymentDetail2? ',Detail2:'+s.paymentDetail2:''}</small>`
+              : ''}
+          </td>
+          <td>${s.extraInfo||'-'}</td>
+          <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
+          <td style="text-align:center;">
+            <i class="fas fa-trash-alt delete-sale-btn" data-id="${s.id}"></i>
+          </td>`;
         document.querySelector('#salesTable tbody').prepend(row);
         refreshSummary(res.summary);
         e.target.reset();
@@ -670,47 +605,43 @@ row.innerHTML = `
       } catch (err) { alert(err.message); }
     });
 
-// EXPENSE form
-document.getElementById('expenseForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  try {
-    const obj = Object.fromEntries(new FormData(e.target).entries());
-    const res = await postJSON('/api/expense', obj);
-    const ex  = res.expense;
+    // EXPENSE form AJAX
+    document.getElementById('expenseForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const obj = Object.fromEntries(new FormData(e.target).entries());
+        const res = await postJSON('/api/expense', obj);
+        const ex  = res.expense;
 
-    /* ensure the table exists (replaces the .no‑data card at first expense) */
-    ensureTableExists(
-      '.tables-content div:nth-child(2)',
-      '#expenseTable',
-      `<thead>
-  <tr>
-    <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
-    <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-  </tr>
-</thead>`
-    );
+        ensureTableExists(
+          '.tables-content div:nth-child(2)',
+          '#expenseTable',
+          `<thead>
+            <tr>
+              <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
+              <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
+            </tr>
+          </thead>`
+        );
 
-    const row = document.createElement('tr');
-   
-row.innerHTML = `
-  <td>${ex.expenseReason}</td>
-  <td>${cash(ex.expenseCost)}</td>
-  <td>${ex.expenseStatus}</td>
-  <td>${ex.expenseDetail1 || '-'}</td>
-  <td>${ex.expenseDetail2 || '-'}</td>
-  <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
-  <td style="text-align:center;">
-    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="${ex.id}"></i>
-  </td>`;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${ex.expenseReason}</td>
+          <td>${cash(ex.expenseCost)}</td>
+          <td>${ex.expenseStatus}</td>
+          <td>${ex.expenseDetail1||'-'}</td>
+          <td>${ex.expenseDetail2||'-'}</td>
+          <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
+          <td style="text-align:center;">
+            <i class="fas fa-trash-alt delete-expense-btn" data-id="${ex.id}"></i>
+          </td>`;
+        document.querySelector('#expenseTable tbody').prepend(row);
+        refreshSummary(res.summary);
+        e.target.reset();
+      } catch (err) { alert(err.message); }
+    });
 
-    document.querySelector('#expenseTable tbody').prepend(row);
-
-    refreshSummary(res.summary);
-    e.target.reset();
-  } catch (err) { alert(err.message); }
-});
-
-    // OPENING BALANCE form
+    // OPENING BALANCE form AJAX
     document.getElementById('openingForm').addEventListener('submit', async e => {
       e.preventDefault();
       try {
@@ -722,27 +653,28 @@ row.innerHTML = `
       } catch (err) { alert(err.message); }
     });
   </script>
+
   <script>
-    /* ---  fillOpening/Closing time convenience (restored)  --- */
     function getCurrentTimeString(){
       const d=new Date();
       return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }
-    document.getElementById('fillOpeningTime') .onclick=()=>(
-      document.getElementById('openingTime').value = getCurrentTimeString());
-    document.getElementById('fillClosingTime') .onclick=()=>(
-      document.getElementById('closingTime').value = getCurrentTimeString());
-    </script>
-    <!-- optional: restore client‑side subscription redirect -->
-<script>
-  const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining>0) ? 'true':'false' %>;
-  if(!isSubscribed){
-    const nav = performance.getEntriesByType("navigation")[0]||{};
-    setTimeout(()=>location.href='/pricing', nav.type==="back_forward"?10000:5000);
-  }
+    document.getElementById('fillOpeningTime').onclick = () => {
+      document.getElementById('openingTime').value = getCurrentTimeString();
+    };
+    document.getElementById('fillClosingTime').onclick = () => {
+      document.getElementById('closingTime').value = getCurrentTimeString();
+    };
   </script>
-  
+
+  <script>
+    const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining>0) ? 'true':'false' %>;
+    if (!isSubscribed) {
+      const nav = performance.getEntriesByType("navigation")[0]||{};
+      setTimeout(() => location.href='/pricing', nav.type==="back_forward"?10000:5000);
+    }
+  </script>
+
   <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
-<script src="/js/firebasePersistence.js" type="module"></script>
 </html>

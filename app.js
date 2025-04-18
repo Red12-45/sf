@@ -789,81 +789,102 @@ app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (r
   }
 });
 
-// POST /add-product – create or update
-app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req,res) => {
+// ─────────── POST /add-product – create or update ───────────
+app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
     const {
-      existingProduct, productName, wholesalePrice, retailPrice,
-      quantity, productId, selectedCategory, newCategory,
-      selectedUnit, newUnit
+      existingProduct,
+      productName,
+      wholesalePrice,
+      retailPrice,
+      quantity,
+      selectedCategory,
+      newCategory,
+      selectedUnit,
+      newUnit
     } = req.body;
 
-    const wp  = parseFloat(wholesalePrice);
-    const rp  = parseFloat(retailPrice);
-    const qty = parseFloat(quantity);
-    const category = (newCategory && newCategory.trim()) ? newCategory.trim() : (selectedCategory||'');
-    const unitRaw  = (newUnit && newUnit.trim()) ? newUnit.trim() : (selectedUnit||'');
+    const wp       = parseFloat(wholesalePrice);
+    const rp       = parseFloat(retailPrice);
+    const qty      = parseFloat(quantity);
+    const category = (newCategory?.trim()) ? newCategory.trim() : (selectedCategory || '');
+    const unitRaw  = (newUnit?.trim())     ? newUnit.trim()     : (selectedUnit   || '');
     const unit     = unitRaw.toLowerCase();
-    const enteredProductId = (productId && productId.trim()) ? productId.trim() : '-';
 
     let productDoc;
     if (existingProduct && existingProduct !== 'new') {
-      const ref = db.collection('products').doc(existingProduct);
+      // update existing
+      const ref  = db.collection('products').doc(existingProduct);
       const snap = await ref.get();
       if (!snap.exists) return res.status(404).send('Selected product not found');
-      productDoc = snap;
-      const d = snap.data();
+
+      const d    = snap.data();
       const curQ = d.quantity || 0;
       const newQ = curQ + qty;
-      const wW = ((curQ * d.wholesalePrice) + (qty * wp)) / newQ;
-      const wR = ((curQ * d.retailPrice)  + (qty * rp)) / newQ;
+      const wW   = ((curQ * d.wholesalePrice) + (qty * wp)) / newQ;
+      const wR   = ((curQ * d.retailPrice ) + (qty * rp)) / newQ;
+
       await ref.update({
-        quantity: newQ,
-        wholesalePrice: wW,
-        retailPrice: wR,
-        profitMargin: wR - wW,
-        updatedAt: new Date(),
-        ...(unit ? { unit } : {}),
-        ...(category ? { category } : {})
+        quantity:      newQ,
+        wholesalePrice:wW,
+        retailPrice:   wR,
+        profitMargin:  wR - wW,
+        updatedAt:     new Date(),
+        ...(unit     && { unit }),
+        ...(category && { category })
       });
+      productDoc = snap;
+
     } else {
-      const sameName = await db.collection('products')
+      // new product
+      const dup = await db.collection('products')
         .where('accountId','==',accountId)
         .where('productName','==',productName)
         .limit(1).get();
-      if (!sameName.empty) {
-        productDoc = sameName.docs[0];
+
+      if (!dup.empty) {
+        // if same name exists, re-run as update
+        productDoc            = dup.docs[0];
         req.body.existingProduct = productDoc.id;
         return app._router.handle(req, res);
       }
+
       const data = {
-        productName, wholesalePrice: wp, retailPrice: rp,
-        quantity: qty, profitMargin: rp - wp,
-        category, unit, createdAt: new Date(),
-        productId: enteredProductId,
-        accountId, oldestWholesale: wp,
-        oldestBatchQty: qty, secondWholesale: null,
-        oldestRetail: rp, secondRetail: null
+        productName,
+        wholesalePrice: wp,
+        retailPrice:    rp,
+        quantity:       qty,
+        profitMargin:   rp - wp,
+        category,
+        unit,
+        createdAt:      new Date(),
+        accountId,
+        // legacy batch‑tracking fields kept for backwards compatibility
+        oldestWholesale: wp,
+        oldestBatchQty:  qty,
+        secondWholesale: null,
+        oldestRetail:    rp,
+        secondRetail:    null
       };
       const ref = await db.collection('products').add(data);
       productDoc = { id: ref.id, data: () => data };
     }
 
-    const batch = {
-      productId: productDoc.id,
-      productName: productDoc.data().productName,
-      purchasePrice: wp,
-      salePrice: rp,
-      quantity: qty,
+    // always add a new stockBatch
+    await db.collection('stockBatches').add({
+      productId:         productDoc.id,
+      productName:       productDoc.data().productName,
+      purchasePrice:     wp,
+      salePrice:         rp,
+      quantity:          qty,
       remainingQuantity: qty,
-      batchDate: new Date(),
+      batchDate:         new Date(),
       accountId,
-      batchProductId: enteredProductId,
       unit
-    };
-    await db.collection('stockBatches').add(batch);
+    });
 
+    // clear our caches so the sidebar/category lists refresh
     cache.del(`categories_${accountId}`);
     cache.del(`units_${accountId}`);
 
@@ -872,6 +893,8 @@ app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (
     res.status(500).send(err.toString());
   }
 });
+
+
 
 // GET /view-products
 app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), async (req, res) => {
@@ -1055,35 +1078,41 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     const accountId = req.session.user.accountId;
     const batchId   = req.params.batchId;
     const batchRef  = db.collection('stockBatches').doc(batchId);
-    const batchDoc  = await batchRef.get();
-    if (!batchDoc.exists) return res.status(404).send('Stock batch not found');
-    const batchData = batchDoc.data();
+    const batchSnap = await batchRef.get();
+
+    if (!batchSnap.exists) return res.status(404).send('Stock batch not found');
+    const batchData = batchSnap.data();
     if (batchData.accountId !== accountId) return res.status(403).send('Access denied');
 
     const newProductName = req.body.productName?.trim() || batchData.productName;
     const purchasePrice  = parseFloat(req.body.purchasePrice);
     const salePrice      = parseFloat(req.body.salePrice);
     const quantity       = parseFloat(req.body.quantity);
-    const batchProductId = req.body.productId?.trim() || "-";
-    const category       = req.body.newCategory?.trim() || req.body.selectedCategory || "";
-    const unitRaw        = req.body.newUnit?.trim() || req.body.selectedUnit || "";
+    const category       = req.body.newCategory?.trim() || req.body.selectedCategory || '';
+    const unitRaw        = req.body.newUnit?.trim()   || req.body.selectedUnit    || '';
     const unit           = unitRaw.toLowerCase();
 
+    // update the batch
     await batchRef.update({
-      purchasePrice, salePrice,
-      quantity, remainingQuantity: quantity,
-      batchProductId, productName: newProductName,
-      unit, updatedAt: new Date()
+      purchasePrice,
+      salePrice,
+      quantity,
+      remainingQuantity: quantity,
+      productName:       newProductName,
+      unit,
+      updatedAt:         new Date()
     });
 
+    // also update the parent product’s name/unit/category
     const productRef = db.collection('products').doc(batchData.productId);
-    const prodUpdate = {
+    await productRef.update({
       productName: newProductName,
-      updatedAt: new Date(),
-      ...(category ? { category } : {}),
-      ...(unit     ? { unit     } : {})
-    };
-    await productRef.update(prodUpdate);
+      updatedAt:   new Date(),
+      ...(category && { category }),
+      ...(unit     && { unit     })
+    });
+
+    // recalculate aggregates
     await recalcProductFromBatches(batchData.productId);
 
     cache.del(`units_${accountId}`);
