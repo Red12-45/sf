@@ -321,7 +321,7 @@ app.use((req, res, next) => {
   const allowedPaths = [
     '/', '/login', '/register', '/documentation', '/pricing',
     '/subscribe/monthly', '/subscribe/half-yearly', '/subscribe/yearly',
-    '/payment-success', '/logout'
+    '/payment-success', '/logout','/tnc', '/privacy', '/customerservice'
   ];
   if (allowedPaths.includes(req.path)) return next();
   const subscriptionExpiry = req.session.user.subscriptionExpiry;
