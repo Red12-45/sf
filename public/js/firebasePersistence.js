@@ -1,8 +1,11 @@
 // public/js/firebasePersistence.js
-// Make sure to use: <script type="module" src="/js/firebasePersistence.js"></script>
+// Make sure to use: <script type="module" src="/js/firebasePersistence.js?v=2"></script>
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.19.1/firebase-app.js";
-import { getFirestore, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/9.19.1/firebase-firestore.js";
+import {
+  initializeFirestore,
+  persistentLocalCache
+} from "https://www.gstatic.com/firebasejs/9.19.1/firebase-firestore.js";
 
 // ✅ Safe to expose — this is the public Firebase config
 const firebaseConfig = {
@@ -15,23 +18,12 @@ const firebaseConfig = {
   measurementId: "G-ZWZ7GLCH2D"
 };
 
-// Initialize Firebase
+// Initialize Firebase app
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore
-export const db = getFirestore(app);
+// Initialize Firestore with persistent local cache
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
 
-// Enable offline persistence
-enableIndexedDbPersistence(db)
-  .then(() => {
-    console.log("✅ Offline persistence enabled.");
-  })
-  .catch((err) => {
-    if (err.code === "failed-precondition") {
-      console.error("⚠️ Persistence failed: multiple tabs open.");
-    } else if (err.code === "unimplemented") {
-      console.error("❌ Persistence not supported by this browser.");
-    } else {
-      console.error("❌ Error enabling persistence:", err);
-    }
-  });
+console.log("✅ Offline persistence enabled with persistentLocalCache.");
