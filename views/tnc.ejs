@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms &amp; Conditions</title>
+  <link rel="stylesheet" href="/css/tnc.css" />
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+</head>
+<style>
+    body {
+  background: #f4f6f8;
+  color: #2c3e50;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.tnc-container {
+  max-width: 800px;
+  margin: 50px auto;
+  background: #fff;
+  padding: 40px;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+h1 {
+  font-size: 2.75rem;
+  color: #34495e;
+  margin-bottom: 5px;
+}
+
+.updated {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  margin-bottom: 30px;
+}
+
+section {
+  margin-bottom: 25px;
+}
+
+section h2 {
+  font-size: 1.5rem;
+  color: #2980b9;
+  margin-bottom: 10px;
+}
+
+dl dt {
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+dl dd {
+  margin-left: 20px;
+  margin-bottom: 8px;
+}
+
+ol, ul {
+  margin-left: 20px;
+}
+
+p, li {
+  line-height: 1.6;
+}
+
+.btn-wrapper {
+  text-align: center;
+  margin-top: 40px;
+}
+
+.btn {
+  display: inline-block;
+  padding: 12px 30px;
+  background: #2980b9;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 5px;
+  font-weight: 500;
+  transition: background 0.3s ease;
+}
+
+.btn:hover {
+  background: #1c5980;
+}
+
+</style>
+<body>
+  <div class="tnc-container">
+    <h1>Terms &amp; Conditions</h1>
+    <p class="updated">Last updated: <%= new Date().toLocaleDateString() %></p>
+
+    <section>
+      <h2>1. Definitions</h2>
+      <dl>
+        <dt>“Service”</dt>
+        <dd>The web application at <strong><%= host %></strong>, including features such as product management, stock batches, sales, expenses, subscriptions, and employee reporting.</dd>
+        <dt>“User”</dt>
+        <dd>Anyone registered and logged in, either as a Master or a Sub‑user.</dd>
+        <dt>“Master”</dt>
+        <dd>The primary account holder with full permissions, able to manage sub‑users, products, and settings.</dd>
+        <dt>“Sub‑user”</dt>
+        <dd>An additional account under the same Master, with restricted access to routes as configured by the Master.</dd>
+        <dt>“Content”</dt>
+        <dd>All data entered or uploaded by Users, including products, batches, sales records, expenses, and employee reports.</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>2. Account &amp; Security</h2>
+      <ol>
+        <li>You must register with accurate personal and business information.</li>
+        <li>You are responsible for maintaining the confidentiality of your password and session.</li>
+        <li>Master accounts may create up to two Sub‑users; Sub‑users inherit the Master’s subscription but cannot alter subscription or Master‑only settings.</li>
+        <li>Notify us immediately of any unauthorized access to your account.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>3. Subscription &amp; Payments</h2>
+      <ul>
+        <li>Available plans: Monthly (₹400), Half‑Yearly (₹4,599), Yearly (₹8,599).</li>
+        <li>All transactions are processed via Razorpay; by subscribing you authorize charges to your chosen payment method.</li>
+        <li>No refunds once a subscription period has started. You may disable auto‑renewal in your profile before expiry.</li>
+        <li>Access to paid features is revoked upon subscription expiry or failed payment.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>4. Use of Service</h2>
+      <ol>
+        <li>Users are responsible for all actions performed under their account.</li>
+        <li>Do not attempt to interfere with, overload, or reverse‑engineer any part of the Service or its APIs.</li>
+        <li>Unauthorized use of our AJAX endpoints (e.g. <code>/api/sale</code>, <code>/api/expense</code>) is prohibited.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>5. Data &amp; Privacy</h2>
+      <p>Your Content is stored securely in Firestore. We do not share your data with third parties except for payment processing. You retain all rights to your Content. We use session cookies for authentication only.</p>
+    </section>
+
+    <section>
+      <h2>6. Intellectual Property</h2>
+      <p>All code, designs, and trademarks of this Service are the property of Your Company Name. No part may be reproduced or distributed without our written permission.</p>
+    </section>
+
+    <section>
+      <h2>7. Limitation of Liability</h2>
+      <p>Under no circumstances shall we be liable for indirect, incidental, consequential, or special damages including lost profits, data loss, or business interruption.</p>
+    </section>
+
+    <section>
+      <h2>8. Termination</h2>
+      <p>We may suspend or terminate your access if you violate these Terms or fail to maintain an active subscription. You may request data deletion at any time; complete removal occurs within 30 days.</p>
+    </section>
+
+    <section>
+      <h2>9. Changes to Terms</h2>
+      <p>We reserve the right to modify these Terms at any time. The “Last updated” date will reflect changes. Continued use after modifications constitutes acceptance.</p>
+    </section>
+
+    <section>
+      <h2>10. Governing Law</h2>
+      <p>These Terms are governed by the laws of India. Any disputes shall be adjudicated in the courts located at the Master account’s registered address.</p>
+    </section>
+
+    <div class="btn-wrapper">
+      <a href="/" class="btn">Back to Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>

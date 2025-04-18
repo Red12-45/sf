@@ -1572,8 +1572,22 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
   }
 });
 
+
+// GET /tnc – Terms & Conditions
+app.get('/tnc', (req, res) => {
+  res.render('tnc', { host: req.get('host') });
+});
+
+// In app.js, after your documentation route for example:
+
+// GET /privacy
+app.get('/privacy', (req, res) => {
+  res.render('privacy');
+});
+
 /* ─────────── START THE SERVER ─────────── */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
