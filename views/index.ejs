@@ -1,724 +1,197 @@
+<!-- views/viewProducts.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
-
-  <title>SalesFlow Dashboard</title>
-  
+  <title>View Products</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/css/index.css">
+  <link rel="stylesheet" href="/css/viewProducts.css">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
 </head>
-
 <body>
-  <!-- Navigation -->
-  <nav>
-    <div class="nav-brand">
-      <i class="fas fa-chart-line"></i>
-      <span>Dashboard</span>
-    </div>
-    <div class="nav-links">
-      <a href="/add-product"><i class="fas fa-plus-circle"></i> Add Product</a>
-      <a href="/view-products"><i class="fas fa-boxes"></i> View Porducts</a>
-      <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
-      <a href="/expense"><i class="fas fa-receipt"></i> Expenses</a>
-      <% if (user && user.isMaster) { %>
-        <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
-        <a href="/permission"><i class="fas fa-lock"></i>Permissions</a>
-      <% } %>
-      <div class="subscription-info">
-        <% if (user.subscriptionExpiry) { %>
-          <span>
-            <%= subscriptionRemaining %> day<%= subscriptionRemaining == 1 ? '' : 's' %> left
-          </span>
-        <% } else { %>
-          <span>No active subscription</span>
-        <% } %>
-      </div>
-      <% if (user && user.isMaster) { %>
-        <a href="/profile" class="profile"><i class="fas fa-user"></i> Profile</a>
-      <% } %>
-      <a href="/documentation" class="profile"><i class="fas fa-file-alt"></i> Guide</a>
-      <a href="/customerservice" class="profile"><i class="fas fa-headset"></i></a>
-      <a href="/logout" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
-    </div>
-  </nav>
+  <!-- Sidebar omitted for brevity; keep your existing sidebar here -->
 
-  <!-- Main Container -->
-  <div class="page-container">
-    <!-- LEFT SIDEBAR (Forms) -->
-    <div class="forms-sidebar">
-      <div id="toggleSidebar" class="collapse-arrow">
-        <i class="fas fa-chevron-left"></i>
-      </div>
+  <div class="main-content" id="main-content">
+    <div class="page-container">
+      <!-- Filters and header omitted; keep your existing filter form and page header -->
 
-      <!-- Sales Entry Form -->
-      <div class="formBox">
-        <h1><i class="fas fa-shopping-bag"></i> Sale Transaction</h1>
-        <form id="saleForm" action="/sale" method="POST">
-          <!-- Category -->
-          <div>
-            <label for="categorySelect">Category:</label>
-            <select id="categorySelect">
-              <option value="">-- Select a category --</option>
-              <% categories.sort((a, b) => a.localeCompare(b)).forEach(function(cat) { %>
-                <option value="<%= cat %>"><%= cat %></option>
-              <% }); %>
-            </select>
-          </div>
-          <!-- Product -->
-          <div>
-            <label for="productSelect">Product:</label>
-            <select id="productSelect" name="productId" required>
-              <option value="">-- Select a product --</option>
-              <% products.sort((a, b) => a.productName.localeCompare(b.productName)).forEach(function(product){ %>
-                <option value="<%= product.id %>" 
-                  data-retail="<%= product.retailPrice %>" 
-                  data-category="<%= product.category %>"
-                  data-batches='<%= JSON.stringify(product.batches || []) %>'>
-                  <%= product.productName %> (Stock: <%= product.quantity %>)
-                </option>
-              <% }); %>
-            </select>
-          </div>
-          <!-- Product ID (Optional) -->
-          <div>
-            <label for="productIdSelect">Product ID:</label>
-            <select id="productIdSelect" name="customProductId">
-              <option value="">Product ID (Optional)</option>
-              <% products.forEach(function(product) { %>
-                <% if (product.productId && product.productId.trim() !== "" && product.productId.trim() !== "-") { %>
-                  <option value="<%= product.id %>">
-                    <%= product.productId %> (Stock: <%= product.quantity %>)
-                  </option>
-                <% } %>
-              <% }); %>
-            </select>
-          </div>
-          <!-- Retail Price Entry -->
-          <div>
-            <label for="retailPrice">Retail Price:</label>
-            <input type="number" step="0.01" id="retailPrice" name="retailPrice" placeholder="Enter sale price" required>
-          </div>
-          <!-- Sale Quantity -->
-          <div>
-            <label for="saleQuantity">Quantity:</label>
-            <input type="number" id="saleQuantity" name="saleQuantity" required>
-          </div>
-          <!-- Computed Fields -->
-          <div>
-            <label for="wholesalePrice">Wholesale Price:</label>
-            <input type="text" id="wholesalePrice" name="wholesalePrice" placeholder="Computed wholesale price" readonly>
-          </div>
-          <div>
-            <label for="profitPerUnit">Profit/Unit:</label>
-            <input type="text" id="profitPerUnit" name="profitPerUnit" placeholder="Computed profit per unit" readonly>
-          </div>
-          <div>
-            <label for="totalProfit">Total Profit:</label>
-            <input type="text" id="totalProfit" name="totalProfit" placeholder="Computed total profit" readonly>
-          </div>
-          <!-- Sale Date -->
-          <div>
-            <label for="saleDate">Sale Date:</label>
-            <input type="date" id="saleDate" name="saleDate" value="<%= saleDate %>" required>
-          </div>
-          <!-- Payment Status -->
-          <div>
-            <label for="status">Payment Status:</label>
-            <select id="status" name="status" required>
-              <option value="Paid Cash">Paid Cash</option>
-              <option value="Paid Online">Paid Online</option>
-              <option value="Not Paid">Not Paid</option>
-              <option value="Half Cash + Half Online">Half Cash + Half Online</option>
-              <option value="Half Cash + Not Paid">Half Cash + Not Paid</option>
-              <option value="Half Online + Not Paid">Half Online + Not Paid</option>
-            </select>
-          </div>
-          <!-- Combined Payment Details -->
-          <div id="combinedPaymentFields">
-            <div>
-              <label id="paymentLabel1" for="paymentDetail1">Payment Detail 1:</label>
-              <input type="number" step="0.01" id="paymentDetail1" name="paymentDetail1" placeholder="Amount">
-            </div>
-            <div>
-              <label id="paymentLabel2" for="paymentDetail2">Payment Detail 2:</label>
-              <input type="number" step="0.01" id="paymentDetail2" name="paymentDetail2" placeholder="Amount">
-            </div>
-          </div>
-          <!-- Extra Info -->
-          <div>
-            <label for="extraInfo">Extra Info:</label>
-            <textarea id="extraInfo" name="extraInfo" rows="3" cols="30"></textarea>
-          </div>
-          <button type="submit"><i class="fas fa-check-circle"></i> Process Sale</button>
-        </form>
-      </div>
-
-      <!-- Expense Entry Form -->
-      <div class="formBox">
-        <h1><i class="fas fa-file-invoice-dollar"></i> Expense Transaction</h1>
-        <form id="expenseForm" action="/expense" method="POST">
-          <input type="hidden" name="saleDate" value="<%= saleDate %>">
-          <div>
-            <label for="expenseReason">Reason:</label>
-            <input type="text" id="expenseReason" name="expenseReason" placeholder="Reason for expense" required>
-          </div>
-          <div>
-            <label for="expenseCost">Cost:</label>
-            <input type="number" step="0.01" id="expenseCost" name="expenseCost" placeholder="Cost" required>
-          </div>
-          <div>
-            <label for="expenseStatus">Payment Method:</label>
-            <select id="expenseStatus" name="expenseStatus" required>
-              <option value="Paid Cash">Paid Cash</option>
-              <option value="Paid Online">Paid Online</option>
-              <option value="Not Paid">Not Paid</option>
-              <option value="Half Cash + Half Online">Half Cash + Half Online</option>
-              <option value="Half Cash + Not Paid">Half Cash + Not Paid</option>
-              <option value="Half Online + Not Paid">Half Online + Not Paid</option>
-            </select>
-          </div>
-          <div id="expenseExtraFields">
-            <div>
-              <label id="expenseLabel1" for="expenseDetail1">Detail 1:</label>
-              <input type="number" step="0.01" id="expenseDetail1" name="expenseDetail1" placeholder="Amount">
-            </div>
-            <div>
-              <label id="expenseLabel2" for="expenseDetail2">Detail 2:</label>
-              <input type="number" step="0.01" id="expenseDetail2" name="expenseDetail2" placeholder="Amount">
-            </div>
-          </div>
-          <button type="submit"><i class="fas fa-plus-circle"></i> Add Expense</button>
-        </form>
-      </div>
-
-      <!-- Opening Balance Form -->
-      <div class="formBox">
-        <h1><i class="fas fa-wallet"></i> Opening Balance</h1>
-        <form id="openingForm" action="/update-opening-balance" method="POST">
-          <div>
-            <label for="openingBalance">Opening Balance:</label>
-            <input type="number" step="0.01" id="openingBalance" name="openingBalance" value="<%= openingBalance %>" required>
-          </div>
-          <div>
-            <label for="openingTime">Opening Time:</label>
-            <input type="text" id="openingTime" name="openingTime" value="<%= openingTime %>">
-            <i class="fas fa-clock clickable" id="fillOpeningTime" style="cursor: pointer; margin-left: 8px;"></i>
-          </div>
-          <div>
-            <label for="closingTime">Closing Time:</label>
-            <input type="text" id="closingTime" name="closingTime" value="<%= closingTime %>">
-            <i class="fas fa-clock clickable" id="fillClosingTime" style="cursor: pointer; margin-left: 8px;"></i>
-          </div>
-          <input type="hidden" name="saleDate" value="<%= saleDate %>">
-          <button type="submit"><i class="fas fa-sync-alt"></i> Update Balance</button>
-        </form>
-      </div>
-
-      <div class="formBox">
-        <h1><i class="fas fa-user-clock"></i> Report Time</h1>
-        <a href="/employees" class="go-report-link">
-          <i class="fas fa-user-clock"></i> Go to Report Time
-        </a>
-      </div>
-    </div>
-
-    <!-- RIGHT CONTENT AREA (Tables and Summary) -->
-    <div class="tables-content">
-      <!-- Sales Table -->
-      <div>
-        <h2>
-          <span>Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)</span>
-          <span class="date-info">
-            <% if (openingTime) { %>
-              <i class="far fa-clock"></i> Open: <%= openingTime %>
-            <% } %>
-            <% if (closingTime) { %>
-              <i class="fas fa-clock"></i> Close: <%= closingTime %>
-            <% } %>
-          </span>
-        </h2>
-        <% if (sales.length === 0) { %>
-          <div class="no-data">
-            <i class="far fa-chart-bar"></i>
-            <p>No sales recorded for this date.</p>
-          </div>
-        <% } else { %>
-          <table id="salesTable">
+      <% if (products.length===0) { %>
+        <div class="empty-state"><i class="fas fa-box-open"></i><p>No products available.</p></div>
+      <% } else { %>
+        <div class="products-table-container">
+          <table class="products-table">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Product</th>
-                <th>FIFO Avg. Wholesale</th>
-                <th>Sale Price</th>
-                <th>Qty</th>
+                <th></th>
+                <th>Serial No.</th>
+                <th>Product Name</th>
+                <th>Wholesale Price</th>
+                <th>Retail Price</th>
+                <th>Quantity</th>
                 <th>Unit</th>
-                <th>Total Sale</th>
-                <th>Profit/Unit</th>
-                <th>Total Profit</th>
-                <th>Status</th>
-                <th>Info</th>
-                <th>Time</th>
-                <th>Action</th>
+                <th>Profit Margin</th>
+                <th>Category</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              <% sales.forEach(function(sale){ %>
-                <tr>
-                  <td><%= sale.customProductId ? sale.customProductId : "-" %></td>
-                  <td><%= sale.productName %></td>
-                  <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
-                  <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
-                  <td><%= sale.saleQuantity %></td>
-                  <td><%= sale.unit || "-" %></td>
-                  <td>
-                    <% let totalSale = sale.totalSale || (sale.retailPrice * sale.saleQuantity); %>
-                    <%= parseFloat(totalSale).toFixed(2) %>
-                  </td>
-                  <td>
-                    <% let profitPerUnit = sale.profitPerUnit || (sale.retailPrice - sale.wholesalePrice); %>
-                    <%= parseFloat(profitPerUnit).toFixed(2) %>
-                  </td>
-                  <td><%= parseFloat(sale.profit).toFixed(2) %></td>
-                  <td>
-                    <% 
-                      let statusClass = "";
-                      if (sale.status === "Paid Cash") statusClass = "status-cash";
-                      else if (sale.status === "Paid Online") statusClass = "status-online";
-                      else if (sale.status === "Not Paid") statusClass = "status-notpaid";
-                      else statusClass = "status-mixed";
-                    %>
-                    <span class="status-pill <%= statusClass %>"><%= sale.status %></span>
-                    <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
-                      <br>
-                      <small>
-                        <% if(sale.paymentDetail1) { %>Detail1: <%= sale.paymentDetail1 %><% } %>
-                        <% if(sale.paymentDetail2) { %>, Detail2: <%= sale.paymentDetail2 %><% } %>
-                      </small>
-                    <% } %>
-                  </td>
-                  <td>
-                    <%= sale.extraInfo ? sale.extraInfo : "-" %>
-                  </td>
-                  <td>
-                    <% 
-                      let saleTime;
-                      if (sale.createdAt && sale.createdAt.toDate) {
-                        saleTime = sale.createdAt.toDate().toLocaleTimeString();
-                      } else {
-                        saleTime = new Date(sale.createdAt).toLocaleTimeString();
-                      }
-                    %>
-                    <%= saleTime %>
-                  </td>
-              
-                  <td style="text-align: center;">
-                    <i class="fas fa-trash-alt delete-sale-icon" data-id="<%= sale.id %>"></i>
-                  </td>
-                </tr>
-              <% }); %>
-            </tbody>
-          </table>
-        <% } %>
-      </div>
-
-      <!-- Expenses Table -->
-      <div>
-        <% 
-          let totalExpenseAmount = 0;
-          if (expenses && expenses.length > 0) {
-            totalExpenseAmount = expenses.reduce((sum, exp) => sum + parseFloat(exp.expenseCost || 0), 0);
-          }
-        %>
-        <h2>
-          Expenses for <%= saleDate %>
-          <% if (expenses.length > 0) { %>
-            (Expense Amount: ₹<%= totalExpenseAmount.toFixed(2) %>)
-          <% } %>
-        </h2>
-        <% if (expenses && expenses.length > 0) { %>
-          <table id="expenseTable">
-            <thead>
-              <tr>
-                <th>Expense Reason</th>
-                <th>Expense Cost</th>
-                <th>Payment Method</th>
-                <th>Detail 1</th>
-                <th>Detail 2</th>
-                <th>Time</th>
+            <% products.forEach(function(product,index){ %>
+              <tr id="product-row-<%= product.id %>">
+                <td>
+                  <% if (product.batches && product.batches.length>0) { %>
+                    <button onclick="toggleBatches('<%= product.id %>')">
+                      <i class="fas fa-chevron-down" id="icon-<%= product.id %>"></i>
+                    </button>
+                  <% } %>
+                </td>
+                <td><%= index+1 %></td>
+                <td><%= product.productName %></td>
+                <td>₹<%= product.wholesalePrice.toFixed(2) %></td>
+                <td>₹<%= product.retailPrice.toFixed(2) %></td>
+                <td><%= product.quantity %></td>
+                <td><%= product.unit||'-' %></td>
+                <td>₹<%= product.profitMargin.toFixed(2) %></td>
+                <td><span class="category-badge"><%= product.category||'-' %></span></td>
+                <td><!-- your delete button --></td>
               </tr>
-            </thead>
-            <tbody>
-              <% expenses.forEach(function(expense){ %>
-                <tr>
-                  <td><%= expense.expenseReason %></td>
-                  <td><%= expense.expenseCost.toFixed(2) %></td>
-                  <td><%= expense.expenseStatus %></td>
-                  <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : "-" %></td>
-                  <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : "-" %></td>
-                  <td>
-                    <% 
-                      let expenseTime;
-                      if (expense.createdAt && expense.createdAt.toDate) {
-                        expenseTime = expense.createdAt.toDate().toLocaleTimeString();
-                      } else {
-                        expenseTime = new Date(expense.createdAt).toLocaleTimeString();
-                      }
-                    %>
-                    <%= expenseTime %>
+
+              <% if (product.batches && product.batches.length>0) { %>
+                <tr class="batches-container" id="batches-<%= product.id %>">
+                  <td colspan="10">
+                    <table class="batch-table">
+                      <thead>
+                        <tr>
+                          <th>Batch Date</th>
+                          <th>Purchase Price</th>
+                          <th>Retail Price</th>
+                          <th>Quantity</th>
+                          <th>Remaining</th>
+                          <th>Profit Margin</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% product.batches.forEach(function(batch){ 
+                             const d = batch.batchDate.seconds
+                               ? new Date(batch.batchDate.seconds*1000)
+                               : new Date(batch.batchDate);
+                        %>
+                        <tr data-batch-id="<%= batch.id %>">
+                          <td><%= d.toLocaleDateString() %> <%= d.toLocaleTimeString() %></td>
+                          <td class="editable-cell" data-field="purchasePrice">
+                            <span class="value">₹<%= batch.purchasePrice.toFixed(2) %></span>
+                            <i class="fas fa-pencil-alt edit-icon"></i>
+                            <i class="fas fa-save save-icon" style="display:none;"></i>
+                          </td>
+                          <td class="editable-cell" data-field="salePrice">
+                            <span class="value">₹<%= batch.salePrice.toFixed(2) %></span>
+                            <i class="fas fa-pencil-alt edit-icon"></i>
+                            <i class="fas fa-save save-icon" style="display:none;"></i>
+                          </td>
+                          <td class="editable-cell" data-field="quantity">
+                            <span class="value"><%= batch.quantity %></span>
+                            <i class="fas fa-pencil-alt edit-icon"></i>
+                            <i class="fas fa-save save-icon" style="display:none;"></i>
+                          </td>
+                          <td class="remaining"><%= batch.remainingQuantity %></td>
+                          <td class="profit">₹<%= (batch.salePrice - batch.purchasePrice).toFixed(2) %></td>
+                          <td><!-- empty for alignment --></td>
+                        </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
                   </td>
                 </tr>
-              <% }); %>
+              <% } %>
+            <% }) %>
             </tbody>
           </table>
-        <% } else { %>
-          <div class="no-data">
-            <i class="fas fa-file-invoice-dollar"></i>
-            <p>No expenses recorded for this date.</p>
-          </div>
-        <% } %>
-      </div>
-
-      <!-- Summary Section -->
-      <div id="summarySection" class="formBox">
-        <h2>Summary for <%= saleDate %></h2>
-        <button id="toggleSummary">Show Daily Summary</button>
-        <div id="summaryContent" style="display: none;">
-          <p data-label="Total Sales: " data-key="totalSales"><%= totalSales.toFixed(2) %></p>
-          <p data-label="Total Profit: " data-key="totalProfit"><%= totalProfit.toFixed(2) %></p>
-          <p data-label="Total Cash Sales: " data-key="totalCashSales"><%= totalCashSales.toFixed(2) %></p>
-          <p data-label="Total Online Sales: " data-key="totalOnlineSales"><%= totalOnlineSales.toFixed(2) %></p>
-          <p data-label="Total Not Paid Sales: " data-key="totalNotPaidSales"><%= totalNotPaidSales.toFixed(2) %></p>
-          <p data-label="Total Cash Expenses: " data-key="totalCashExpenses"><%= totalCashExpenses.toFixed(2) %></p>
-          <p data-label="Total Online Expenses: " data-key="totalOnlineExpenses"><%= totalOnlineExpenses.toFixed(2) %></p>
-          <p data-label="Final Cash: " data-key="finalCash"><%= finalCash.toFixed(2) %></p>
         </div>
-      </div>
+      <% } %>
     </div>
   </div>
 
-  <!-- Client‑Side Script -->
-  <script>
-    /* -------------------------------------------------------------- */
-    /* Everything below this line until the next comment == ORIGINAL   */
-    /* -------------------------------------------------------------- */
-    document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.delete-sale-btn');
-  if (!btn) return;
-
-  if (!confirm('Delete this sale and restore stock?')) return;
-  try {
-    const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
-    /* remove row */
-    btn.closest('tr').remove();
-    /* refresh summary numbers */
-    refreshSummary(res.summary);
-  } catch (err) { alert(err.message); }
-});
-
-    const categorySelect = document.getElementById('categorySelect');
-    const productSelect = document.getElementById('productSelect');
-    const productIdSelect = document.getElementById('productIdSelect');
-    const retailInput = document.getElementById('retailPrice');
-    const saleQuantityInput = document.getElementById('saleQuantity');
-    const statusSelect = document.getElementById('status');
-    const combinedPaymentFields = document.getElementById('combinedPaymentFields');
-    const paymentLabel1 = document.getElementById('paymentLabel1');
-    const paymentLabel2 = document.getElementById('paymentLabel2');
-
-    categorySelect.addEventListener('change', function() {
-      const selectedCategory = categorySelect.value;
-      for (let i = 0; i < productSelect.options.length; i++) {
-        const option = productSelect.options[i];
-        if (option.value === "") continue;
-        option.style.display = (!selectedCategory || option.getAttribute('data-category') === selectedCategory) ? "" : "none";
-      }
-      productSelect.selectedIndex = 0;
-      productIdSelect.value = "";
-      updateSaleCalculations();
-    });
-
-    productSelect.addEventListener('change', function() {
-      productIdSelect.value = "";
-      updateSaleCalculations();
-    });
-
-    productIdSelect.addEventListener('change', function() {
-      const customSelection = productIdSelect.value;
-      if (customSelection) {
-        productSelect.value = customSelection;
-        productSelect.dispatchEvent(new Event('change'));
-      }
-    });
-
-    statusSelect.addEventListener('change', function() {
-      const status = statusSelect.value;
-      if (status === "Half Cash + Half Online") {
-        combinedPaymentFields.style.display = "block";
-        paymentLabel1.textContent = "Cash Amount:";
-        paymentLabel2.textContent = "Online Amount:";
-      } else if (status === "Half Cash + Not Paid") {
-        combinedPaymentFields.style.display = "block";
-        paymentLabel1.textContent = "Cash Amount:";
-        paymentLabel2.textContent = "Not Paid Amount:";
-      } else if (status === "Half Online + Not Paid") {
-        combinedPaymentFields.style.display = "block";
-        paymentLabel1.textContent = "Online Amount:";
-        paymentLabel2.textContent = "Not Paid Amount:";
-      } else {
-        combinedPaymentFields.style.display = "none";
-        document.getElementById('paymentDetail1').value = "";
-        document.getElementById('paymentDetail2').value = "";
-      }
-    });
-    statusSelect.dispatchEvent(new Event('change'));
-
-    document.getElementById('toggleSummary').addEventListener('click', function() {
-      const summaryContent = document.getElementById('summaryContent');
-      if (summaryContent.style.display === 'none') {
-        summaryContent.style.display = 'block';
-        this.textContent = 'Hide Summary';
-      } else {
-        summaryContent.style.display = 'none';
-        this.textContent = 'Show Daily Summary';
-      }
-    });
-
-    document.getElementById('toggleSidebar').addEventListener('click', function() {
-      const formsSidebar = document.querySelector('.forms-sidebar');
-      formsSidebar.classList.toggle('collapsed');
-      this.innerHTML = formsSidebar.classList.contains('collapsed')
-        ? '<i class="fas fa-angle-double-right"></i>'
-        : '<i class="fas fa-angle-double-left"></i>';
-    });
-
-    function computeFIFO(batches, saleQty) {
-      let remaining = saleQty;
-      let totalWholesaleCost = 0;
-      let totalRetailTotal = 0;
-      let totalUnitsUsed = 0;
-      for (let i = 0; i < batches.length && remaining > 0; i++) {
-        const batch = batches[i];
-        const units = Math.min(batch.qty, remaining);
-        totalWholesaleCost += batch.wholesale * units;
-        totalRetailTotal += batch.retail * units;
-        totalUnitsUsed += units;
-        remaining -= units;
-      }
-      if (totalUnitsUsed === 0) return { wholesale: 0, retail: 0 };
-      return { wholesale: totalWholesaleCost / totalUnitsUsed, retail: totalRetailTotal / totalUnitsUsed };
-    }
-
-    function updateSaleCalculations() {
-      const selectedOption = productSelect.options[productSelect.selectedIndex];
-      if (!selectedOption || selectedOption.value === "") {
-        document.getElementById('wholesalePrice').value = "";
-        document.getElementById('profitPerUnit').value = "";
-        document.getElementById('totalProfit').value = "";
-        retailInput.placeholder = "";
-        return;
-      }
-      let batches = [];
-      try {
-        batches = JSON.parse(selectedOption.getAttribute('data-batches'));
-      } catch (e) {
-        batches = [];
-      }
-      const saleQty = parseInt(saleQuantityInput.value) || 0;
-      if (saleQty === 0) {
-        document.getElementById('wholesalePrice').value = "";
-        document.getElementById('profitPerUnit').value = "";
-        document.getElementById('totalProfit').value = "";
-        retailInput.placeholder = "";
-        return;
-      }
-      const computed = computeFIFO(batches, saleQty);
-      const computedWholesale = computed.wholesale;
-      const computedRetail = computed.retail;
-      retailInput.placeholder = computedRetail.toFixed(2);
-      const userRetail = parseFloat(retailInput.value);
-      const effectiveRetail = (!isNaN(userRetail) && userRetail > 0) ? userRetail : computedRetail;
-      const profitPerUnit = effectiveRetail - computedWholesale;
-      const totalProfit = profitPerUnit * saleQty;
-      document.getElementById('wholesalePrice').value = computedWholesale.toFixed(2);
-      document.getElementById('profitPerUnit').value = profitPerUnit.toFixed(2);
-      document.getElementById('totalProfit').value = totalProfit.toFixed(2);
-    }
-
-    retailInput.addEventListener('input', updateSaleCalculations);
-    saleQuantityInput.addEventListener('input', updateSaleCalculations);
-    productSelect.addEventListener('change', updateSaleCalculations);
-
-    /* -------------------------------------------------------------- */
-    /* -----------------  AJAX LIVE‑UPDATE PATCH  ------------------- */
-    /* -------------------------------------------------------------- */
-   
-
-function ensureTableExists (wrapperSelector, tableId, theadHtml) {
-  if (document.querySelector(tableId)) return;      // table already there
-  const wrap = document.querySelector(wrapperSelector);
-  if (!wrap) return;                                // safety – wrapper missing
-  wrap.innerHTML = `
-    <table id="${tableId.substring(1)}">
-      ${theadHtml}
-      <tbody></tbody>
-    </table>`;
+<script>
+function toggleBatches(id){
+  const row = document.getElementById('batches-'+id);
+  const icon = document.getElementById('icon-'+id);
+  if (!row) return;
+  if (row.classList.contains('show')){
+    row.classList.remove('show');
+    icon.classList.replace('fa-chevron-up','fa-chevron-down');
+  } else {
+    row.classList.add('show');
+    icon.classList.replace('fa-chevron-down','fa-chevron-up');
+  }
 }
 
+// Delegate clicks on edit/save icons
+document.querySelectorAll('.editable-cell').forEach(cell => {
+  const editIcon = cell.querySelector('.edit-icon');
+  const saveIcon = cell.querySelector('.save-icon');
+  const field = cell.dataset.field;
 
-    // quick helpers
-    const cash = n => Number(n).toFixed(2);
-    const postJSON = async (url, obj) => {
-      const r = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(obj)
-      });
-      const j = await r.json();
-      if (!j.success) throw new Error(j.error || 'Unknown error');
-      return j;
-    };
-    const refreshSummary = s => {
-      for (const [k, v] of Object.entries(s)) {
-        const el = document.querySelector(`#summaryContent [data-key="${k}"]`);
-        if (el) el.textContent = el.textContent.replace(/[-+]?\d+(\.\d+)?$/, cash(v));
-      }
-      document.getElementById('summaryContent').style.display = 'block';
-      document.getElementById('toggleSummary').textContent = 'Hide Summary';
-    };
+  editIcon.addEventListener('click', () => {
+    const valSpan = cell.querySelector('.value');
+    let raw = valSpan.textContent.replace('₹','').trim();
+    const input = document.createElement('input');
+    input.type = field==='quantity' ? 'number' : 'text';
+    input.value = raw;
+    input.className = 'edit-input';
+    cell.insertBefore(input, valSpan);
+    valSpan.style.display = 'none';
+    editIcon.style.display = 'none';
+    saveIcon.style.display = '';
+  });
 
-    // SALE form
-    document.getElementById('saleForm').addEventListener('submit', async e => {
-      if (e.submitter?.classList.contains('noAjax')) return; // optional fallback
-      e.preventDefault();
-      try {
-        const obj = Object.fromEntries(new FormData(e.target).entries());
-        const res = await postJSON('/api/sale', obj);
-        const s = res.sale;
-        const row = document.createElement('tr');
-        // ⬇️ put this *before* you build the <tr>
-const pillClass = {
-  'Paid Cash'   : 'status-cash',
-  'Paid Online' : 'status-online',
-  'Not Paid'    : 'status-notpaid'
-}[s.status] || 'status-mixed';
+  saveIcon.addEventListener('click', async () => {
+    const tr = cell.closest('tr');
+    const batchId = tr.dataset.batchId;
+    // gather all three fields
+    const row = tr;
+    const pCell = row.querySelector('[data-field="purchasePrice"]');
+    const rCell = row.querySelector('[data-field="salePrice"]');
+    const qCell = row.querySelector('[data-field="quantity"]');
+    const pVal = parseFloat(pCell.querySelector('.edit-input')?.value ?? pCell.querySelector('.value').textContent.replace('₹',''));
+    const rVal = parseFloat(rCell.querySelector('.edit-input')?.value ?? rCell.querySelector('.value').textContent.replace('₹',''));
+    const qVal = parseInt(qCell.querySelector('.edit-input')?.value ?? qCell.querySelector('.value').textContent,10);
 
-row.innerHTML = `
-  <td>${s.customProductId || '-'}</td>
-  <td>${s.productName}</td>
-  <td>${cash(s.wholesalePrice)}</td>
-  <td>${cash(s.retailPrice)}</td>
-  <td>${s.saleQuantity}</td>
-  <td>${s.unit || '-'}</td>
-  <td>${cash(s.totalSale)}</td>
-  <td>${cash(s.profitPerUnit)}</td>
-  <td>${cash(s.profit)}</td>
-  <td>
-      <span class="status-pill ${pillClass}">${s.status}</span>
-      ${(s.paymentDetail1 || s.paymentDetail2)
-        ? `<br><small>${s.paymentDetail1 ? 'Detail1: '+s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: '+s.paymentDetail2 : ''}</small>` 
-        : ''}
-  </td>
-  <td>${s.extraInfo || '-'}</td>
-  <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
-  <td>
-    <button type="button" class="delete-sale-btn" data-id="${s.id}">
-      <i class="fas fa-trash"></i>
-    </button>
-  </td>`;
-
-
-          // make sure the sales table exists (replaces the .no-data card at first sale)
-          ensureTableExists(
-  '.tables-content div:first-child',   // wrapper holding the sales panel
-  '#salesTable',
-  `<thead>
-     <tr>
-       <th>ID</th><th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
-       <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
-       <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
-       <th>Action</th>
-     </tr>
-   </thead>`
-);
-
-
-        document.querySelector('#salesTable tbody').prepend(row);
-        refreshSummary(res.summary);
-        e.target.reset();
-        updateSaleCalculations();
-      } catch (err) { alert(err.message); }
+    const res = await fetch(`/api/update-stock-batch/${batchId}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        purchasePrice: pVal,
+        salePrice: rVal,
+        quantity: qVal
+      })
     });
-
-// EXPENSE form
-document.getElementById('expenseForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  try {
-    const obj = Object.fromEntries(new FormData(e.target).entries());
-    const res = await postJSON('/api/expense', obj);
-    const ex  = res.expense;
-
-    /* ensure the table exists (replaces the .no‑data card at first expense) */
-    ensureTableExists(
-      '.tables-content div:nth-child(2)',
-      '#expenseTable',
-      `<thead>
-         <tr>
-           <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
-           <th>Detail 1</th><th>Detail 2</th><th>Time</th>
-         </tr>
-       </thead>`
-    );
-
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${ex.expenseReason}</td>
-      <td>${cash(ex.expenseCost)}</td>
-      <td>${ex.expenseStatus}</td>
-      <td>${ex.expenseDetail1 || '-'}</td>
-      <td>${ex.expenseDetail2 || '-'}</td>
-      <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>`;
-    document.querySelector('#expenseTable tbody').prepend(row);
-
-    refreshSummary(res.summary);
-    e.target.reset();
-  } catch (err) { alert(err.message); }
-});
-
-    // OPENING BALANCE form
-    document.getElementById('openingForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      try {
-        const obj = Object.fromEntries(new FormData(e.target).entries());
-        const res = await postJSON('/api/opening-balance', obj);
-        document.querySelector('h2 span').innerHTML =
-          `Sales for ${obj.saleDate} (Opening Balance: ₹${cash(res.openingBalance)})`;
-        refreshSummary(res.summary);
-      } catch (err) { alert(err.message); }
-    });
-  </script>
-  <script>
-    /* ---  fillOpening/Closing time convenience (restored)  --- */
-    function getCurrentTimeString(){
-      const d=new Date();
-      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const data = await res.json();
+    if (!data.success) {
+      alert('Update failed: ' + (data.error || ''));
+      return;
     }
-    document.getElementById('fillOpeningTime') .onclick=()=>(
-      document.getElementById('openingTime').value = getCurrentTimeString());
-    document.getElementById('fillClosingTime') .onclick=()=>(
-      document.getElementById('closingTime').value = getCurrentTimeString());
-    </script>
-    <!-- optional: restore client‑side subscription redirect -->
-<script>
-  const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining>0) ? 'true':'false' %>;
-  if(!isSubscribed){
-    const nav = performance.getEntriesByType("navigation")[0]||{};
-    setTimeout(()=>location.href='/pricing', nav.type==="back_forward"?10000:5000);
-  }
-  </script>
-  
-  <script src="/js/firebasePersistence.js" type="module"></script>
+
+    // update all three cells and profit/remaining
+    const profitCell = row.querySelector('.profit');
+    const remainingCell = row.querySelector('.remaining');
+    const newProfit = (rVal - pVal).toFixed(2);
+
+    [[pCell,pVal,'₹'+pVal.toFixed(2)], [rCell,rVal,'₹'+rVal.toFixed(2)], [qCell,qVal,qVal]]
+      .forEach(([c, raw, text]) => {
+        const span = c.querySelector('.value');
+        span.textContent = text;
+        span.style.display = '';
+        const inp = c.querySelector('.edit-input');
+        if (inp) inp.remove();
+        c.querySelector('.edit-icon').style.display = '';
+        c.querySelector('.save-icon').style.display = 'none';
+      });
+
+    profitCell.textContent = '₹'+newProfit;
+    remainingCell.textContent = qVal;
+  });
+});
+</script>
 </body>
 </html>

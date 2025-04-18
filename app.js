@@ -1037,6 +1037,8 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 });
 
 
+
+
 /* ─────────── SALES & PROFIT REPORTING ─────────── */
 // GET /sales
 // ────────────────────────────────────────────────────────────────
@@ -1191,12 +1193,13 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
 
 /* ─────────── SUBSCRIPTION & PAYMENT ROUTES ─────────── */
 // GET /pricing
-app.get('/pricing', isAuthenticated, (req, res) => {
+app.get('/pricing', (req, res) => {
   const now = new Date();
-  if (req.session.user.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now)
+  if (req.session.user?.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now)
     return res.redirect('/');
-  res.render('pricing', { user: req.session.user });
+  res.render('pricing', { user: req.session.user || null });
 });
+
 
 // GET /subscribe/monthly
 app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
