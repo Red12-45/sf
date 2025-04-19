@@ -18,80 +18,64 @@
       <span>Expense Report</span>
     </div>
     <div class="sidebar-nav">
-      <!-- Dashboard Section -->
       <div class="sidebar-section">
         <div class="sidebar-heading">Dashboard</div>
         <ul class="sidebar-menu">
           <li class="sidebar-item">
             <a href="/" class="sidebar-link">
-              <i class="fas fa-home"></i>
-              <span>Dashboard</span>
+              <i class="fas fa-home"></i><span>Dashboard</span>
             </a>
           </li>
           <li class="sidebar-item">
             <a href="/sales" class="sidebar-link">
-              <i class="fas fa-shopping-cart"></i>
-              <span>Sales Report</span>
+              <i class="fas fa-shopping-cart"></i><span>Sales Report</span>
             </a>
           </li>
           <li class="sidebar-item">
             <a href="/profit" class="sidebar-link">
-              <i class="fas fa-chart-bar"></i>
-              <span>Profit Report</span>
+              <i class="fas fa-chart-bar"></i><span>Profit Report</span>
             </a>
           </li>
           <li class="sidebar-item">
             <a href="/expense" class="sidebar-link active">
-              <i class="fas fa-money-bill-wave"></i>
-              <span>Expenses</span>
+              <i class="fas fa-money-bill-wave"></i><span>Expenses</span>
             </a>
           </li>
         </ul>
       </div>
-      
-      <!-- Products Section -->
       <div class="sidebar-section">
         <div class="sidebar-heading">Products</div>
         <ul class="sidebar-menu">
           <li class="sidebar-item">
             <a href="/add-product" class="sidebar-link">
-              <i class="fas fa-plus-circle"></i>
-              <span>Add New Product</span>
+              <i class="fas fa-plus-circle"></i><span>Add New Product</span>
             </a>
           </li>
           <li class="sidebar-item">
             <a href="/view-products" class="sidebar-link">
-              <i class="fas fa-boxes"></i>
-              <span>View/Edit Products</span>
+              <i class="fas fa-boxes"></i><span>View/Edit Products</span>
             </a>
           </li>
-    
         </ul>
       </div>
-      
-      <!-- Settings Section -->
       <div class="sidebar-section">
         <div class="sidebar-heading">Settings</div>
         <ul class="sidebar-menu">
           <li class="sidebar-item">
             <a href="/profile" class="sidebar-link">
-              <i class="fas fa-user"></i>
-              <span>Profile</span>
+              <i class="fas fa-user"></i><span>Profile</span>
             </a>
           </li>
-        
         </ul>
       </div>
     </div>
-    
     <div class="sidebar-footer">
       <a href="/logout">
-        <i class="fas fa-sign-out-alt"></i>
-        <span>Logout</span>
+        <i class="fas fa-sign-out-alt"></i><span>Logout</span>
       </a>
     </div>
   </div>
-  
+
   <!-- Main Content Area -->
   <div class="main-content" id="main-content">
     <div class="page-container">
@@ -105,7 +89,7 @@
           </div>
         </form>
       </div>
-      
+
       <!-- Expense Submission Form Card -->
       <div class="formBox">
         <form action="/expense" method="POST" id="expenseForm">
@@ -129,98 +113,183 @@
           </div>
         </form>
       </div>
-      
+
       <!-- Display Expense Records for the Selected Month -->
       <% if (groupedExpenses && Object.keys(groupedExpenses).length > 0) { %>
         <h2>Expenses for <%= month %></h2>
-        <% let dates = Object.keys(groupedExpenses).sort(); %>
-        <% dates.forEach(function(expenseDate) { %>
-          <h3>Expenses for <%= expenseDate %></h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Expense Reason</th>
-                <th>Expense Amount</th>
-                <th>Expense Date</th>
-                <th>Expense Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% groupedExpenses[expenseDate].forEach(function(expense) { 
-                   let createdAt;
-                   if (expense.createdAt && typeof expense.createdAt.toDate === 'function') {
-                     createdAt = expense.createdAt.toDate();
-                   } else {
-                     createdAt = new Date(expense.createdAt);
-                   }
-                   let dateString = createdAt.toISOString().substring(0, 10);
-                   let timeString = createdAt.toLocaleTimeString();
-              %>
-                <tr>
-                  <td><%= expense.expenseReason %></td>
-                  <td><%= parseFloat(expense.expenseCost).toFixed(2) %></td>
-                  <td><%= dateString %></td>
-                  <td><%= timeString %></td>
-                </tr>
-              <% }); %>
-            </tbody>
-          </table>
-          <br>
-        <% }); %>
-        <h3>Total Expense for Month: <%= totalExpense.toFixed(2) %></h3>
+        <div id="expenseContainer">
+          <% Object.keys(groupedExpenses).sort().forEach(function(expenseDate) { %>
+            <div class="expense-group" data-date="<%= expenseDate %>">
+              <h3>Expenses for <%= expenseDate %></h3>
+              <table id="expenseTable-<%= expenseDate %>">
+                <thead>
+                  <tr>
+                    <th>Reason</th><th>Amount</th><th>Method</th>
+                    <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% groupedExpenses[expenseDate].forEach(function(expense) {
+                       let created = (expense.createdAt.toDate)
+                         ? expense.createdAt.toDate()
+                         : new Date(expense.createdAt);
+                       let timeStr = created.toLocaleTimeString();
+                  %>
+                    <tr>
+                      <td><%= expense.expenseReason %></td>
+                      <td><%= expense.expenseCost.toFixed(2) %></td>
+                      <td><%= expense.expenseStatus %></td>
+                      <td><%= expense.expenseDetail1 || '-' %></td>
+                      <td><%= expense.expenseDetail2 || '-' %></td>
+                      <td><%= timeStr %></td>
+                      <td style="text-align:center;">
+                        <i class="fas fa-trash-alt delete-expense-btn" data-id="<%= expense.id %>"></i>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% }); %>
+        </div>
+        <h3>Total Expense for Month: ₹<span id="totalExpense"><%= totalExpense.toFixed(2) %></span></h3>
       <% } else { %>
         <p>No expenses found for this month.</p>
       <% } %>
     </div>
   </div>
-  
+
   <script>
-    // Sidebar toggle functionality for responsive design
+    // Sidebar toggle
     if (document.getElementById('sidebarToggle')) {
-      document.getElementById('sidebarToggle').addEventListener('click', function() {
+      document.getElementById('sidebarToggle').addEventListener('click', () => {
         document.getElementById('sidebar').classList.toggle('active');
         document.getElementById('main-content').classList.toggle('sidebar-open');
       });
     }
-    
-    // Add expense row dynamically
-    document.getElementById('addExpense').addEventListener('click', function() {
-      var expenseItems = document.getElementById('expenseItems');
-      var newRow = document.createElement('div');
+
+    // Add/remove dynamic rows
+    document.getElementById('addExpense').addEventListener('click', () => {
+      const expenseItems = document.getElementById('expenseItems');
+      const newRow = document.createElement('div');
       newRow.className = 'expense-row';
-      newRow.innerHTML = 
-        '<input type="text" name="expenseReason" placeholder="Expense Reason" class="expense-field" required>' +
-        '<input type="number" step="0.01" name="expenseCost" placeholder="Expense Amount" class="expense-field" required>' +
-        '<input type="hidden" name="expenseStatus" value="Paid Cash">' +
-        '<input type="hidden" name="expenseDetail1" value="">' +
-        '<input type="hidden" name="expenseDetail2" value="">' +
-        '<button type="button" class="removeExpense">Remove</button>';
+      newRow.innerHTML = `
+        <input type="text" name="expenseReason" placeholder="Expense Reason" class="expense-field" required>
+        <input type="number" step="0.01" name="expenseCost" placeholder="Expense Amount" class="expense-field" required>
+        <input type="hidden" name="expenseStatus" value="Paid Cash">
+        <input type="hidden" name="expenseDetail1" value="">
+        <input type="hidden" name="expenseDetail2" value="">
+        <button type="button" class="removeExpense">Remove</button>`;
       expenseItems.appendChild(newRow);
-      updateRemoveButtonVisibility();
+      toggleRemoveButtons();
     });
 
-    // Function to update remove button visibility (hide the remove button on the first expense row)
-    function updateRemoveButtonVisibility() {
-      var expenseRows = document.querySelectorAll('#expenseItems .expense-row');
-      expenseRows.forEach(function(row, index) {
-        var removeBtn = row.querySelector('.removeExpense');
-        if (index === 0) {
-          removeBtn.style.display = 'none';
-        } else {
-          removeBtn.style.display = 'inline-block';
-        }
+    function toggleRemoveButtons() {
+      document.querySelectorAll('#expenseItems .expense-row').forEach((row, i) => {
+        row.querySelector('.removeExpense').style.display = i === 0 ? 'none' : 'inline-block';
       });
     }
 
-    // Remove expense row dynamically
-    document.getElementById('expenseItems').addEventListener('click', function(e) {
-      if(e.target && e.target.classList.contains('removeExpense')) {
+    document.getElementById('expenseItems').addEventListener('click', e => {
+      if (e.target.classList.contains('removeExpense')) {
         e.target.parentElement.remove();
-        updateRemoveButtonVisibility();
+        toggleRemoveButtons();
+      }
+    });
+
+    // Helper to POST JSON
+    async function postJSON(url, data) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Unknown error');
+      return json;
+    }
+
+    // AJAX: submit all rows
+    document.getElementById('expenseForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const form = e.target;
+      const fm = new FormData(form);
+      // Build payload preserving multiple values
+      const payload = {};
+      for (let [key, value] of fm.entries()) {
+        if (payload[key] !== undefined) {
+          payload[key] = Array.isArray(payload[key])
+            ? payload[key].concat(value)
+            : [payload[key], value];
+        } else {
+          payload[key] = value;
+        }
+      }
+      try {
+        const { expenses } = await postJSON('/api/expense', payload);
+        let total = parseFloat(document.getElementById('totalExpense').textContent);
+        for (const ex of expenses) {
+          const date = ex.saleDate;
+          let group = document.querySelector(`.expense-group[data-date="${date}"]`);
+          if (!group) {
+            const container = document.getElementById('expenseContainer');
+            group = document.createElement('div');
+            group.className = 'expense-group';
+            group.dataset.date = date;
+            group.innerHTML = `
+              <h3>Expenses for ${date}</h3>
+              <table id="expenseTable-${date}">
+                <thead>
+                  <tr>
+                    <th>Reason</th><th>Amount</th><th>Method</th>
+                    <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>`;
+            container.appendChild(group);
+          }
+          const tbody = group.querySelector('tbody');
+          const timeStr = new Date(ex.createdAt).toLocaleTimeString();
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${ex.expenseReason}</td>
+            <td>${Number(ex.expenseCost).toFixed(2)}</td>
+            <td>${ex.expenseStatus}</td>
+            <td>${ex.expenseDetail1 || '-'}</td>
+            <td>${ex.expenseDetail2 || '-'}</td>
+            <td>${timeStr}</td>
+            <td style="text-align:center;">
+              <i class="fas fa-trash-alt delete-expense-btn" data-id="${ex.id}"></i>
+            </td>`;
+          tbody.prepend(row);
+          total += parseFloat(ex.expenseCost);
+        }
+        document.getElementById('totalExpense').textContent = total.toFixed(2);
+        form.reset();
+        toggleRemoveButtons();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+
+    // AJAX: delete single expense
+    document.getElementById('expenseContainer').addEventListener('click', async e => {
+      if (!e.target.classList.contains('delete-expense-btn')) return;
+      if (!confirm('Delete this expense?')) return;
+      try {
+        await postJSON('/api/delete-expense', { expenseId: e.target.dataset.id });
+        const tr = e.target.closest('tr');
+        const cost = parseFloat(tr.children[1].textContent);
+        tr.remove();
+        let total = parseFloat(document.getElementById('totalExpense').textContent) - cost;
+        document.getElementById('totalExpense').textContent = total.toFixed(2);
+      } catch (err) {
+        alert(err.message);
       }
     });
   </script>
-    <script src="/js/firebasePersistence.js" type="module"></script>
+
+  <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
-<script src="/js/firebasePersistence.js" type="module"></script>
 </html>

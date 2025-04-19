@@ -469,35 +469,58 @@ app.get('/create-user', isAuthenticated, async (req, res) => {
 
 // POST /create-user
 app.post('/create-user', isAuthenticated, async (req, res) => {
-  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
+  // Only master accounts can create sub‑users
+  if (!req.session.user.isMaster) {
+    return res.status(403).send('Access denied');
+  }
+
   try {
+    // Count existing sub‑users
     const subUsersQuery = await db.collection('users')
-      .where('accountId','==',req.session.user.accountId)
-      .where('isMaster','==',false)
+      .where('accountId', '==', req.session.user.accountId)
+      .where('isMaster', '==', false)
       .get();
-    if (subUsersQuery.size >= 2) return res.status(400).send('Sub‑user limit reached. Maximum 2 sub‑users allowed.');
+
+    // Enforce a maximum of 1 sub‑user
+    if (subUsersQuery.size >= 1) {
+      return res.status(400).send('Sub‑user limit reached. Maximum 1 sub‑user allowed.');
+    }
 
     const { name, password, confirmPassword, subUserId } = req.body;
-    if (password !== confirmPassword) return res.status(400).send('Passwords do not match');
-    if (!subUserId.trim()) return res.status(400).send('Sub‑user ID is required');
 
+    if (password !== confirmPassword) {
+      return res.status(400).send('Passwords do not match');
+    }
+    if (!subUserId.trim()) {
+      return res.status(400).send('Sub‑user ID is required');
+    }
+
+    // Ensure the ID is unique within this account
     const exist = await db.collection('users')
-      .where('subUserId','==',subUserId)
-      .where('accountId','==',req.session.user.accountId)
+      .where('subUserId', '==', subUserId)
+      .where('accountId', '==', req.session.user.accountId)
       .get();
-    if (!exist.empty) return res.status(400).send('Sub‑user ID already exists.');
+    if (!exist.empty) {
+      return res.status(400).send('Sub‑user ID already exists.');
+    }
 
+    // Create the sub‑user
     const hashedPassword = await bcrypt.hash(password, 10);
     await db.collection('users').add({
-      name, password: hashedPassword, isMaster: false,
-      accountId: req.session.user.accountId, subUserId,
+      name,
+      password: hashedPassword,
+      isMaster: false,
+      accountId: req.session.user.accountId,
+      subUserId,
       createdAt: new Date()
     });
-    res.redirect('/');
+
+    res.redirect('/create-user');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
+
 
 // POST /edit-user
 app.post('/edit-user', isAuthenticated, async (req, res) => {
@@ -1577,59 +1600,69 @@ app.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res
 });
 
 
-app.post('/api/delete-expense', isAuthenticated, async (req, res) => {
-  const { expenseId } = req.body;
-  try {
-    const expRef = db.collection('expenses').doc(expenseId);
-    const expDoc = await expRef.get();
-    if (!expDoc.exists) throw new Error('Expense not found');
-    const exp = expDoc.data();
-    if (exp.accountId !== req.session.user.accountId) throw new Error('Access denied');
+app.post(
+  '/api/delete-expense',
+  isAuthenticated,
+  async (req, res) => {
+    try {
+      const expRef = db.collection('expenses').doc(req.body.expenseId);
+      const expDoc = await expRef.get();
+      if (!expDoc.exists) throw new Error('Expense not found');
+      if (expDoc.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
 
-    // delete the expense
-    await expRef.delete();
-
-    // recompute summary for that date
-    const { summary } = await computeDailySummary(
-      req.session.user.accountId,
-      exp.saleDate
-    );
-
-    res.json({ success: true, summary });
-  } catch (e) {
-    res.json({ success: false, error: e.toString() });
+      await expRef.delete();
+      res.json({ success: true });
+    } catch (e) {
+      res.json({ success: false, error: e.toString() });
+    }
   }
-});
-app.post('/api/expense', isAuthenticated, async (req, res) => {
-  try {
-    const saved = await processExpense(req.body, req.session.user);
-    // saved does *not* include its own ID yet — grab it:
-    const snap = await db.collection('expenses')
-                         .where('accountId','==',req.session.user.accountId)
-                         .orderBy('createdAt','desc')
-                         .limit(1)
-                         .get();
-    const doc = snap.docs[0];
-    const expense = { id: doc.id, ...doc.data() };
+);
 
-    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
-    res.json({ success: true, expense, summary });
-  } catch (e) {
-    res.json({ success: false, error: e.toString() });
+
+app.post(
+  '/api/expense',
+  isAuthenticated,
+  async (req, res) => {
+    try {
+      // Normalize to arrays
+      const reasons  = Array.isArray(req.body.expenseReason)  ? req.body.expenseReason  : [req.body.expenseReason];
+      const costs    = Array.isArray(req.body.expenseCost)    ? req.body.expenseCost    : [req.body.expenseCost];
+      const statuses = Array.isArray(req.body.expenseStatus)  ? req.body.expenseStatus  : [req.body.expenseStatus];
+      const d1s      = Array.isArray(req.body.expenseDetail1) ? req.body.expenseDetail1 : [req.body.expenseDetail1];
+      const d2s      = Array.isArray(req.body.expenseDetail2) ? req.body.expenseDetail2 : [req.body.expenseDetail2];
+
+      const saved = [];
+      for (let i = 0; i < reasons.length; i++) {
+        const data = {
+          expenseReason: reasons[i],
+          expenseCost:   parseFloat(costs[i]),
+          expenseStatus: statuses[i] || 'Paid Cash',
+          saleDate:      req.body.saleDate,
+          accountId:     req.session.user.accountId,
+          createdAt:     new Date()
+        };
+        if (d1s[i]) data.expenseDetail1 = parseFloat(d1s[i]);
+        if (d2s[i]) data.expenseDetail2 = parseFloat(d2s[i]);
+
+        const docRef = await db.collection('expenses').add(data);
+        saved.push({
+          id:             docRef.id,
+          expenseReason:  data.expenseReason,
+          expenseCost:    data.expenseCost,
+          expenseStatus:  data.expenseStatus,
+          expenseDetail1: data.expenseDetail1 || '',
+          expenseDetail2: data.expenseDetail2 || '',
+          saleDate:       data.saleDate,
+          createdAt:      data.createdAt.toISOString()
+        });
+      }
+
+      res.json({ success: true, expenses: saved });
+    } catch (e) {
+      res.json({ success: false, error: e.toString() });
+    }
   }
-});
-
-
-// AJAX: POST /api/sale
-app.post('/api/sale', isAuthenticated, async (req, res) => {
-  try {
-    const sale    = await processSale(req.body, req.session.user);
-    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
-    res.json({ success: true, sale, summary });
-  } catch (e) {
-    res.json({ success: false, error: e.toString() });
-  }
-});
+);
 
 
 
