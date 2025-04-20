@@ -20,12 +20,12 @@
     </div>
     <div class="nav-links">
       <a href="/add-product"><i class="fas fa-plus-circle"></i> Add Product</a>
-      <a href="/view-products"><i class="fas fa-boxes"></i> View Porducts</a>
+      <a href="/view-products"><i class="fas fa-boxes"></i> View Products</a>
       <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
       <a href="/expense"><i class="fas fa-receipt"></i> Expenses</a>
       <% if (user && user.isMaster) { %>
         <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
-        <a href="/permission"><i class="fas fa-lock"></i>Permissions</a>
+        <a href="/permission"><i class="fas fa-lock"></i> Permissions</a>
       <% } %>
       <div class="subscription-info">
         <% if (user.subscriptionExpiry) { %>
@@ -79,20 +79,6 @@
                   data-batches='<%= JSON.stringify(product.batches || []) %>'>
                   <%= product.productName %> (Stock: <%= product.quantity %>)
                 </option>
-              <% }); %>
-            </select>
-          </div>
-          <!-- Product ID (Optional) -->
-          <div>
-            <label for="productIdSelect">Product ID:</label>
-            <select id="productIdSelect" name="customProductId">
-              <option value="">Product ID (Optional)</option>
-              <% products.forEach(function(product) { %>
-                <% if (product.productId && product.productId.trim() !== "" && product.productId.trim() !== "-") { %>
-                  <option value="<%= product.id %>">
-                    <%= product.productId %> (Stock: <%= product.quantity %>)
-                  </option>
-                <% } %>
               <% }); %>
             </select>
           </div>
@@ -249,7 +235,6 @@
           <table id="salesTable">
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Product</th>
                 <th>FIFO Avg. Wholesale</th>
                 <th>Sale Price</th>
@@ -267,7 +252,6 @@
             <tbody>
               <% sales.forEach(function(sale){ %>
                 <tr>
-                  <td><%= sale.customProductId ? sale.customProductId : "-" %></td>
                   <td><%= sale.productName %></td>
                   <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
                   <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
@@ -313,7 +297,6 @@
                     %>
                     <%= saleTime %>
                   </td>
-              
                   <td style="text-align:center;">
                     <i class="fas fa-trash-alt delete-sale-btn" data-id="<%= sale.id %>"></i>
                   </td>
@@ -369,11 +352,9 @@
                   <td style="text-align:center;">
                     <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="<%= expense.id %>"></i>
                   </td>
-                       
                 </tr>
               <% }); %>
             </tbody>
-            
           </table>
         <% } else { %>
           <div class="no-data">
@@ -407,40 +388,36 @@
     /* Everything below this line until the next comment == ORIGINAL   */
     /* -------------------------------------------------------------- */
     document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.delete-sale-btn');
-  if (!btn) return;
+      const btn = e.target.closest('.delete-sale-btn');
+      if (!btn) return;
 
-  if (!confirm('Delete this sale and restore stock?')) return;
-  try {
-    const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
-    /* remove row */
-    btn.closest('tr').remove();
-    /* refresh summary numbers */
-    refreshSummary(res.summary);
-  } catch (err) { alert(err.message); }
-});
-// expense delete
-document.addEventListener('click', async e => {
-  const btn = e.target.closest('.delete-expense-btn');
-  if (!btn) return;
-
-  if (!confirm('Delete this expense and update the summary?')) return;
-
-  try {
-    const res = await postJSON('/api/delete-expense', {
-      expenseId: btn.dataset.id
+      if (!confirm('Delete this sale and restore stock?')) return;
+      try {
+        const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
+        btn.closest('tr').remove();
+        refreshSummary(res.summary);
+      } catch (err) { alert(err.message); }
     });
-    btn.closest('tr').remove();
-    refreshSummary(res.summary);
-  } catch (err) {
-    alert(err.message);
-  }
-});
 
+    document.addEventListener('click', async e => {
+      const btn = e.target.closest('.delete-expense-btn');
+      if (!btn) return;
+
+      if (!confirm('Delete this expense and update the summary?')) return;
+
+      try {
+        const res = await postJSON('/api/delete-expense', {
+          expenseId: btn.dataset.id
+        });
+        btn.closest('tr').remove();
+        refreshSummary(res.summary);
+      } catch (err) {
+        alert(err.message);
+      }
+    });
 
     const categorySelect = document.getElementById('categorySelect');
     const productSelect = document.getElementById('productSelect');
-    const productIdSelect = document.getElementById('productIdSelect');
     const retailInput = document.getElementById('retailPrice');
     const saleQuantityInput = document.getElementById('saleQuantity');
     const statusSelect = document.getElementById('status');
@@ -456,21 +433,11 @@ document.addEventListener('click', async e => {
         option.style.display = (!selectedCategory || option.getAttribute('data-category') === selectedCategory) ? "" : "none";
       }
       productSelect.selectedIndex = 0;
-      productIdSelect.value = "";
       updateSaleCalculations();
     });
 
     productSelect.addEventListener('change', function() {
-      productIdSelect.value = "";
       updateSaleCalculations();
-    });
-
-    productIdSelect.addEventListener('change', function() {
-      const customSelection = productIdSelect.value;
-      if (customSelection) {
-        productSelect.value = customSelection;
-        productSelect.dispatchEvent(new Event('change'));
-      }
     });
 
     statusSelect.addEventListener('change', function() {
@@ -574,21 +541,17 @@ document.addEventListener('click', async e => {
     /* -------------------------------------------------------------- */
     /* -----------------  AJAX LIVE‑UPDATE PATCH  ------------------- */
     /* -------------------------------------------------------------- */
-   
+    function ensureTableExists (wrapperSelector, tableId, theadHtml) {
+      if (document.querySelector(tableId)) return;
+      const wrap = document.querySelector(wrapperSelector);
+      if (!wrap) return;
+      wrap.innerHTML = `
+        <table id="${tableId.substring(1)}">
+          ${theadHtml}
+          <tbody></tbody>
+        </table>`;
+    }
 
-function ensureTableExists (wrapperSelector, tableId, theadHtml) {
-  if (document.querySelector(tableId)) return;      // table already there
-  const wrap = document.querySelector(wrapperSelector);
-  if (!wrap) return;                                // safety – wrapper missing
-  wrap.innerHTML = `
-    <table id="${tableId.substring(1)}">
-      ${theadHtml}
-      <tbody></tbody>
-    </table>`;
-}
-
-
-    // quick helpers
     const cash = n => Number(n).toFixed(2);
     const postJSON = async (url, obj) => {
       const r = await fetch(url, {
@@ -609,59 +572,53 @@ function ensureTableExists (wrapperSelector, tableId, theadHtml) {
       document.getElementById('toggleSummary').textContent = 'Hide Summary';
     };
 
-    // SALE form
     document.getElementById('saleForm').addEventListener('submit', async e => {
-      if (e.submitter?.classList.contains('noAjax')) return; // optional fallback
+      if (e.submitter?.classList.contains('noAjax')) return;
       e.preventDefault();
       try {
         const obj = Object.fromEntries(new FormData(e.target).entries());
         const res = await postJSON('/api/sale', obj);
         const s = res.sale;
         const row = document.createElement('tr');
-        // ⬇️ put this *before* you build the <tr>
-const pillClass = {
-  'Paid Cash'   : 'status-cash',
-  'Paid Online' : 'status-online',
-  'Not Paid'    : 'status-notpaid'
-}[s.status] || 'status-mixed';
+        const pillClass = {
+          'Paid Cash': 'status-cash',
+          'Paid Online': 'status-online',
+          'Not Paid': 'status-notpaid'
+        }[s.status] || 'status-mixed';
 
-row.innerHTML = `
-  <td>${s.customProductId || '-'}</td>
-  <td>${s.productName}</td>
-  <td>${cash(s.wholesalePrice)}</td>
-  <td>${cash(s.retailPrice)}</td>
-  <td>${s.saleQuantity}</td>
-  <td>${s.unit || '-'}</td>
-  <td>${cash(s.totalSale)}</td>
-  <td>${cash(s.profitPerUnit)}</td>
-  <td>${cash(s.profit)}</td>
-  <td>
-      <span class="status-pill ${pillClass}">${s.status}</span>
-      ${(s.paymentDetail1 || s.paymentDetail2)
-        ? `<br><small>${s.paymentDetail1 ? 'Detail1: '+s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: '+s.paymentDetail2 : ''}</small>` 
-        : ''}
-  </td>
-  <td>${s.extraInfo || '-'}</td>
-  <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
-   <td style="text-align:center;">
-    <i class="fas fa-trash-alt delete-sale-btn" data-id="${s.id}"></i>
-  </td>`;
+        row.innerHTML = `
+          <td>${s.productName}</td>
+          <td>${cash(s.wholesalePrice)}</td>
+          <td>${cash(s.retailPrice)}</td>
+          <td>${s.saleQuantity}</td>
+          <td>${s.unit || '-'}</td>
+          <td>${cash(s.totalSale)}</td>
+          <td>${cash(s.profitPerUnit)}</td>
+          <td>${cash(s.profit)}</td>
+          <td>
+            <span class="status-pill ${pillClass}">${s.status}</span>
+            ${(s.paymentDetail1 || s.paymentDetail2)
+              ? `<br><small>${s.paymentDetail1 ? 'Detail1: ' + s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: ' + s.paymentDetail2 : ''}</small>`
+              : ''}
+          </td>
+          <td>${s.extraInfo || '-'}</td>
+          <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
+          <td style="text-align:center;">
+            <i class="fas fa-trash-alt delete-sale-btn" data-id="${s.id}"></i>
+          </td>`;
 
-
-          // make sure the sales table exists (replaces the .no-data card at first sale)
-          ensureTableExists(
-  '.tables-content div:first-child',   // wrapper holding the sales panel
-  '#salesTable',
-  `<thead>
-     <tr>
-       <th>ID</th><th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
-       <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
-       <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
-       <th>Action</th>
-     </tr>
-   </thead>`
-);
-
+        ensureTableExists(
+          '.tables-content div:first-child',
+          '#salesTable',
+          `<thead>
+             <tr>
+               <th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
+               <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
+               <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
+               <th>Action</th>
+             </tr>
+           </thead>`
+        );
 
         document.querySelector('#salesTable tbody').prepend(row);
         refreshSummary(res.summary);
@@ -670,47 +627,42 @@ row.innerHTML = `
       } catch (err) { alert(err.message); }
     });
 
-// EXPENSE form
-document.getElementById('expenseForm').addEventListener('submit', async e => {
-  e.preventDefault();
-  try {
-    const obj = Object.fromEntries(new FormData(e.target).entries());
-    const res = await postJSON('/api/expense', obj);
-    const ex  = res.expense;
+    document.getElementById('expenseForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const obj = Object.fromEntries(new FormData(e.target).entries());
+        const res = await postJSON('/api/expense', obj);
+        const ex = res.expense;
 
-    /* ensure the table exists (replaces the .no‑data card at first expense) */
-    ensureTableExists(
-      '.tables-content div:nth-child(2)',
-      '#expenseTable',
-      `<thead>
-  <tr>
-    <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
-    <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-  </tr>
-</thead>`
-    );
+        ensureTableExists(
+          '.tables-content div:nth-child(2)',
+          '#expenseTable',
+          `<thead>
+            <tr>
+              <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
+              <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
+            </tr>
+          </thead>`
+        );
 
-    const row = document.createElement('tr');
-   
-row.innerHTML = `
-  <td>${ex.expenseReason}</td>
-  <td>${cash(ex.expenseCost)}</td>
-  <td>${ex.expenseStatus}</td>
-  <td>${ex.expenseDetail1 || '-'}</td>
-  <td>${ex.expenseDetail2 || '-'}</td>
-  <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
-  <td style="text-align:center;">
-    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="${ex.id}"></i>
-  </td>`;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${ex.expenseReason}</td>
+          <td>${cash(ex.expenseCost)}</td>
+          <td>${ex.expenseStatus}</td>
+          <td>${ex.expenseDetail1 || '-'}</td>
+          <td>${ex.expenseDetail2 || '-'}</td>
+          <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
+          <td style="text-align:center;">
+            <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="${ex.id}"></i>
+          </td>`;
 
-    document.querySelector('#expenseTable tbody').prepend(row);
+        document.querySelector('#expenseTable tbody').prepend(row);
+        refreshSummary(res.summary);
+        e.target.reset();
+      } catch (err) { alert(err.message); }
+    });
 
-    refreshSummary(res.summary);
-    e.target.reset();
-  } catch (err) { alert(err.message); }
-});
-
-    // OPENING BALANCE form
     document.getElementById('openingForm').addEventListener('submit', async e => {
       e.preventDefault();
       try {
@@ -724,25 +676,23 @@ row.innerHTML = `
   </script>
   <script>
     /* ---  fillOpening/Closing time convenience (restored)  --- */
-    function getCurrentTimeString(){
-      const d=new Date();
+    function getCurrentTimeString() {
+      const d = new Date();
       return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }
-    document.getElementById('fillOpeningTime') .onclick=()=>(
-      document.getElementById('openingTime').value = getCurrentTimeString());
-    document.getElementById('fillClosingTime') .onclick=()=>(
-      document.getElementById('closingTime').value = getCurrentTimeString());
-    </script>
-    <!-- optional: restore client‑side subscription redirect -->
-<script>
-  const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining>0) ? 'true':'false' %>;
-  if(!isSubscribed){
-    const nav = performance.getEntriesByType("navigation")[0]||{};
-    setTimeout(()=>location.href='/pricing', nav.type==="back_forward"?10000:5000);
-  }
+    document.getElementById('fillOpeningTime').onclick = () =>
+      (document.getElementById('openingTime').value = getCurrentTimeString());
+    document.getElementById('fillClosingTime').onclick = () =>
+      (document.getElementById('closingTime').value = getCurrentTimeString());
   </script>
-  
+  <!-- optional: restore client-side subscription redirect -->
+  <script>
+    const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining > 0) ? 'true' : 'false' %>;
+    if (!isSubscribed) {
+      const nav = performance.getEntriesByType("navigation")[0] || {};
+      setTimeout(() => location.href = '/pricing', nav.type === "back_forward" ? 10000 : 5000);
+    }
+  </script>
   <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
-
 </html>

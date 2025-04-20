@@ -197,7 +197,6 @@
       }
     });
 
-    // Helper to POST JSON
     async function postJSON(url, data) {
       const res = await fetch(url, {
         method: 'POST',
@@ -209,12 +208,9 @@
       return json;
     }
 
-    // AJAX: submit all rows
     document.getElementById('expenseForm').addEventListener('submit', async e => {
       e.preventDefault();
-      const form = e.target;
-      const fm = new FormData(form);
-      // Build payload preserving multiple values
+      const fm = new FormData(e.target);
       const payload = {};
       for (let [key, value] of fm.entries()) {
         if (payload[key] !== undefined) {
@@ -226,54 +222,53 @@
         }
       }
       try {
-        const { expenses } = await postJSON('/api/expense', payload);
-        let total = parseFloat(document.getElementById('totalExpense').textContent);
-        for (const ex of expenses) {
-          const date = ex.saleDate;
-          let group = document.querySelector(`.expense-group[data-date="${date}"]`);
-          if (!group) {
-            const container = document.getElementById('expenseContainer');
-            group = document.createElement('div');
-            group.className = 'expense-group';
-            group.dataset.date = date;
-            group.innerHTML = `
-              <h3>Expenses for ${date}</h3>
-              <table id="expenseTable-${date}">
-                <thead>
-                  <tr>
-                    <th>Reason</th><th>Amount</th><th>Method</th>
-                    <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>`;
-            container.appendChild(group);
-          }
-          const tbody = group.querySelector('tbody');
-          const timeStr = new Date(ex.createdAt).toLocaleTimeString();
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${ex.expenseReason}</td>
-            <td>${Number(ex.expenseCost).toFixed(2)}</td>
-            <td>${ex.expenseStatus}</td>
-            <td>${ex.expenseDetail1 || '-'}</td>
-            <td>${ex.expenseDetail2 || '-'}</td>
-            <td>${timeStr}</td>
-            <td style="text-align:center;">
-              <i class="fas fa-trash-alt delete-expense-btn" data-id="${ex.id}"></i>
-            </td>`;
-          tbody.prepend(row);
-          total += parseFloat(ex.expenseCost);
+        const { expense: ex, summary } = await postJSON('/api/expense', payload);
+        let total = parseFloat(document.getElementById('totalExpense').textContent) || 0;
+        // Parse Firestore timestamp if needed
+        let createdAtDate;
+        if (ex.createdAt && ex.createdAt._seconds) {
+          createdAtDate = new Date(ex.createdAt._seconds * 1000);
+        } else {
+          createdAtDate = new Date(ex.createdAt);
         }
+        const date = createdAtDate.toISOString().substring(0,10);
+        let group = document.querySelector(`.expense-group[data-date="${date}"]`);
+        if (!group) {
+          const container = document.getElementById('expenseContainer');
+          group = document.createElement('div');
+          group.className = 'expense-group';
+          group.dataset.date = date;
+          group.innerHTML = `
+            <h3>Expenses for ${date}</h3>
+            <table id="expenseTable-${date}">
+              <thead>
+                <tr><th>Reason</th><th>Amount</th><th>Method</th><th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>`;
+          document.getElementById('expenseContainer').appendChild(group);
+        }
+        const tbody = group.querySelector('tbody');
+        const timeStr = createdAtDate.toLocaleTimeString();
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${ex.expenseReason}</td>
+          <td>${Number(ex.expenseCost).toFixed(2)}</td>
+          <td>${ex.expenseStatus}</td>
+          <td>${ex.expenseDetail1 || '-'}</td>
+          <td>${ex.expenseDetail2 || '-'}</td>
+          <td>${timeStr}</td>
+          <td style="text-align:center;"><i class="fas fa-trash-alt delete-expense-btn" data-id="${ex.id}"></i></td>`;
+        tbody.prepend(row);
+        total += parseFloat(ex.expenseCost);
         document.getElementById('totalExpense').textContent = total.toFixed(2);
-        form.reset();
+        e.target.reset();
         toggleRemoveButtons();
       } catch (err) {
         alert(err.message);
       }
     });
 
-    // AJAX: delete single expense
     document.getElementById('expenseContainer').addEventListener('click', async e => {
       if (!e.target.classList.contains('delete-expense-btn')) return;
       if (!confirm('Delete this expense?')) return;

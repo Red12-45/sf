@@ -1,3 +1,5 @@
+**sales.ejs**
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +7,7 @@
   <title>Sales Report - Filtered</title>
   <!-- Font Awesome for Icons -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <!-- Link to the Sales CSS file -->
+  <!-- Sales CSS -->
   <link rel="stylesheet" href="/css/sales.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
@@ -17,20 +19,19 @@
       <i class="fas fa-chart-line"></i>
       <span>Sales Report</span>
     </div>
-    
     <div class="sidebar-nav">
       <!-- Dashboard Section -->
       <div class="sidebar-section">
         <div class="sidebar-heading">Dashboard</div>
         <ul class="sidebar-menu">
           <li class="sidebar-item">
-            <a href="/" class="sidebar-link active">
+            <a href="/" class="sidebar-link">
               <i class="fas fa-home"></i>
               <span>Dashboard</span>
             </a>
           </li>
           <li class="sidebar-item">
-            <a href="/sales" class="sidebar-link">
+            <a href="/sales" class="sidebar-link active">
               <i class="fas fa-shopping-cart"></i>
               <span>Sales Report</span>
             </a>
@@ -49,7 +50,6 @@
           </li>
         </ul>
       </div>
-      
       <!-- Product Management Section -->
       <div class="sidebar-section">
         <div class="sidebar-heading">Products</div>
@@ -68,7 +68,6 @@
           </li>
         </ul>
       </div>
-      
       <!-- Settings Section -->
       <div class="sidebar-section">
         <div class="sidebar-heading">Settings</div>
@@ -82,7 +81,6 @@
         </ul>
       </div>
     </div>
-    
     <div class="sidebar-footer">
       <a href="/logout">
         <i class="fas fa-sign-out-alt"></i>
@@ -90,12 +88,10 @@
       </a>
     </div>
   </div>
-  
-  <!-- Main Content Area -->
+  <!-- Main Content -->
   <div class="main-content" id="main-content">
     <div class="page-container">
-     
-      <!-- Filter Form Card with Inline Filters -->
+      <!-- Filter Form -->
       <div class="formBox filter-form">
         <h2><i class="fas fa-filter"></i> Filter Sales</h2>
         <form action="/sales" method="GET" class="form-inline">
@@ -122,42 +118,29 @@
           <button type="submit"><i class="fas fa-search"></i> Filter</button>
         </form>
       </div>
-
-      <!-- Sales Report List -->
+      <!-- Grouped Sales & Expenses -->
       <div class="sales-report">
         <%
+          // Group sales and expenses by date
           const groupedSales = {};
-          sales.forEach(function(sale) {
-            const date = sale.saleDate;
-            if (!groupedSales[date]) groupedSales[date] = [];
-            groupedSales[date].push(sale);
-          });
+          sales.forEach(s => { (groupedSales[s.saleDate] = groupedSales[s.saleDate] || []).push(s); });
           const groupedExpenses = {};
-          expenses.forEach(function(expense) {
-            const date = expense.saleDate;
-            if (!groupedExpenses[date]) groupedExpenses[date] = [];
-            groupedExpenses[date].push(expense);
-          });
-          const allDatesSet = new Set();
-          sales.forEach(sale => allDatesSet.add(sale.saleDate));
-          expenses.forEach(expense => allDatesSet.add(expense.saleDate));
-          const allDates = Array.from(allDatesSet).sort();
+          expenses.forEach(e => { (groupedExpenses[e.saleDate] = groupedExpenses[e.saleDate] || []).push(e); });
+          const allDates = Array.from(new Set([...Object.keys(groupedSales), ...Object.keys(groupedExpenses)])).sort();
         %>
-
-        <% if(allDates.length === 0) { %>
+        <% if (allDates.length === 0) { %>
           <div class="formBox">
             <p>No data found for the selected filters.</p>
           </div>
         <% } else { %>
-          <% allDates.forEach(function(date) { %>
+          <% allDates.forEach(date => { %>
             <div class="date-group">
               <h2>
                 Sales for <%= date %>
-                <% if (groupedSales[date] && groupedSales[date][0] && groupedSales[date][0].openingBalance !== undefined) { %>
+                <% if (groupedSales[date] && groupedSales[date][0]?.openingBalance !== undefined) { %>
                   (Opening Balance: ₹<%= parseFloat(groupedSales[date][0].openingBalance).toFixed(2) %>)
                 <% } %>
               </h2>
-              
               <div class="time-info-container">
                 <% if (openingTimes[date]?.openingTime) { %>
                   <span class="time-info"><i class="far fa-clock"></i> Opening: <%= openingTimes[date].openingTime %></span>
@@ -166,8 +149,8 @@
                   <span class="time-info"><i class="far fa-clock"></i> Closing: <%= openingTimes[date].closingTime %></span>
                 <% } %>
               </div>
-              
-              <% if(groupedSales[date]?.length > 0) { %>
+              <!-- Sales Table -->
+              <% if (groupedSales[date]?.length > 0) { %>
                 <table>
                   <thead>
                     <tr>
@@ -177,35 +160,32 @@
                       <th>Quantity</th>
                       <th>Unit</th>
                       <th>Total Sale</th>
-                      <th>Profit per Unit</th>
+                      <th>Profit/Unit</th>
                       <th>Total Profit</th>
                       <th>Status</th>
                       <th>Opening Balance</th>
                       <th>Extra Info</th>
-                      <th>Sale Date</th>
                       <th>Time</th>
+                      <th style="text-align:center;">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <% groupedSales[date].forEach(function(sale){ %>
+                    <% groupedSales[date].forEach(sale => { %>
                       <tr>
                         <td><%= sale.productName %></td>
                         <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
                         <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
                         <td><%= sale.saleQuantity %></td>
-                        <td><%= sale.unit || "-" %></td>
+                        <td><%= sale.unit || '-' %></td>
                         <td>
-                          <% let totalSale = sale.totalSale || (sale.retailPrice * sale.saleQuantity); %>
-                          <%= parseFloat(totalSale).toFixed(2) %>
+                          <% const tot = sale.totalSale || (sale.retailPrice * sale.saleQuantity); %>
+                          <%= parseFloat(tot).toFixed(2) %>
                         </td>
-                        <td>
-                          <% let profitPerUnit = sale.profitPerUnit || (sale.retailPrice - sale.wholesalePrice); %>
-                          <%= parseFloat(profitPerUnit).toFixed(2) %>
-                        </td>
+                        <td><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
                         <td><%= parseFloat(sale.profit).toFixed(2) %></td>
                         <td>
-                          <%= sale.status %>
-                          <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
+                          <span><%= sale.status %></span>
+                          <% if(sale.paymentDetail1 || sale.paymentDetail2) { %>
                             <br><small>
                               <% if(sale.paymentDetail1) { %>Detail1: <%= sale.paymentDetail1 %><% } %>
                               <% if(sale.paymentDetail2) { %>, Detail2: <%= sale.paymentDetail2 %><% } %>
@@ -213,13 +193,13 @@
                           <% } %>
                         </td>
                         <td><%= sale.openingBalance %></td>
-                        <td><%= sale.extraInfo %></td>
-                        <td><%= sale.saleDate %></td>
+                        <td><%= sale.extraInfo || '-' %></td>
                         <td>
-                          <% let saleTime = sale.createdAt?.toDate
-                            ? sale.createdAt.toDate().toLocaleTimeString()
-                            : new Date(sale.createdAt).toLocaleTimeString(); %>
-                          <%= saleTime %>
+                          <% const time = sale.createdAt?.toDate ? sale.createdAt.toDate().toLocaleTimeString() : new Date(sale.createdAt).toLocaleTimeString(); %>
+                          <%= time %>
+                        </td>
+                        <td style="text-align:center;">
+                          <i class="fas fa-trash-alt delete-sale-btn" data-id="<%= sale.id %>" data-date="<%= date %>"></i>
                         </td>
                       </tr>
                     <% }); %>
@@ -228,143 +208,147 @@
               <% } else { %>
                 <p>No sales found for <%= date %>.</p>
               <% } %>
-
+              <!-- Expenses Section -->
               <h2>
                 Expenses for <%= date %>
-                <% if (groupedExpenses[date]?.length > 0) {
-                     let totalDayExpense = groupedExpenses[date].reduce((sum, exp) => sum + parseFloat(exp.expenseCost || 0), 0); %>
-                  (₹<%= totalDayExpense.toFixed(2) %>)
+                <% if (groupedExpenses[date]?.length) {
+                     const sumExp = groupedExpenses[date].reduce((a,e)=>a+parseFloat(e.expenseCost||0),0);
+                  %> (₹<%= sumExp.toFixed(2) %>)
                 <% } %>
               </h2>
-              
-              <% if(groupedExpenses[date]?.length > 0) { %>
+              <% if (groupedExpenses[date]?.length > 0) { %>
                 <table>
                   <thead>
                     <tr>
-                      <th>Expense Reason</th>
-                      <th>Expense Cost</th>
-                      <th>Payment Method</th>
+                      <th>Reason</th>
+                      <th>Cost</th>
+                      <th>Method</th>
                       <th>Detail 1</th>
                       <th>Detail 2</th>
                       <th>Time</th>
+                      <th style="text-align:center;">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <% groupedExpenses[date].forEach(function(expense){ %>
+                    <% groupedExpenses[date].forEach(exp => { %>
                       <tr>
-                        <td><%= expense.expenseReason %></td>
-                        <td><%= parseFloat(expense.expenseCost).toFixed(2) %></td>
-                        <td><%= expense.expenseStatus %></td>
-                        <td><%= expense.expenseDetail1 || "-" %></td>
-                        <td><%= expense.expenseDetail2 || "-" %></td>
+                        <td><%= exp.expenseReason %></td>
+                        <td><%= parseFloat(exp.expenseCost).toFixed(2) %></td>
+                        <td><%= exp.expenseStatus %></td>
+                        <td><%= exp.expenseDetail1 || '-' %></td>
+                        <td><%= exp.expenseDetail2 || '-' %></td>
                         <td>
-                          <% let expenseTime = expense.createdAt?.toDate
-                            ? expense.createdAt.toDate().toLocaleTimeString()
-                            : new Date(expense.createdAt).toLocaleTimeString(); %>
-                          <%= expenseTime %>
+                          <% const et = exp.createdAt?.toDate ? exp.createdAt.toDate().toLocaleTimeString() : new Date(exp.createdAt).toLocaleTimeString(); %>
+                          <%= et %>
+                        </td>
+                        <td style="text-align:center;">
+                          <i class="fas fa-trash-alt delete-expense-btn" data-id="<%= exp.id %>" data-date="<%= date %>"></i>
                         </td>
                       </tr>
                     <% }); %>
                   </tbody>
                 </table>
               <% } else { %>
-                <p>No expenses found for <%= date %>.</p>
+                <p>No expenses for <%= date %>.</p>
               <% } %>
-
+              <!-- Summary Box -->
               <div class="summaryBox">
                 <button class="toggleSummary" data-date="<%= date %>">
                   <i class="fas fa-chart-pie"></i> Show Summary
                 </button>
-                <div class="summaryContent" id="summary_<%= date %>" style="display: none;">
+                <div class="summaryContent" id="summary_<%= date %>" style="display:none;">
                   <%
-                    let dateSales = groupedSales[date] || [];
-                    let totalSalesAmount = 0, totalProfitAmount = 0;
-                    let totalCashSales = 0, totalOnlineSales = 0, totalNotPaidSales = 0;
-                    dateSales.forEach(sale => {
-                      let saleAmount = sale.retailPrice * sale.saleQuantity;
-                      totalSalesAmount += saleAmount;
-                      totalProfitAmount += sale.profit;
-                      switch (sale.status) {
-                        case 'Paid Cash': totalCashSales += saleAmount; break;
-                        case 'Paid Online': totalOnlineSales += saleAmount; break;
-                        case 'Not Paid': totalNotPaidSales += saleAmount; break;
-                        case 'Half Cash + Half Online':
-                          if (sale.paymentDetail1) totalCashSales += parseFloat(sale.paymentDetail1);
-                          if (sale.paymentDetail2) totalOnlineSales += parseFloat(sale.paymentDetail2);
-                          break;
-                        case 'Half Cash + Not Paid':
-                          if (sale.paymentDetail1) totalCashSales += parseFloat(sale.paymentDetail1);
-                          if (sale.paymentDetail2) totalNotPaidSales += parseFloat(sale.paymentDetail2);
-                          break;
-                        case 'Half Online + Not Paid':
-                          if (sale.paymentDetail1) totalOnlineSales += parseFloat(sale.paymentDetail1);
-                          if (sale.paymentDetail2) totalNotPaidSales += parseFloat(sale.paymentDetail2);
-                          break;
+                    // compute day's summary on server side for initial render
+                    const daySales = groupedSales[date]||[];
+                    const dayExps = groupedExpenses[date]||[];
+                    let tSales=0, tProfit=0, cSales=0, oSales=0, nSales=0;
+                    daySales.forEach(s=>{
+                      const amt=s.retailPrice*s.saleQuantity; tSales+=amt; tProfit+=s.profit;
+                      switch(s.status){
+                        case 'Paid Cash': cSales+=amt; break;
+                        case 'Paid Online': oSales+=amt; break;
+                        case 'Not Paid': nSales+=amt; break;
+                        case 'Half Cash + Half Online': if(s.paymentDetail1) cSales+=parseFloat(s.paymentDetail1); if(s.paymentDetail2) oSales+=parseFloat(s.paymentDetail2); break;
+                        case 'Half Cash + Not Paid': if(s.paymentDetail1) cSales+=parseFloat(s.paymentDetail1); if(s.paymentDetail2) nSales+=parseFloat(s.paymentDetail2); break;
+                        case 'Half Online + Not Paid': if(s.paymentDetail1) oSales+=parseFloat(s.paymentDetail1); if(s.paymentDetail2) nSales+=parseFloat(s.paymentDetail2); break;
                       }
                     });
-                    let dateExpenses = groupedExpenses[date] || [];
-                    let totalCashExpenses = 0, totalOnlineExpenses = 0;
-                    dateExpenses.forEach(expense => {
-                      switch(expense.expenseStatus) {
-                        case 'Paid Cash': totalCashExpenses += parseFloat(expense.expenseCost); break;
-                        case 'Paid Online': totalOnlineExpenses += parseFloat(expense.expenseCost); break;
-                        case 'Half Cash + Half Online':
-                          if (expense.expenseDetail1) totalCashExpenses += parseFloat(expense.expenseDetail1);
-                          if (expense.expenseDetail2) totalOnlineExpenses += parseFloat(expense.expenseDetail2);
-                          break;
-                        case 'Half Cash + Not Paid':
-                          if (expense.expenseDetail1) totalCashExpenses += parseFloat(expense.expenseDetail1);
-                          break;
-                        case 'Half Online + Not Paid':
-                          if (expense.expenseDetail1) totalOnlineExpenses += parseFloat(expense.expenseDetail1);
-                          break;
+                    let cExp=0, oExp=0;
+                    dayExps.forEach(e=>{
+                      switch(e.expenseStatus){
+                        case 'Paid Cash': cExp+=parseFloat(e.expenseCost); break;
+                        case 'Paid Online': oExp+=parseFloat(e.expenseCost); break;
+                        case 'Half Cash + Half Online': if(e.expenseDetail1) cExp+=parseFloat(e.expenseDetail1); if(e.expenseDetail2) oExp+=parseFloat(e.expenseDetail2); break;
+                        case 'Half Cash + Not Paid': if(e.expenseDetail1) cExp+=parseFloat(e.expenseDetail1); break;
+                        case 'Half Online + Not Paid': if(e.expenseDetail1) oExp+=parseFloat(e.expenseDetail1); break;
                       }
                     });
-                    let finalCash = totalCashSales - totalCashExpenses;
+                    const finalCash = cSales - cExp;
                   %>
-                  <h3>Summary for <%= date %></h3>
-                  <p data-label="Total Sales: "><%= totalSalesAmount.toFixed(2) %></p>
-                  <p data-label="Total Profit: "><%= totalProfitAmount.toFixed(2) %></p>
-                  <p data-label="Total Cash Sales: "><%= totalCashSales.toFixed(2) %></p>
-                  <p data-label="Total Online Sales: "><%= totalOnlineSales.toFixed(2) %></p>
-                  <p data-label="Total Not Paid Sales: "><%= totalNotPaidSales.toFixed(2) %></p>
-                  <p data-label="Total Cash Expenses: "><%= totalCashExpenses.toFixed(2) %></p>
-                  <p data-label="Total Online Expenses: "><%= totalOnlineExpenses.toFixed(2) %></p>
-                  <p data-label="Final Cash: "><%= finalCash.toFixed(2) %></p>
+                  <p data-key="totalSales">Total Sales: <%= tSales.toFixed(2) %></p>
+                  <p data-key="totalProfit">Total Profit: <%= tProfit.toFixed(2) %></p>
+                  <p data-key="totalCashSales">Total Cash Sales: <%= cSales.toFixed(2) %></p>
+                  <p data-key="totalOnlineSales">Total Online Sales: <%= oSales.toFixed(2) %></p>
+                  <p data-key="totalNotPaidSales">Total Not Paid Sales: <%= nSales.toFixed(2) %></p>
+                  <p data-key="totalCashExpenses">Total Cash Expenses: <%= cExp.toFixed(2) %></p>
+                  <p data-key="totalOnlineExpenses">Total Online Expenses: <%= oExp.toFixed(2) %></p>
+                  <p data-key="finalCash">Final Cash: <%= finalCash.toFixed(2) %></p>
                 </div>
               </div>
             </div>
           <% }); %>
         <% } %>
-      </div><!-- End of Sales Report List -->
-    </div><!-- End of Page Container -->
-  </div><!-- End of Main Content Area -->
-
+      </div>
+    </div>
+  </div>
+  <!-- Client‑Side Scripts -->
   <script>
-    // Sidebar toggle functionality for responsive design
-    var sidebarToggle = document.getElementById('sidebarToggle');
-    if (sidebarToggle) {
-      sidebarToggle.addEventListener('click', function() {
-        document.getElementById('sidebar').classList.toggle('active');
-        document.getElementById('main-content').classList.toggle('sidebar-open');
+    // Sidebar toggle
+    document.getElementById('sidebarToggle')?.addEventListener('click', ()=>{
+      document.getElementById('sidebar').classList.toggle('active');
+      document.getElementById('main-content').classList.toggle('sidebar-open');
+    });
+    // Toggle summary visibility
+    document.querySelectorAll('.toggleSummary').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const date=btn.dataset.date;
+        const cont=document.getElementById('summary_'+date);
+        if(cont.style.display==='none'){ cont.style.display='block'; btn.innerHTML='<i class="fas fa-chart-pie"></i> Hide Summary'; }
+        else { cont.style.display='none'; btn.innerHTML='<i class="fas fa-chart-pie"></i> Show Summary'; }
       });
+    });
+    // Helper: post JSON
+    async function postJSON(url, data){ const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); const j=await res.json(); if(!j.success) throw new Error(j.error||'Error'); return j; }
+    // Refresh per-date summary on delete
+    function refreshSummary(date, s){ const cont=document.getElementById('summary_'+date); if(!cont) return; ['totalSales','totalProfit','totalCashSales','totalOnlineSales','totalNotPaidSales','totalCashExpenses','totalOnlineExpenses','finalCash'].forEach(k=>{
+        const p=cont.querySelector(`[data-key="${k}"]`);
+        if(p) p.textContent=p.textContent.replace(/[-+]?\d+(\.\d+)?$/, (s[k]||0).toFixed(2));
+      });
+      cont.style.display='block';
+      const btn=document.querySelector(`.toggleSummary[data-date="${date}"]`);
+      if(btn) btn.innerHTML='<i class="fas fa-chart-pie"></i> Hide Summary';
     }
-
-    // Toggle Summary Section Logic
-    document.querySelectorAll('.toggleSummary').forEach(function(button) {
-      button.addEventListener('click', function() {
-        var date = button.getAttribute('data-date');
-        var summaryContent = document.getElementById('summary_' + date);
-        if (summaryContent.style.display === 'none' || summaryContent.style.display === '') {
-          summaryContent.style.display = 'block';
-          button.innerHTML = '<i class="fas fa-chart-pie"></i> Hide Summary';
-        } else {
-          summaryContent.style.display = 'none';
-          button.innerHTML = '<i class="fas fa-chart-pie"></i> Show Summary';
-        }
-      });
+    // Delete sale
+    document.addEventListener('click', async e=>{
+      const d=e.target.closest('.delete-sale-btn'); if(!d) return;
+      if(!confirm('Delete this sale and restore stock?')) return;
+      try{ const { summary } = await postJSON('/api/delete-sale',{ saleId:d.dataset.id });
+        d.closest('tr').remove();
+        refreshSummary(d.dataset.date, summary);
+      }catch(err){ alert(err.message); }
+    });
+    // Delete expense
+    document.addEventListener('click', async e=>{
+      const d=e.target.closest('.delete-expense-btn'); if(!d) return;
+      if(!confirm('Delete this expense and update summary?')) return;
+      try{ const { summary } = await postJSON('/api/delete-expense',{ expenseId:d.dataset.id });
+        d.closest('tr').remove();
+        refreshSummary(d.dataset.date, summary);
+      }catch(err){ alert(err.message); }
     });
   </script>
   <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
 </html>
+```
+

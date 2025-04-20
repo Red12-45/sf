@@ -469,58 +469,35 @@ app.get('/create-user', isAuthenticated, async (req, res) => {
 
 // POST /create-user
 app.post('/create-user', isAuthenticated, async (req, res) => {
-  // Only master accounts can create sub‑users
-  if (!req.session.user.isMaster) {
-    return res.status(403).send('Access denied');
-  }
-
+  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
   try {
-    // Count existing sub‑users
     const subUsersQuery = await db.collection('users')
-      .where('accountId', '==', req.session.user.accountId)
-      .where('isMaster', '==', false)
+      .where('accountId','==',req.session.user.accountId)
+      .where('isMaster','==',false)
       .get();
-
-    // Enforce a maximum of 1 sub‑user
-    if (subUsersQuery.size >= 1) {
-      return res.status(400).send('Sub‑user limit reached. Maximum 1 sub‑user allowed.');
-    }
+    if (subUsersQuery.size >= 2) return res.status(400).send('Sub‑user limit reached. Maximum 2 sub‑users allowed.');
 
     const { name, password, confirmPassword, subUserId } = req.body;
+    if (password !== confirmPassword) return res.status(400).send('Passwords do not match');
+    if (!subUserId.trim()) return res.status(400).send('Sub‑user ID is required');
 
-    if (password !== confirmPassword) {
-      return res.status(400).send('Passwords do not match');
-    }
-    if (!subUserId.trim()) {
-      return res.status(400).send('Sub‑user ID is required');
-    }
-
-    // Ensure the ID is unique within this account
     const exist = await db.collection('users')
-      .where('subUserId', '==', subUserId)
-      .where('accountId', '==', req.session.user.accountId)
+      .where('subUserId','==',subUserId)
+      .where('accountId','==',req.session.user.accountId)
       .get();
-    if (!exist.empty) {
-      return res.status(400).send('Sub‑user ID already exists.');
-    }
+    if (!exist.empty) return res.status(400).send('Sub‑user ID already exists.');
 
-    // Create the sub‑user
     const hashedPassword = await bcrypt.hash(password, 10);
     await db.collection('users').add({
-      name,
-      password: hashedPassword,
-      isMaster: false,
-      accountId: req.session.user.accountId,
-      subUserId,
+      name, password: hashedPassword, isMaster: false,
+      accountId: req.session.user.accountId, subUserId,
       createdAt: new Date()
     });
-
-    res.redirect('/create-user');
+    res.redirect('/');
   } catch (error) {
     res.status(500).send(error.toString());
   }
 });
-
 
 // POST /edit-user
 app.post('/edit-user', isAuthenticated, async (req, res) => {
@@ -555,28 +532,6 @@ app.post('/delete-user', isAuthenticated, async (req, res) => {
       return res.status(403).send('Access denied');
     await userRef.delete();
     res.redirect('/create-user');
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
-});
-
-
-/* ─────────── PRODUCT & STOCK ROUTES ─────────── */
-// POST /delete-product/:productId
-app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    const { productId } = req.params;
-    const productRef = db.collection('products').doc(productId);
-    const productDoc = await productRef.get();
-    if (!productDoc.exists) return res.status(404).send('Product not found');
-    const data = productDoc.data();
-    if (data.accountId !== accountId) return res.status(403).send('Access denied');
-    if (data.quantity !== 0) return res.status(400).send('Cannot delete: quantity not zero');
-    const batchesSnap = await db.collection('stockBatches').where('productId','==',productId).get();
-    if (!batchesSnap.empty) return res.status(400).send('Cannot delete: has batches');
-    await productRef.delete();
-    res.redirect('/view-products');
   } catch (error) {
     res.status(500).send(error.toString());
   }
@@ -968,15 +923,14 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
 // POST /delete-stock-batch/:batchId
 app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
-    const accountId = req.session.user.accountId;
     const { batchId } = req.params;
     const batchRef = db.collection('stockBatches').doc(batchId);
     const batchDoc = await batchRef.get();
     if (!batchDoc.exists) return res.status(404).send('Stock batch not found');
-    const data = batchDoc.data();
-    if (data.accountId !== accountId) return res.status(403).send('Access denied');
+    if (batchDoc.data().accountId !== req.session.user.accountId) return res.status(403).send('Access denied');
+
+    // just delete the batch—no more recalc against a productId
     await batchRef.delete();
-    await recalcProductFromBatches(data.productId);
     res.redirect('/view-products');
   } catch (error) {
     res.status(500).send(error.toString());
@@ -1010,33 +964,29 @@ async function recalcProductFromBatches(productId) {
 // GET /edit-stock-batch/:batchId
 app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
-    const accountId = req.session.user.accountId;
-    const batchId   = req.params.batchId;
-    const batchRef  = db.collection('stockBatches').doc(batchId);
-    const batchDoc  = await batchRef.get();
+    const { batchId } = req.params;
+    const batchRef = db.collection('stockBatches').doc(batchId);
+    const batchDoc = await batchRef.get();
     if (!batchDoc.exists) return res.status(404).send('Stock batch not found');
-    const batchData = batchDoc.data();
-    if (batchData.accountId !== accountId) return res.status(403).send('Access denied');
+    if (batchDoc.data().accountId !== req.session.user.accountId) return res.status(403).send('Access denied');
 
-    const productDoc = await db.collection('products').doc(batchData.productId).get();
-    if (!productDoc.exists) return res.status(404).send('Parent product not found');
-
+    // still load categories/units, but no parent‐product lookup
     const [categories, units] = await Promise.all([
-      getCategories(accountId),
-      getUnits(accountId)
+      getCategories(req.session.user.accountId),
+      getUnits(req.session.user.accountId)
     ]);
 
     res.render('editStockBatch', {
-      batch: { id: batchDoc.id, ...batchData },
-      product: { id: productDoc.id, ...productDoc.data() },
-      categories, units
+      batch: { id: batchDoc.id, ...batchDoc.data() },
+      categories,
+      units
     });
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
 
-// In app.js, update your inline-edit handler:
+// POST /api/edit-stock-batch-field/:batchId
 app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, res) => {
   try {
     const { batchId } = req.params;
@@ -1046,7 +996,7 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, re
     if (!batchDoc.exists) throw new Error('Batch not found');
     if (batchDoc.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
 
-    // Parse and apply field update
+    // build update
     const update = { updatedAt: new Date() };
     if (field === 'purchasePrice' || field === 'salePrice') {
       update[field] = parseFloat(value);
@@ -1059,34 +1009,19 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, re
     }
     await batchRef.update(update);
 
-    // Recalc profitMargin on batch
-    const updatedBatchSnap = await batchRef.get();
-    const updatedBatch = updatedBatchSnap.data();
-    const profitMargin = updatedBatch.salePrice - updatedBatch.purchasePrice;
+    // re‑compute profitMargin on this batch only
+    const updated = (await batchRef.get()).data();
+    const profitMargin = updated.salePrice - updated.purchasePrice;
     await batchRef.update({ profitMargin });
-
-    // Recalc product aggregates
-    await recalcProductFromBatches(updatedBatch.productId);
-
-    // Fetch updated product
-    const prodDoc = await db.collection('products').doc(updatedBatch.productId).get();
-    const prod = prodDoc.data();
 
     res.json({
       success: true,
       batch: {
-        productId: updatedBatch.productId,
-        purchasePrice: updatedBatch.purchasePrice,
-        salePrice:     updatedBatch.salePrice,
-        quantity:      updatedBatch.quantity,
-        remainingQuantity: updatedBatch.remainingQuantity,
+        purchasePrice: updated.purchasePrice,
+        salePrice:     updated.salePrice,
+        quantity:      updated.quantity,
+        remainingQuantity: updated.remainingQuantity,
         profitMargin
-      },
-      product: {
-        wholesalePrice: prod.wholesalePrice,
-        retailPrice:    prod.retailPrice,
-        quantity:       prod.quantity,
-        profitMargin:   prod.profitMargin
       }
     });
   } catch (err) {
@@ -1098,54 +1033,44 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, re
 // POST /edit-stock-batch/:batchId
 app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
-    const accountId = req.session.user.accountId;
-    const batchId   = req.params.batchId;
-    const batchRef  = db.collection('stockBatches').doc(batchId);
-    const batchSnap = await batchRef.get();
-
-    if (!batchSnap.exists) return res.status(404).send('Stock batch not found');
-    const batchData = batchSnap.data();
-    if (batchData.accountId !== accountId) return res.status(403).send('Access denied');
-
-    const newProductName = req.body.productName?.trim() || batchData.productName;
-    const purchasePrice  = parseFloat(req.body.purchasePrice);
-    const salePrice      = parseFloat(req.body.salePrice);
-    const quantity       = parseFloat(req.body.quantity);
-    const category       = req.body.newCategory?.trim() || req.body.selectedCategory || '';
-    const unitRaw        = req.body.newUnit?.trim()   || req.body.selectedUnit    || '';
-    const unit           = unitRaw.toLowerCase();
-
-    // update the batch
-    await batchRef.update({
+    const { batchId } = req.params;
+    const {
+      productName,
       purchasePrice,
       salePrice,
       quantity,
-      remainingQuantity: quantity,
-      productName:       newProductName,
-      unit,
-      updatedAt:         new Date()
-    });
+      newCategory,
+      selectedCategory,
+      newUnit,
+      selectedUnit
+    } = req.body;
 
-    // also update the parent product’s name/unit/category
-    const productRef = db.collection('products').doc(batchData.productId);
-    await productRef.update({
-      productName: newProductName,
-      updatedAt:   new Date(),
-      ...(category && { category }),
-      ...(unit     && { unit     })
-    });
+    const batchRef = db.collection('stockBatches').doc(batchId);
+    const batchSnap = await batchRef.get();
+    if (!batchSnap.exists) return res.status(404).send('Stock batch not found');
+    if (batchSnap.data().accountId !== req.session.user.accountId) return res.status(403).send('Access denied');
 
-    // recalculate aggregates
-    await recalcProductFromBatches(batchData.productId);
+    // only update the batch—no parent product update or recalc
+    const updateData = {
+      purchasePrice: parseFloat(purchasePrice),
+      salePrice:     parseFloat(salePrice),
+      quantity:      parseFloat(quantity),
+      remainingQuantity: parseFloat(quantity),
+      updatedAt:     new Date()
+    };
+    if (productName?.trim()) updateData.productName = productName.trim();
+    const unitRaw = newUnit?.trim() || selectedUnit;
+    if (unitRaw) updateData.unit = unitRaw.toLowerCase();
+    const category = newCategory?.trim() || selectedCategory;
+    if (category) updateData.category = category;
 
-    cache.del(`units_${accountId}`);
-    cache.del(`categories_${accountId}`);
-
+    await batchRef.update(updateData);
     res.redirect('/view-products');
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
+
 
 
 
@@ -1600,69 +1525,59 @@ app.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res
 });
 
 
-app.post(
-  '/api/delete-expense',
-  isAuthenticated,
-  async (req, res) => {
-    try {
-      const expRef = db.collection('expenses').doc(req.body.expenseId);
-      const expDoc = await expRef.get();
-      if (!expDoc.exists) throw new Error('Expense not found');
-      if (expDoc.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
+app.post('/api/delete-expense', isAuthenticated, async (req, res) => {
+  const { expenseId } = req.body;
+  try {
+    const expRef = db.collection('expenses').doc(expenseId);
+    const expDoc = await expRef.get();
+    if (!expDoc.exists) throw new Error('Expense not found');
+    const exp = expDoc.data();
+    if (exp.accountId !== req.session.user.accountId) throw new Error('Access denied');
 
-      await expRef.delete();
-      res.json({ success: true });
-    } catch (e) {
-      res.json({ success: false, error: e.toString() });
-    }
+    // delete the expense
+    await expRef.delete();
+
+    // recompute summary for that date
+    const { summary } = await computeDailySummary(
+      req.session.user.accountId,
+      exp.saleDate
+    );
+
+    res.json({ success: true, summary });
+  } catch (e) {
+    res.json({ success: false, error: e.toString() });
   }
-);
+});
+app.post('/api/expense', isAuthenticated, async (req, res) => {
+  try {
+    const saved = await processExpense(req.body, req.session.user);
+    // saved does *not* include its own ID yet — grab it:
+    const snap = await db.collection('expenses')
+                         .where('accountId','==',req.session.user.accountId)
+                         .orderBy('createdAt','desc')
+                         .limit(1)
+                         .get();
+    const doc = snap.docs[0];
+    const expense = { id: doc.id, ...doc.data() };
 
-
-app.post(
-  '/api/expense',
-  isAuthenticated,
-  async (req, res) => {
-    try {
-      // Normalize to arrays
-      const reasons  = Array.isArray(req.body.expenseReason)  ? req.body.expenseReason  : [req.body.expenseReason];
-      const costs    = Array.isArray(req.body.expenseCost)    ? req.body.expenseCost    : [req.body.expenseCost];
-      const statuses = Array.isArray(req.body.expenseStatus)  ? req.body.expenseStatus  : [req.body.expenseStatus];
-      const d1s      = Array.isArray(req.body.expenseDetail1) ? req.body.expenseDetail1 : [req.body.expenseDetail1];
-      const d2s      = Array.isArray(req.body.expenseDetail2) ? req.body.expenseDetail2 : [req.body.expenseDetail2];
-
-      const saved = [];
-      for (let i = 0; i < reasons.length; i++) {
-        const data = {
-          expenseReason: reasons[i],
-          expenseCost:   parseFloat(costs[i]),
-          expenseStatus: statuses[i] || 'Paid Cash',
-          saleDate:      req.body.saleDate,
-          accountId:     req.session.user.accountId,
-          createdAt:     new Date()
-        };
-        if (d1s[i]) data.expenseDetail1 = parseFloat(d1s[i]);
-        if (d2s[i]) data.expenseDetail2 = parseFloat(d2s[i]);
-
-        const docRef = await db.collection('expenses').add(data);
-        saved.push({
-          id:             docRef.id,
-          expenseReason:  data.expenseReason,
-          expenseCost:    data.expenseCost,
-          expenseStatus:  data.expenseStatus,
-          expenseDetail1: data.expenseDetail1 || '',
-          expenseDetail2: data.expenseDetail2 || '',
-          saleDate:       data.saleDate,
-          createdAt:      data.createdAt.toISOString()
-        });
-      }
-
-      res.json({ success: true, expenses: saved });
-    } catch (e) {
-      res.json({ success: false, error: e.toString() });
-    }
+    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
+    res.json({ success: true, expense, summary });
+  } catch (e) {
+    res.json({ success: false, error: e.toString() });
   }
-);
+});
+
+
+// AJAX: POST /api/sale
+app.post('/api/sale', isAuthenticated, async (req, res) => {
+  try {
+    const sale    = await processSale(req.body, req.session.user);
+    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
+    res.json({ success: true, sale, summary });
+  } catch (e) {
+    res.json({ success: false, error: e.toString() });
+  }
+});
 
 
 
@@ -1688,25 +1603,26 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
 });
 
 /* ─────────── AJAX:  DELETE SALE  ─────────── */
+// ─────────── AJAX: DELETE SALE ───────────
 app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
   const { saleId } = req.body;
   try {
-    /* 0. pull the sale we’re undoing */
+    // 0. pull the sale we’re undoing
     const saleRef = db.collection('sales').doc(saleId);
     const saleDoc = await saleRef.get();
-    if (!saleDoc.exists)          throw new Error('Sale not found');
+    if (!saleDoc.exists) throw new Error('Sale not found');
     const sale = saleDoc.data();
-    if (sale.accountId !== req.session.user.accountId)
-      throw new Error('Access denied');
+    if (sale.accountId !== req.session.user.accountId) throw new Error('Access denied');
 
-    /* 1. restore product stock */
+    // 1. restore product stock
     await db.collection('products')
-            .doc(sale.productId)
-            .update({ quantity: admin.firestore.FieldValue
-                                     .increment(sale.saleQuantity) });
+      .doc(sale.productId)
+      .update({
+        // this line increments the product.quantity by the number you originally sold
+        quantity: admin.firestore.FieldValue.increment(sale.saleQuantity)
+      });
 
-    /* 2. restore every batch that the sale had pulled from               */
-    /*    ( needs sale.batchesUsed — see next section)                    */
+    // 2. restore every batch that the sale had pulled from
     if (Array.isArray(sale.batchesUsed) && sale.batchesUsed.length) {
       const batch = db.batch();
       sale.batchesUsed.forEach(bu => {
@@ -1718,10 +1634,10 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
       await batch.commit();
     }
 
-    /* 3. finally, delete the sale doc itself */
+    // 3. delete the sale document
     await saleRef.delete();
 
-    /* 4. recompute today’s summary so the client stays in‑sync */
+    // 4. recompute today’s summary so the client stays in‑sync
     const { summary } = await computeDailySummary(
       req.session.user.accountId,
       sale.saleDate
@@ -1731,6 +1647,7 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
     res.json({ success: false, error: e.toString() });
   }
 });
+
 
 
 // GET /tnc – Terms & Conditions
