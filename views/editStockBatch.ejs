@@ -1,17 +1,22 @@
+<!-- views/editStockBatch.ejs — full working version -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Edit Stock Batch</title>
+
+  <!-- favicon / fonts / css -->
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <link rel="stylesheet" href="/css/editProduct.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
   <style>.hidden{display:none}</style>
 </head>
+
 <body>
 <div class="page-wrapper">
-  <!-- ── Sidebar (unchanged) ───────────────────────────────────────────── -->
+  <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
   <aside class="sidebar">
     <div class="sidebar-header"><div class="logo">Edit Stock Batch</div></div>
     <nav>
@@ -19,9 +24,9 @@
         <div class="section-title">Navigation</div>
         <ul>
           <li><a href="/"><span class="nav-icon">🏠</span>Dashboard</a></li>
-          <li><a href="/add-product"><span class="nav-icon">➕</span>Add New Product</a></li>
+          <li><a href="/add-product"><span class="nav-icon">➕</span>Add&nbsp;New&nbsp;Product</a></li>
           <li><a href="/expense"><span class="nav-icon">📜</span>Expense</a></li>
-          <li><a href="/view-products" class="active"><span class="nav-icon">📋</span>View Products</a></li>
+          <li><a href="/view-products" class="active"><span class="nav-icon">📋</span>View&nbsp;Products</a></li>
           <li><a href="/sales"><span class="nav-icon">🏷️</span>Sales</a></li>
         </ul>
       </div>
@@ -36,31 +41,42 @@
     <div class="sidebar-footer">© 2025 SalesFlow</div>
   </aside>
 
-  <!-- ── Main Content ──────────────────────────────────────────────────── -->
+  <!-- ── Main Content ───────────────────────────────────────────────────── -->
   <main class="content">
     <header class="page-header">
-      <h1>Edit Stock Batch for "<%= product.productName %>"</h1>
+      <h1>
+        Edit Stock Batch
+        <% if (batch.productName) { %>
+          for "<%= batch.productName %>"
+        <% } %>
+      </h1>
     </header>
 
     <section class="form-container">
       <form action="/edit-stock-batch/<%= batch.id %>" method="POST">
-        <!-- ── Product name ──────────────────────────────────────────────── -->
+        <!-- ── Product name (if stored on batch) ────────────────────────── -->
         <div class="form-row">
           <div class="form-group full-width">
             <label for="productName">Product Name</label>
-            <input type="text" id="productName" name="productName"
-                   value="<%= product.productName %>" required>
+            <input type="text"
+                   id="productName"
+                   name="productName"
+                   value="<%= batch.productName || '' %>"
+                   required>
           </div>
         </div>
 
-        <!-- ── Category choose / create ──────────────────────────────── -->
+        <!-- ── Category choose / create ─────────────────────────────────── -->
         <div class="form-row">
           <div class="form-group">
             <label for="selectedCategory">Choose Category</label>
             <select id="selectedCategory" name="selectedCategory">
               <option value="">-- Select Category --</option>
-              <% categories.forEach(cat=>{ %>
-                <option value="<%= cat %>" <%= product.category===cat?'selected':'' %>><%= cat %></option>
+              <% categories.forEach(cat => { %>
+                <option value="<%= cat %>"
+                        <%= batch.category === cat ? 'selected' : '' %>>
+                  <%= cat %>
+                </option>
               <% }) %>
             </select>
           </div>
@@ -70,14 +86,17 @@
           </div>
         </div>
 
-        <!-- ── Unit choose / create (same as Add Product) ─────────────── -->
+        <!-- ── Unit choose / create ─────────────────────────────────────── -->
         <div class="form-row">
           <div class="form-group">
             <label for="selectedUnit">Choose Unit</label>
             <select id="selectedUnit" name="selectedUnit">
               <option value="">-- Select Unit --</option>
-              <% units.forEach(u=>{ %>
-                <option value="<%= u %>" <%= (product.unit||'').toLowerCase()===u?'selected':'' %>><%= u %></option>
+              <% units.forEach(u => { %>
+                <option value="<%= u %>"
+                        <%= (batch.unit || '').toLowerCase() === u ? 'selected' : '' %>>
+                  <%= u %>
+                </option>
               <% }) %>
             </select>
           </div>
@@ -87,22 +106,34 @@
           </div>
         </div>
 
-        <!-- ── Pricing & Quantity ─────────────────────────────────────── -->
+        <!-- ── Pricing & Quantity ───────────────────────────────────────── -->
         <div class="form-row">
           <div class="form-group">
             <label for="purchasePrice">Purchase Price</label>
-            <input type="number" step="0.01" id="purchasePrice" name="purchasePrice"
-                   value="<%= batch.purchasePrice %>" required>
+            <input type="number"
+                   step="0.01"
+                   id="purchasePrice"
+                   name="purchasePrice"
+                   value="<%= batch.purchasePrice %>"
+                   required>
           </div>
           <div class="form-group">
             <label for="salePrice">Retail Price</label>
-            <input type="number" step="0.01" id="salePrice" name="salePrice"
-                   value="<%= batch.salePrice %>" required>
+            <input type="number"
+                   step="0.01"
+                   id="salePrice"
+                   name="salePrice"
+                   value="<%= batch.salePrice %>"
+                   required>
           </div>
           <div class="form-group">
             <label for="quantity">Quantity</label>
-            <input type="number" step="any" id="quantity" name="quantity"
-                   value="<%= batch.quantity %>" required>
+            <input type="number"
+                   step="any"
+                   id="quantity"
+                   name="quantity"
+                   value="<%= batch.quantity %>"
+                   required>
           </div>
         </div>
 
