@@ -90,7 +90,7 @@
           <!-- Sale Quantity -->
           <div>
             <label for="saleQuantity">Quantity:</label>
-            <input type="number" id="saleQuantity" name="saleQuantity" required>
+            <input type="number" step="any" id="saleQuantity" name="saleQuantity" required>
           </div>
           <!-- Computed Fields -->
           <div>
@@ -384,9 +384,6 @@
 
   <!-- Client‑Side Script -->
   <script>
-    /* -------------------------------------------------------------- */
-    /* Everything below this line until the next comment == ORIGINAL   */
-    /* -------------------------------------------------------------- */
     document.addEventListener('click', async (e) => {
       const btn = e.target.closest('.delete-sale-btn');
       if (!btn) return;
@@ -513,7 +510,8 @@
       } catch (e) {
         batches = [];
       }
-      const saleQty = parseInt(saleQuantityInput.value) || 0;
+      // ← changed here to allow decimals:
+      const saleQty = parseFloat(saleQuantityInput.value) || 0;
       if (saleQty === 0) {
         document.getElementById('wholesalePrice').value = "";
         document.getElementById('profitPerUnit').value = "";
@@ -527,20 +525,17 @@
       retailInput.placeholder = computedRetail.toFixed(2);
       const userRetail = parseFloat(retailInput.value);
       const effectiveRetail = (!isNaN(userRetail) && userRetail > 0) ? userRetail : computedRetail;
-      const profitPerUnit = effectiveRetail - computedWholesale;
-      const totalProfit = profitPerUnit * saleQty;
+      const profitPerUnitVal = effectiveRetail - computedWholesale;
+      const totalProfitVal = profitPerUnitVal * saleQty;
       document.getElementById('wholesalePrice').value = computedWholesale.toFixed(2);
-      document.getElementById('profitPerUnit').value = profitPerUnit.toFixed(2);
-      document.getElementById('totalProfit').value = totalProfit.toFixed(2);
+      document.getElementById('profitPerUnit').value = profitPerUnitVal.toFixed(2);
+      document.getElementById('totalProfit').value = totalProfitVal.toFixed(2);
     }
 
     retailInput.addEventListener('input', updateSaleCalculations);
     saleQuantityInput.addEventListener('input', updateSaleCalculations);
     productSelect.addEventListener('change', updateSaleCalculations);
 
-    /* -------------------------------------------------------------- */
-    /* -----------------  AJAX LIVE‑UPDATE PATCH  ------------------- */
-    /* -------------------------------------------------------------- */
     function ensureTableExists (wrapperSelector, tableId, theadHtml) {
       if (document.querySelector(tableId)) return;
       const wrap = document.querySelector(wrapperSelector);
@@ -599,7 +594,7 @@
             <span class="status-pill ${pillClass}">${s.status}</span>
             ${(s.paymentDetail1 || s.paymentDetail2)
               ? `<br><small>${s.paymentDetail1 ? 'Detail1: ' + s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: ' + s.paymentDetail2 : ''}</small>`
-              : ''}
+              : ''} 
           </td>
           <td>${s.extraInfo || '-'}</td>
           <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
@@ -674,8 +669,8 @@
       } catch (err) { alert(err.message); }
     });
   </script>
+  <!-- convenience fill‑time buttons -->
   <script>
-    /* ---  fillOpening/Closing time convenience (restored)  --- */
     function getCurrentTimeString() {
       const d = new Date();
       return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;

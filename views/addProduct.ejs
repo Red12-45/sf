@@ -21,7 +21,7 @@
           <div class="section-title">Navigation</div>
           <ul>
             <li><a href="/"><span class="nav-icon">🏠</span>Dashboard</a></li>
-            <li><a href="/expense" class="active"><span class="nav-icon">📜</span>Expenses</a></li>
+            <li><a href="/expense"><span class="nav-icon">📜</span>Expenses</a></li>
             <li><a href="/view-products"><span class="nav-icon">📋</span>View Products</a></li>
             <li><a href="/sales"><span class="nav-icon">🏷️</span>Sales</a></li>
           </ul>
@@ -39,7 +39,7 @@
 
     <!-- Main Content Section -->
     <main class="content">
-      <header class="page-header"><h1>Add New Product / Stock Batch</h1></header>
+      <header class="page-header"><h1>Add New Product / Stock Batch</h1></header>
 
       <% if (success) { %>
         <div class="success-message">Product added/updated successfully!</div>
@@ -91,8 +91,9 @@
           <div id="newProductFields">
             <div class="form-row">
               <div class="form-group">
-                <label for="productName" class="required">Product Name</label>
-                <input type="text" id="productName" name="productName" placeholder="Enter product name" required>
+                <label for="productName">Product Name</label>
+                <!-- removed static `required` here -->
+                <input type="text" id="productName" name="productName" placeholder="Enter product name">
               </div>
             </div>
 
@@ -164,9 +165,22 @@
 
   <script>
     function toggleNewProductFields() {
-      const selectElem = document.getElementById('existingProduct');
-      document.getElementById('newProductFields').style.display =
-        selectElem.value === 'new' ? 'block' : 'none';
+      const sel = document.getElementById('existingProduct');
+      const wrapper = document.getElementById('newProductFields');
+      const inputs = wrapper.querySelectorAll('input, select');
+      if (sel.value === 'new') {
+        wrapper.style.display = 'block';
+        inputs.forEach(i => { 
+          i.disabled = false;
+          if (i.id === 'productName') i.required = true;
+        });
+      } else {
+        wrapper.style.display = 'none';
+        inputs.forEach(i => { 
+          i.disabled = true;
+          if (i.id === 'productName') i.required = false;
+        });
+      }
     }
     document.addEventListener('DOMContentLoaded', toggleNewProductFields);
   </script>

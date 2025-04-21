@@ -921,24 +921,52 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
 
 /* ─────────── STOCK BATCH MANAGEMENT ─────────── */
 // POST /delete-stock-batch/:batchId
+// POST /delete-stock-batch/:batchId
 app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
     const { batchId } = req.params;
-    const batchRef = db.collection('stockBatches').doc(batchId);
-    const batchDoc = await batchRef.get();
+    const batchRef    = db.collection('stockBatches').doc(batchId);
+    const batchDoc    = await batchRef.get();
     if (!batchDoc.exists) return res.status(404).send('Stock batch not found');
     if (batchDoc.data().accountId !== req.session.user.accountId) return res.status(403).send('Access denied');
 
-    // just delete the batch—no more recalc against a productId
+    // Grab parent productId
+    const productId = batchDoc.data().productId;
+
+    // Delete the batch & recalc
     await batchRef.delete();
+    await recalcProductFromBatches(productId);
+
+    // If AJAX, send back updated product JSON
+    if (req.xhr) {
+      const prodSnap = await db.collection('products').doc(productId).get();
+      const p = prodSnap.data();
+      return res.json({
+        success: true,
+        product: {
+          id:             productId,
+          wholesalePrice: p.wholesalePrice,
+          retailPrice:    p.retailPrice,
+          quantity:       p.quantity,
+          profitMargin:   p.profitMargin
+        }
+      });
+    }
+
+    // Otherwise full‐page flow
     res.redirect('/view-products');
   } catch (error) {
+    console.error('Error deleting stock batch:', error);
+    if (req.xhr) return res.json({ success: false, error: error.toString() });
     res.status(500).send(error.toString());
   }
 });
 
+
 async function recalcProductFromBatches(productId) {
-  const snap = await db.collection('stockBatches').where('productId','==',productId).get();
+  const snap = await db.collection('stockBatches')
+    .where('productId','==',productId)
+    .get();
   let totalRemaining=0, totalWholesale=0, totalRetail=0;
   snap.docs.forEach(doc => {
     const d = doc.data();
@@ -992,9 +1020,9 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, re
     const { batchId } = req.params;
     const { field, value } = req.body;
     const batchRef = db.collection('stockBatches').doc(batchId);
-    const batchDoc = await batchRef.get();
-    if (!batchDoc.exists) throw new Error('Batch not found');
-    if (batchDoc.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
+    const batchSnap = await batchRef.get();
+    if (!batchSnap.exists) throw new Error('Batch not found');
+    if (batchSnap.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
 
     // build update
     const update = { updatedAt: new Date() };
@@ -1014,6 +1042,12 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, re
     const profitMargin = updated.salePrice - updated.purchasePrice;
     await batchRef.update({ profitMargin });
 
+    // **NEW**: recalc parent product and fetch its updated data
+    const productId = batchSnap.data().productId;
+    await recalcProductFromBatches(productId);
+    const productSnap = await db.collection('products').doc(productId).get();
+    const prod = productSnap.data();
+
     res.json({
       success: true,
       batch: {
@@ -1022,6 +1056,13 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, re
         quantity:      updated.quantity,
         remainingQuantity: updated.remainingQuantity,
         profitMargin
+      },
+      product: {
+        id: productSnap.id,
+        wholesalePrice: prod.wholesalePrice,
+        retailPrice:    prod.retailPrice,
+        quantity:       prod.quantity,
+        profitMargin:   prod.profitMargin
       }
     });
   } catch (err) {
@@ -1160,6 +1201,226 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
     res.status(500).send(err.toString());
   }
 });
+
+
+// POST /api/edit-sale
+app.post('/api/edit-sale', async (req, res) => {
+  try {
+    const {
+      saleId,
+      field,
+      value,
+      paymentDetail1,
+      paymentDetail2
+    } = req.body;
+
+    const saleRef = db.collection('sales').doc(saleId);
+    const saleSnap = await saleRef.get();
+    if (!saleSnap.exists) return res.json({ success: false, error: 'Sale not found' });
+    const data = saleSnap.data();
+
+    // ─────────── Handle status + details ───────────
+    if (field === 'status') {
+      const updateData = { status: value };
+      if (paymentDetail1 !== undefined) updateData.paymentDetail1 = parseFloat(paymentDetail1);
+      if (paymentDetail2 !== undefined) updateData.paymentDetail2 = parseFloat(paymentDetail2);
+      await saleRef.update(updateData);
+    } else {
+      // ─────────── Original quantity/retail inline‐edit logic ───────────
+
+      // 1) Parse new values
+      const oldQty    = data.saleQuantity;
+      const oldRetail = data.retailPrice;
+      const newQty    = field === 'saleQuantity' ? parseInt(value, 10) : oldQty;
+      const newRetail = field === 'retailPrice'   ? parseFloat(value)   : oldRetail;
+
+      // 2) Adjust stock batches by deltaQty
+      const deltaQty = newQty - oldQty;
+      const batchDb  = db.collection('stockBatches');
+      const batchOps = db.batch();
+
+      // clone existing usage array
+      const updatedBatchesUsed = Array.isArray(data.batchesUsed)
+        ? data.batchesUsed.map(u => ({ ...u }))
+        : [];
+
+      if (deltaQty > 0) {
+        // consume extra units FIFO
+        let toTake = deltaQty;
+        const snap = await batchDb
+          .where('productId','==', data.productId)
+          .where('remainingQuantity','>', 0)
+          .orderBy('batchDate','asc')
+          .get();
+        for (const b of snap.docs) {
+          if (toTake <= 0) break;
+          const d = b.data();
+          const take = Math.min(d.remainingQuantity, toTake);
+          batchOps.update(b.ref, { remainingQuantity: d.remainingQuantity - take });
+          const idx = updatedBatchesUsed.findIndex(u => u.id === b.id);
+          if (idx > -1) updatedBatchesUsed[idx].qtyUsed += take;
+          else            updatedBatchesUsed.push({ id: b.id, qtyUsed: take });
+          toTake -= take;
+        }
+        if (toTake > 0) return res.json({ success: false, error: 'Not enough stock to increase quantity' });
+
+      } else if (deltaQty < 0) {
+        // return units back to batches
+        let toReturn = -deltaQty;
+        for (const usage of updatedBatchesUsed.slice().reverse()) {
+          if (toReturn <= 0) break;
+          const ret = Math.min(usage.qtyUsed, toReturn);
+          const batchRef2 = batchDb.doc(usage.id);
+          const batchSnap2= await batchRef2.get();
+          if (!batchSnap2.exists) continue;
+          const currRem = batchSnap2.data().remainingQuantity || 0;
+          batchOps.update(batchRef2, { remainingQuantity: currRem + ret });
+          usage.qtyUsed -= ret;
+          toReturn   -= ret;
+        }
+        // drop zero‐usage entries
+        for (let i = updatedBatchesUsed.length - 1; i >= 0; i--) {
+          if (updatedBatchesUsed[i].qtyUsed <= 0) updatedBatchesUsed.splice(i, 1);
+        }
+      }
+
+      // commit batch updates
+      await batchOps.commit();
+
+      // 3) Recompute product.quantity
+      const recalcSnap = await batchDb.where('productId','==', data.productId).get();
+      let sumRemaining = 0;
+      recalcSnap.docs.forEach(d => sumRemaining += (d.data().remainingQuantity || 0));
+      await db.collection('products').doc(data.productId).update({ quantity: sumRemaining });
+
+      // 4) Recalculate weighted average wholesale price
+      let totalWholesale = 0;
+      for (const u of updatedBatchesUsed) {
+        const bdoc = await batchDb.doc(u.id).get();
+        if (!bdoc.exists) continue;
+        const pPrice = bdoc.data().purchasePrice;
+        totalWholesale += pPrice * u.qtyUsed;
+      }
+      const avgWholesale = newQty > 0 ? (totalWholesale / newQty) : 0;
+
+      // 5) Compute profit figures
+      const profitPerUnit = newRetail - avgWholesale;
+      const totalProfit   = profitPerUnit * newQty;
+      const totalSale     = newRetail * newQty;
+
+      // 6) Update the sale document
+      const updatedName = (newQty !== oldQty || newRetail !== oldRetail) && !data.productName.includes('(updated)')
+        ? data.productName + '(updated)'
+        : data.productName;
+
+      await saleRef.update({
+        saleQuantity:   newQty,
+        wholesalePrice: avgWholesale,
+        retailPrice:    newRetail,
+        totalSale,
+        profitPerUnit,
+        profit:         totalProfit,
+        productName:    updatedName,
+        batchesUsed:    updatedBatchesUsed
+      });
+    }
+
+    // ─────────── Recompute daily summary ───────────
+    const date = data.saleDate;
+    const [salesSnap2, expSnap2] = await Promise.all([
+      db.collection('sales').where('saleDate','==', date).get(),
+      db.collection('expenses').where('saleDate','==', date).get()
+    ]);
+    let tS=0, tP=0, cS=0, oS=0, nS=0, cE=0, oE=0;
+    salesSnap2.forEach(d => {
+      const s = d.data(), amt = s.retailPrice * s.saleQuantity;
+      tS += amt; tP += s.profit;
+      switch(s.status){
+        case 'Paid Cash': cS += amt; break;
+        case 'Paid Online': oS += amt; break;
+        case 'Not Paid': nS += amt; break;
+        case 'Half Cash + Half Online':
+          if(s.paymentDetail1) cS += parseFloat(s.paymentDetail1);
+          if(s.paymentDetail2) oS += parseFloat(s.paymentDetail2);
+          break;
+        case 'Half Cash + Not Paid':
+          if(s.paymentDetail1) cS += parseFloat(s.paymentDetail1);
+          if(s.paymentDetail2) nS += parseFloat(s.paymentDetail2);
+          break;
+        case 'Half Online + Not Paid':
+          if(s.paymentDetail1) oS += parseFloat(s.paymentDetail1);
+          if(s.paymentDetail2) nS += parseFloat(s.paymentDetail2);
+          break;
+      }
+    });
+    expSnap2.forEach(d => {
+      const e = d.data();
+      switch(e.expenseStatus){
+        case 'Paid Cash': cE += parseFloat(e.expenseCost); break;
+        case 'Paid Online': oE += parseFloat(e.expenseCost); break;
+        case 'Half Cash + Half Online':
+          if(e.expenseDetail1) cE += parseFloat(e.expenseDetail1);
+          if(e.expenseDetail2) oE += parseFloat(e.expenseDetail2);
+          break;
+        case 'Half Cash + Not Paid':
+          if(e.expenseDetail1) cE += parseFloat(e.expenseDetail1);
+          break;
+        case 'Half Online + Not Paid':
+          if(e.expenseDetail1) oE += parseFloat(e.expenseDetail1);
+          break;
+      }
+    });
+    const summary = {
+      totalSales:          tS,
+      totalProfit:         tP,
+      totalCashSales:      cS,
+      totalOnlineSales:    oS,
+      totalNotPaidSales:   nS,
+      totalCashExpenses:   cE,
+      totalOnlineExpenses: oE,
+      finalCash:           cS - cE
+    };
+
+    // 8) Return success + updatedRow + summary
+    // For status edits, include the two details in updatedRow
+    let updatedRow = {};
+    if (req.body.field === 'status') {
+      updatedRow.status = req.body.value;
+      if (req.body.paymentDetail1 !== undefined)
+        updatedRow.paymentDetail1 = parseFloat(req.body.paymentDetail1);
+      if (req.body.paymentDetail2 !== undefined)
+        updatedRow.paymentDetail2 = parseFloat(req.body.paymentDetail2);
+    } else {
+      // numeric edits already updated above; re-fetch if needed
+      const fresh = await saleRef.get();
+      const d = fresh.data();
+      updatedRow = {
+        saleQuantity:   d.saleQuantity,
+        wholesalePrice: d.wholesalePrice,
+        retailPrice:    d.retailPrice,
+        totalSale:      d.totalSale,
+        profitPerUnit:  d.profitPerUnit,
+        profit:         d.profit,
+        productName:    d.productName
+      };
+    }
+
+    return res.json({ success: true, updatedRow, summary });
+  } catch (error) {
+    return res.json({ success: false, error: error.message });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
 
 
 // GET /profit
