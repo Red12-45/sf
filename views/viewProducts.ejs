@@ -124,7 +124,7 @@
                     </button>
                   <% } %>
                 </td>
-                <td class="serial-number"><%= index + 1 %></td>
+                <td class="serial-number"><%= (index + 1).toFixed(2) %></td>
                 <td class="product-name"><%= product.productName %></td>
                 <td class="price-cell wholesale-cell">
                   <span class="currency">₹</span><%= Number(product.wholesalePrice).toFixed(2) %>
@@ -133,7 +133,7 @@
                   <span class="currency">₹</span><%= Number(product.retailPrice).toFixed(2) %>
                 </td>
                 <td class="quantity-cell product-quantity-cell <%= product.quantity <= 10 ? 'low-quantity' : '' %>">
-                  <%= product.quantity %>
+                  <%= Number(product.quantity).toFixed(2) %>
                   <% if (product.quantity <= 10) { %><span class="stock-badge">Low</span><% } %>
                 </td>
                 <td class="unit-cell"><%= product.unit ? product.unit : '-' %></td>
@@ -178,7 +178,7 @@
                             </tr>
                           </thead>
                           <tbody>
-                            <% product.batches.forEach(function(batch) { 
+                            <% product.batches.forEach(function(batch) {
                                  const d = batch.batchDate && batch.batchDate.seconds
                                            ? new Date(batch.batchDate.seconds * 1000)
                                            : new Date(batch.batchDate);
@@ -191,30 +191,29 @@
                                   <span class="value">
                                     <span class="currency">₹</span><%= Number(batch.purchasePrice).toFixed(2) %>
                                   </span>
-                                  <i class="fas fa-pencil-alt edit-icon"></i>
+                                  <i class="fas fa-edit edit-icon"></i>
                                 </td>
                                 <td class="price-cell editable" data-batch-id="<%= batch.id %>" data-field="salePrice">
                                   <span class="value">
                                     <span class="currency">₹</span><%= Number(batch.salePrice).toFixed(2) %>
                                   </span>
-                                  <i class="fas fa-pencil-alt edit-icon"></i>
+                                  <i class="fas fa-edit edit-icon"></i>
                                 </td>
 
-                              
                                 <td class="price-cell">
                                   <span class="currency">₹</span><%= Number(batch.profitMargin).toFixed(2) %>
                                 </td>
                                 <td class="editable" data-batch-id="<%= batch.id %>" data-field="quantity">
-                                  <span class="value"><%= batch.quantity %></span>
-                                  <i class="fas fa-pencil-alt edit-icon"></i>
+                                  <span class="value"><%= Number(batch.quantity).toFixed(2) %></span>
+                                  <i class="fas fa-edit edit-icon"></i>
                                 </td>
                                 <td>
-                                  <%= batch.unit 
-                                        ? batch.unit 
+                                  <%= batch.unit
+                                        ? batch.unit
                                         : (product.unit ? product.unit : '-') %>
                                 </td>
                                 <td class="remaining-cell <%= batch.remainingQuantity === 0 ? 'empty' : '' %>">
-                                  <%= batch.remainingQuantity %>
+                                  <%= Number(batch.remainingQuantity).toFixed(2) %>
                                   <% if (batch.remainingQuantity === 0) { %>
                                     <span class="stock-badge empty">Empty</span>
                                   <% } %>
@@ -266,7 +265,6 @@
       if (!confirm('Are you sure?')) return;
 
       const isProduct = form.matches('.delete-product-form');
-      // Include X-Requested-With so server knows it's AJAX
       const res = await fetch(form.action, {
         method: 'POST',
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -277,19 +275,16 @@
       }
 
       if (isProduct) {
-        // remove product & its batches
         const pid = form.dataset.productId;
         document.getElementById('product-row-' + pid)?.remove();
         document.getElementById('batches-' + pid)?.remove();
       } else {
-        // batch deletion: server returns JSON with updated product
         const data = await res.json();
         if (!data.success) return alert(data.error || 'Error deleting batch');
 
-        // remove just that batch row
         form.closest('tr').remove();
 
-        // update the aggregate product row
+        // update aggregate product row
         const p = data.product;
         const prodRow = document.getElementById(`product-row-${p.id}`);
         if (prodRow) {
@@ -297,7 +292,8 @@
             `<span class="currency">₹</span>${p.wholesalePrice.toFixed(2)}`;
           prodRow.querySelector('.retail-cell').innerHTML =
             `<span class="currency">₹</span>${p.retailPrice.toFixed(2)}`;
-          prodRow.querySelector('.product-quantity-cell').innerText = p.quantity;
+          prodRow.querySelector('.product-quantity-cell').innerText =
+            p.quantity.toFixed(2);
           prodRow.querySelector('.product-profit-cell').innerHTML =
             `<span class="currency">₹</span>${p.profitMargin.toFixed(2)}`;
         }
@@ -327,21 +323,25 @@
         const data = await res.json();
         if (!data.success) { alert(data.error); return cancel(); }
         const b = data.batch;
+
         if (field === 'purchasePrice' || field === 'salePrice') {
           cell.innerHTML =
             `<span class="value"><span class="currency">₹</span>${b[field].toFixed(2)}</span>
-             <i class="fas fa-pencil-alt edit-icon"></i>`;
+             <i class="fas fa-edit edit-icon"></i>`;
           const profitCell = cell.closest('tr').querySelector('.price-cell:nth-child(6)');
           profitCell.innerHTML =
             `<span class="currency">₹</span>${b.profitMargin.toFixed(2)}`;
         } else {
+          // quantity edit
           cell.innerHTML =
-            `<span class="value">${b.quantity}</span>
-             <i class="fas fa-pencil-alt edit-icon"></i>`;
+            `<span class="value">${b.quantity.toFixed(2)}</span>
+             <i class="fas fa-edit edit-icon"></i>`;
           const remCell = cell.closest('tr').querySelector('.remaining-cell');
           remCell.innerHTML =
-            `${b.remainingQuantity}${b.remainingQuantity===0?'<span class="stock-badge empty">Empty</span>':''}`;
+            `${b.remainingQuantity.toFixed(2)}${b.remainingQuantity===0?'<span class="stock-badge empty">Empty</span>':''}`;
         }
+
+        // update product row summary
         const p = data.product;
         const prodRow = document.getElementById(`product-row-${p.id}`);
         if (prodRow) {
@@ -349,7 +349,8 @@
             `<span class="currency">₹</span>${p.wholesalePrice.toFixed(2)}`;
           prodRow.querySelector('.retail-cell').innerHTML =
             `<span class="currency">₹</span>${p.retailPrice.toFixed(2)}`;
-          prodRow.querySelector('.product-quantity-cell').innerText = p.quantity;
+          prodRow.querySelector('.product-quantity-cell').innerText =
+            p.quantity.toFixed(2);
           prodRow.querySelector('.product-profit-cell').innerHTML =
             `<span class="currency">₹</span>${p.profitMargin.toFixed(2)}`;
         }
@@ -357,7 +358,7 @@
 
       const cancel = () => {
         cell.innerHTML = `<span class="value">${original}</span>
-                          <i class="fas fa-pencil-alt edit-icon"></i>`;
+                          <i class="fas fa-edit edit-icon"></i>`;
         cell.classList.remove('editing');
       };
 

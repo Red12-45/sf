@@ -153,98 +153,93 @@ async function computeDailySummary(accountId, saleDate) {
 /* ─────────── processSale (shared full‑page + Ajax) ─────────── */
 async function processSale(body, user) {
   const accountId = user.accountId;
+
   let {
     productId,
     customProductId,
-    retailPrice,
+    retailPrice,            // ↱ per‑unit price from the form
     saleQuantity,
     saleDate,
     status,
-    extraInfo,
+    extraInfo     = '',
     paymentDetail1,
     paymentDetail2
   } = body;
 
-  // ensure we never send undefined to Firestore
-  extraInfo = extraInfo || '';
+  saleQuantity  = +parseFloat(saleQuantity);      // allow 0.001 etc.
+  retailPrice   = +parseFloat(retailPrice);
 
-  // parse floats
-  saleQuantity = parseFloat(saleQuantity);
-  const userAmt = parseFloat(retailPrice);
+  /* 1. resolve the product ------------------------------------------------ */
+  const selectedProductId = customProductId?.trim()
+    ? customProductId
+    : productId;
 
-  // resolve product
-  const selectedProductId = customProductId?.trim() ? customProductId : productId;
   const productRef = db.collection('products').doc(selectedProductId);
   const productDoc = await productRef.get();
-  if (!productDoc.exists || productDoc.data().accountId !== accountId) {
+  if (!productDoc.exists || productDoc.data().accountId !== accountId)
     throw new Error('Product not found or unauthorized');
-  }
+
   const product = productDoc.data();
 
-  // FIFO from batches
+  /* 2. FIFO from batches --------------------------------------------------- */
   const batchesSnap = await db.collection('stockBatches')
-    .where('productId', '==', selectedProductId)
-    .where('remainingQuantity', '>', 0)
-    .orderBy('batchDate', 'asc')
+    .where('productId','==',selectedProductId)
+    .where('remainingQuantity','>',0)
+    .orderBy('batchDate','asc')
     .get();
 
-  let remaining = saleQuantity,
-      totalWh = 0,
-      totalRt = 0;
+  let remaining      = saleQuantity;
+  let totalWholesale = 0;          // ₹ sum of wholesale charged
+  const batch = db.batch();
+  const batchesUsed = [];          // [{ id, qtyUsed }]
 
-  const batchUpdate = db.batch();
-  batchesSnap.forEach(b => {
-    if (remaining <= 0) return;
-    const d = b.data();
+  for (const b of batchesSnap.docs) {
+    if (remaining <= 0) break;
+    const d    = b.data();
     const take = Math.min(d.remainingQuantity, remaining);
-    totalWh += d.purchasePrice * take;
-    totalRt += d.salePrice * take;
-    batchUpdate.update(b.ref, { remainingQuantity: d.remainingQuantity - take });
+    batch.update(b.ref, {
+      remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
+    });
+    totalWholesale += d.purchasePrice * take;
+    batchesUsed.push({ id: b.id, qtyUsed: take });
     remaining -= take;
-  });
+  }
   if (remaining > 0) throw new Error('Not enough stock');
+  await batch.commit();
 
-  await batchUpdate.commit();
+  const avgWholesale   = +(totalWholesale / saleQuantity).toFixed(2);
+  const profitPerUnit  = +(retailPrice  - avgWholesale ).toFixed(2);
+  const totalSale      = +(retailPrice  * saleQuantity).toFixed(2);
+  const totalProfit    = +(profitPerUnit* saleQuantity).toFixed(2);
 
-  // averages
-  const avgWholesale     = totalWh / saleQuantity;
-  const avgRetailDefault = totalRt / saleQuantity;
-
-  // interpret retailPrice as total sale
-  const totalSaleAmt  = (userAmt > 0 ? userAmt : avgRetailDefault * saleQuantity);
-  const perUnitRetail = (userAmt > 0 ? userAmt / saleQuantity : avgRetailDefault);
-
-  const profitPerUnit = perUnitRetail - avgWholesale;
-  const totalProfit   = totalSaleAmt - (avgWholesale * saleQuantity);
-
-  // decrement product.quantity
+  /* 3. decrement product.quantity ----------------------------------------- */
   await productRef.update({
     quantity: admin.firestore.FieldValue.increment(-saleQuantity)
   });
 
-  // build sale record
+  /* 4. create the sale record --------------------------------------------- */
   const saleData = {
-    productId:      selectedProductId,
-    productName:    product.productName,
-    unit:           product.unit || '',
-    wholesalePrice: avgWholesale,
-    retailPrice:    perUnitRetail,
-    defaultRetail:  avgRetailDefault,
+    productId      : selectedProductId,
+    productName    : product.productName,
+    unit           : product.unit || '',
+    wholesalePrice : avgWholesale,
+    retailPrice    : retailPrice,
     saleQuantity,
-    saleDate,   
+    saleDate,
     profitPerUnit,
-    profit:         totalProfit,
-    totalSale:      totalSaleAmt,
+    profit         : totalProfit,
+    totalSale,
     status,
     extraInfo,
-    createdAt:      new Date(),
+    batchesUsed,
+    createdAt      : new Date(),
     accountId,
-    ...(paymentDetail1 && { paymentDetail1: parseFloat(paymentDetail1) }),
-    ...(paymentDetail2 && { paymentDetail2: parseFloat(paymentDetail2) })
+    ...(paymentDetail1 && { paymentDetail1:+parseFloat(paymentDetail1) }),
+    ...(paymentDetail2 && { paymentDetail2:+parseFloat(paymentDetail2) })
   };
 
   const saleRef = await db.collection('sales').add(saleData);
-  saleData.id = saleRef.id;
+  saleData.id   = saleRef.id;
   return saleData;
 }
 
@@ -984,61 +979,159 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 });
 
 // POST /api/edit-stock-batch-field/:batchId
-app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, res) => {
+app.post('/api/edit-sale', isAuthenticated, async (req, res) => {
   try {
-    const { batchId } = req.params;
-    const { field, value } = req.body;
-    const batchRef = db.collection('stockBatches').doc(batchId);
-    const batchSnap = await batchRef.get();
-    if (!batchSnap.exists) throw new Error('Batch not found');
-    if (batchSnap.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
+    const {
+      saleId,
+      field,
+      value,
+      paymentDetail1,
+      paymentDetail2
+    } = req.body;
 
-    // build update
-    const update = { updatedAt: new Date() };
-    if (field === 'purchasePrice' || field === 'salePrice') {
-      update[field] = parseFloat(value);
-    } else if (field === 'quantity') {
-      const qty = parseInt(value, 10);
-      update.quantity = qty;
-      update.remainingQuantity = qty;
-    } else {
-      throw new Error('Invalid field');
+    /* 0. load the sale ----------------------------------------------------- */
+    const saleRef  = db.collection('sales').doc(saleId);
+    const snap     = await saleRef.get();
+    if (!snap.exists)  return res.json({ success:false, error:'Sale not found' });
+
+    const data = snap.data();
+    if (data.accountId !== req.session.user.accountId)
+      return res.json({ success:false, error:'Access denied' });
+
+    /* guard copies */
+    let newQty        = +data.saleQuantity;
+    let newRetailPU   = +data.retailPrice;         // per‑unit
+    let batchesUsed   = Array.isArray(data.batchesUsed) ? [...data.batchesUsed] : [];
+
+    /* 1. STATUS ONLY ------------------------------------------------------- */
+    if (field === 'status') {
+      const update = { status:value };
+      if (paymentDetail1 !== undefined) update.paymentDetail1 = +parseFloat(paymentDetail1 || 0);
+      if (paymentDetail2 !== undefined) update.paymentDetail2 = +parseFloat(paymentDetail2 || 0);
+      await saleRef.update(update);
+
+      const { summary } = await computeDailySummary(
+        req.session.user.accountId, data.saleDate
+      );
+      return res.json({
+        success:true,
+        updatedRow:update,
+        summary
+      });
     }
-    await batchRef.update(update);
 
-    // re‑compute profitMargin on this batch only
-    const updated = (await batchRef.get()).data();
-    const profitMargin = updated.salePrice - updated.purchasePrice;
-    await batchRef.update({ profitMargin });
+    /* 2. NUMERIC EDIT ------------------------------------------------------ */
+    if (field === 'saleQuantity')   newQty      = +parseFloat(value);
+    if (field === 'retailPrice')    newRetailPU = +parseFloat(value);
 
-    // **NEW**: recalc parent product and fetch its updated data
-    const productId = batchSnap.data().productId;
-    await recalcProductFromBatches(productId);
-    const productSnap = await db.collection('products').doc(productId).get();
-    const prod = productSnap.data();
+    /* delta qty determines stock action (+ consume, – return) ------------- */
+    const delta = +(newQty - data.saleQuantity);
+    const batchCol = db.collection('stockBatches');
+    const stockOps = db.batch();
 
-    res.json({
-      success: true,
-      batch: {
-        purchasePrice: updated.purchasePrice,
-        salePrice:     updated.salePrice,
-        quantity:      updated.quantity,
-        remainingQuantity: updated.remainingQuantity,
-        profitMargin
-      },
-      product: {
-        id: productSnap.id,
-        wholesalePrice: prod.wholesalePrice,
-        retailPrice:    prod.retailPrice,
-        quantity:       prod.quantity,
-        profitMargin:   prod.profitMargin
+    if (delta > 0) {
+      /* take more stock (FIFO) */
+      let need = delta;
+      const fifo = await batchCol
+        .where('productId','==',data.productId)
+        .where('remainingQuantity','>',0)
+        .orderBy('batchDate','asc')
+        .get();
+
+      for (const b of fifo.docs) {
+        if (need <= 0) break;
+        const d    = b.data();
+        const take = Math.min(d.remainingQuantity, need);
+        stockOps.update(b.ref,{
+          remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
+        });
+        const idx = batchesUsed.findIndex(x => x.id === b.id);
+        if (idx > -1) batchesUsed[idx].qtyUsed += take;
+        else          batchesUsed.push({ id:b.id, qtyUsed:take });
+        need -= take;
       }
+      if (need > 0)
+        return res.json({ success:false, error:'Not enough stock to increase quantity' });
+
+    } else if (delta < 0) {
+      /* return stock (LIFO) */
+      let give = -delta;
+      for (const u of [...batchesUsed].reverse()) {
+        if (give <= 0) break;
+        const ret = Math.min(u.qtyUsed, give);
+        const ref = batchCol.doc(u.id);
+        const bd  = await ref.get();
+        if (!bd.exists) continue;
+        stockOps.update(ref,{
+          remainingQuantity: +(bd.data().remainingQuantity + ret).toFixed(3)
+        });
+        u.qtyUsed -= ret;
+        give      -= ret;
+      }
+      batchesUsed = batchesUsed.filter(u => u.qtyUsed > 0.0001);
+    }
+
+    await stockOps.commit();
+
+    /* 3. re‑compute product quantity -------------------------------------- */
+    const prodRef = db.collection('products').doc(data.productId);
+    const invSnap = await batchCol.where('productId','==',data.productId).get();
+    let productQty = 0;
+    invSnap.forEach(d => productQty += +d.data().remainingQuantity);
+    await prodRef.update({ quantity:+productQty.toFixed(3) });
+
+    /* 4. fresh wholesale average ------------------------------------------ */
+    let wSum = 0;
+    for (const u of batchesUsed) {
+      const bd = await batchCol.doc(u.id).get();
+      if (bd.exists) wSum += bd.data().purchasePrice * u.qtyUsed;
+    }
+    const avgWholesale = newQty ? +(wSum / newQty).toFixed(2) : 0;
+
+    const profitPerUnit = +(newRetailPU - avgWholesale).toFixed(2);
+    const totalSale     = +(newRetailPU * newQty).toFixed(2);
+    const totalProfit   = +(profitPerUnit * newQty).toFixed(2);
+
+    /* 5. update the sale --------------------------------------------------- */
+    await saleRef.update({
+      saleQuantity   : newQty,
+      retailPrice    : newRetailPU,
+      wholesalePrice : avgWholesale,
+      totalSale,
+      profitPerUnit,
+      profit         : totalProfit,
+      batchesUsed,
+      productName    : data.productName.includes('(updated)')
+                        ? data.productName
+                        : data.productName + ' (updated)'
     });
+
+    /* 6. return row + fresh summary --------------------------------------- */
+    const { summary } = await computeDailySummary(
+      req.session.user.accountId, data.saleDate
+    );
+
+    return res.json({
+      success:true,
+      updatedRow:{
+        saleQuantity   : +newQty.toFixed(3),
+        retailPrice    : +newRetailPU.toFixed(2),
+        wholesalePrice : avgWholesale,
+        totalSale,
+        profitPerUnit,
+        profit         : totalProfit,
+        productName    : data.productName.includes('(updated)')
+                          ? data.productName
+                          : data.productName + ' (updated)'
+      },
+      summary
+    });
+
   } catch (err) {
-    res.json({ success: false, error: err.toString() });
+    console.error(err);
+    return res.json({ success:false, error:err.message });
   }
 });
-
 
 // POST /edit-stock-batch/:batchId
 app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
@@ -1086,7 +1179,6 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 
 
 /* ─────────── SALES & PROFIT REPORTING ─────────── */
-// GET /sales
 // ────────────────────────────────────────────────────────────────
 // GET  /sales  – Sales + Expense report with optional filters
 // ────────────────────────────────────────────────────────────────
@@ -1095,81 +1187,84 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
     const accountId = req.session.user.accountId;
     const { saleDate, month, status } = req.query;
 
-    /* -------------------------------------------------- */
-    /* 1. Build the two Firestore queries                 */
-    /* -------------------------------------------------- */
-    let salesQ    = db.collection('sales')   .where('accountId','==',accountId)
-                      .orderBy('createdAt','desc');
-    let expenseQ  = db.collection('expenses').where('accountId','==',accountId)
-                      .orderBy('createdAt','desc');
+    // 1. Build the two Firestore queries
+    let salesQ   = db.collection('sales')
+                     .where('accountId','==',accountId)
+                     .orderBy('createdAt','desc');
+    let expenseQ = db.collection('expenses')
+                     .where('accountId','==',accountId)
+                     .orderBy('createdAt','desc');
 
     if (saleDate) {
-      salesQ   = salesQ  .where('saleDate','==',saleDate);
+      salesQ   = salesQ.where('saleDate','==',saleDate);
       expenseQ = expenseQ.where('saleDate','==',saleDate);
     } else if (month) {
-      const [y,m]  = month.split('-');
-      const start  = `${month}-01`;
-      let nextM    = parseInt(m,10)+1, nextY=parseInt(y,10);
-      if (nextM>12) { nextM=1; nextY++; }
+      const [y,m] = month.split('-');
+      const start = `${month}-01`;
+      let nextM   = parseInt(m,10) + 1, nextY = parseInt(y,10);
+      if (nextM > 12) { nextM = 1; nextY++; }
       const end = `${nextY}-${String(nextM).padStart(2,'0')}-01`;
-      salesQ   = salesQ  .where('saleDate','>=',start).where('saleDate','<',end);
+      salesQ   = salesQ.where('saleDate','>=',start).where('saleDate','<',end);
       expenseQ = expenseQ.where('saleDate','>=',start).where('saleDate','<',end);
     }
 
-    if (status && status.trim() && status!=='All') {
+    if (status && status.trim() && status !== 'All') {
       salesQ = salesQ.where('status','==',status);
     }
 
-    /* -------------------------------------------------- */
-    /* 2. Run them in parallel                            */
-    /* -------------------------------------------------- */
-    const [salesSnap, expSnap] = await Promise.all([salesQ.get(), expenseQ.get()]);
+    // 2. Run them in parallel
+    const [salesSnap, expSnap] = await Promise.all([ salesQ.get(), expenseQ.get() ]);
     const sales    = salesSnap.docs.map(d => ({ id:d.id, ...d.data() }));
     const expenses = expSnap .docs.map(d => ({ id:d.id, ...d.data() }));
 
-    /* -------------------------------------------------- */
-    /* 3. Gather every unique date we touched             */
-    /* -------------------------------------------------- */
+    // 3. Gather every unique date we touched
     const dateSet = new Set();
     sales.forEach(s   => dateSet.add(s.saleDate));
     expenses.forEach(e=> dateSet.add(e.saleDate));
     const allDates = Array.from(dateSet);
 
-    /* -------------------------------------------------- */
-    /* 4. Fetch opening / closing times for each date     */
-    /* -------------------------------------------------- */
-    const openingTimes = {};
-    await Promise.all(allDates.map(async date => {                      //   ★ FIX
-      const obDoc = await db.collection('openingBalances')
-                            .doc(`${accountId}_${date}`)                //   ★ FIX
-                            .get();
-      openingTimes[date] = obDoc.exists
-        ? { openingTime: obDoc.data().openingTime || '',
-            closingTime: obDoc.data().closingTime || '' }
-        : { openingTime:'', closingTime:'' };
+    // 4. Fetch opening / closing times and balances for each date
+    const openingTimes      = {};
+    const openingBalances   = {};
+    await Promise.all(allDates.map(async date => {
+      const obRef = db.collection('openingBalances').doc(`${accountId}_${date}`);
+      const obDoc = await obRef.get();
+      if (obDoc.exists) {
+        const data = obDoc.data();
+        openingTimes[date]    = {
+          openingTime: data.openingTime || '',
+          closingTime: data.closingTime || ''
+        };
+        openingBalances[date] = parseFloat(data.balance || 0);
+      } else {
+        openingTimes[date]    = { openingTime:'', closingTime:'' };
+        openingBalances[date] = 0;
+      }
     }));
 
-    /* -------------------------------------------------- */
-    /* 5. Profit & expense roll‑ups                       */
-    /* -------------------------------------------------- */
+    // 5. Profit & expense roll‑ups (unchanged)
     const profitWithoutExpenses = sales.reduce((sum,s)=>sum+s.profit,0);
     const totalExpensesAmount   = expenses.reduce((sum,e)=>sum+e.expenseCost,0);
     const profitAfterExpenses   = profitWithoutExpenses - totalExpensesAmount;
 
-    /* -------------------------------------------------- */
-    /* 6. Render                                          */
-    /* -------------------------------------------------- */
-    res.render('sales',{
-      sales, expenses,
-      saleDate, month, status,
-      profitWithoutExpenses, totalExpensesAmount, profitAfterExpenses,
-      openingTimes
+    // 6. Render
+    res.render('sales', {
+      sales,
+      expenses,
+      saleDate,
+      month,
+      status,
+      profitWithoutExpenses,
+      totalExpensesAmount,
+      profitAfterExpenses,
+      openingTimes,
+      openingBalances    // 👈 new
     });
-
   } catch (err) {
     res.status(500).send(err.toString());
   }
 });
+
 
 
 // POST /api/edit-sale
@@ -1183,103 +1278,108 @@ app.post('/api/edit-sale', async (req, res) => {
       paymentDetail2
     } = req.body;
 
-    const saleRef = db.collection('sales').doc(saleId);
+    const saleRef  = db.collection('sales').doc(saleId);
     const saleSnap = await saleRef.get();
-    if (!saleSnap.exists) return res.json({ success: false, error: 'Sale not found' });
+    if (!saleSnap.exists) return res.json({ success:false, error:'Sale not found' });
+
     const data = saleSnap.data();
 
-    // ─────────── Handle status + details ───────────
+    /* ─── 1. STATUS EDIT (unchanged apart from two‑decimal parsing) ─── */
     if (field === 'status') {
       const updateData = { status: value };
-      if (paymentDetail1 !== undefined) updateData.paymentDetail1 = parseFloat(paymentDetail1);
-      if (paymentDetail2 !== undefined) updateData.paymentDetail2 = parseFloat(paymentDetail2);
+      if (paymentDetail1 !== undefined) updateData.paymentDetail1 = parseFloat(paymentDetail1 || 0);
+      if (paymentDetail2 !== undefined) updateData.paymentDetail2 = parseFloat(paymentDetail2 || 0);
       await saleRef.update(updateData);
-    } else {
-      // ─────────── Original quantity/retail inline‐edit logic ───────────
 
-      // 1) Parse new values
+    /* ─── 2. RETAIL / QUANTITY INLINE EDIT ─── */
+    } else {
+
+      /* 2‑a · new values parsed as **float** so 0.75 kg etc. work */
       const oldQty    = data.saleQuantity;
       const oldRetail = data.retailPrice;
-      const newQty    = field === 'saleQuantity' ? parseInt(value, 10) : oldQty;
-      const newRetail = field === 'retailPrice'   ? parseFloat(value)   : oldRetail;
+      const newQty    = field === 'saleQuantity' ? parseFloat(value) : oldQty;
+      const newRetail = field === 'retailPrice'  ? parseFloat(value) : oldRetail;
 
-      // 2) Adjust stock batches by deltaQty
-      const deltaQty = newQty - oldQty;
-      const batchDb  = db.collection('stockBatches');
+      /* 2‑b · stock adjustment (FIFO undo / consume) — unchanged logic */
+      const deltaQty = +(newQty - oldQty);              // may be decimal now
+      const batchCol = db.collection('stockBatches');
       const batchOps = db.batch();
 
-      // clone existing usage array
       const updatedBatchesUsed = Array.isArray(data.batchesUsed)
         ? data.batchesUsed.map(u => ({ ...u }))
         : [];
 
+      /* consume extra stock  (deltaQty > 0) */
       if (deltaQty > 0) {
-        // consume extra units FIFO
         let toTake = deltaQty;
-        const snap = await batchDb
+        const snap = await batchCol
           .where('productId','==', data.productId)
           .where('remainingQuantity','>', 0)
           .orderBy('batchDate','asc')
           .get();
         for (const b of snap.docs) {
           if (toTake <= 0) break;
-          const d = b.data();
+          const d    = b.data();
           const take = Math.min(d.remainingQuantity, toTake);
-          batchOps.update(b.ref, { remainingQuantity: d.remainingQuantity - take });
-          const idx = updatedBatchesUsed.findIndex(u => u.id === b.id);
+          batchOps.update(b.ref, {
+            remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
+          });
+          const idx  = updatedBatchesUsed.findIndex(u => u.id === b.id);
           if (idx > -1) updatedBatchesUsed[idx].qtyUsed += take;
-          else            updatedBatchesUsed.push({ id: b.id, qtyUsed: take });
+          else          updatedBatchesUsed.push({ id: b.id, qtyUsed: take });
           toTake -= take;
         }
-        if (toTake > 0) return res.json({ success: false, error: 'Not enough stock to increase quantity' });
+        if (toTake > 0) return res.json({ success:false, error:'Not enough stock to increase quantity' });
 
+      /* return stock  (deltaQty < 0) */
       } else if (deltaQty < 0) {
-        // return units back to batches
         let toReturn = -deltaQty;
         for (const usage of updatedBatchesUsed.slice().reverse()) {
           if (toReturn <= 0) break;
-          const ret = Math.min(usage.qtyUsed, toReturn);
-          const batchRef2 = batchDb.doc(usage.id);
-          const batchSnap2= await batchRef2.get();
+          const ret        = Math.min(usage.qtyUsed, toReturn);
+          const batchRef2  = batchCol.doc(usage.id);
+          const batchSnap2 = await batchRef2.get();
           if (!batchSnap2.exists) continue;
           const currRem = batchSnap2.data().remainingQuantity || 0;
-          batchOps.update(batchRef2, { remainingQuantity: currRem + ret });
+          batchOps.update(batchRef2, {
+            remainingQuantity: +(currRem + ret).toFixed(3)
+          });
           usage.qtyUsed -= ret;
-          toReturn   -= ret;
+          toReturn      -= ret;
         }
-        // drop zero‐usage entries
+        /* drop zero‑usage entries */
         for (let i = updatedBatchesUsed.length - 1; i >= 0; i--) {
-          if (updatedBatchesUsed[i].qtyUsed <= 0) updatedBatchesUsed.splice(i, 1);
+          if (updatedBatchesUsed[i].qtyUsed <= 0.0001) updatedBatchesUsed.splice(i, 1);
         }
       }
 
-      // commit batch updates
       await batchOps.commit();
 
-      // 3) Recompute product.quantity
-      const recalcSnap = await batchDb.where('productId','==', data.productId).get();
-      let sumRemaining = 0;
-      recalcSnap.docs.forEach(d => sumRemaining += (d.data().remainingQuantity || 0));
-      await db.collection('products').doc(data.productId).update({ quantity: sumRemaining });
+      /* 2‑c · re‑compute product stock */
+      const invSnap = await batchCol.where('productId','==', data.productId).get();
+      let sumRem = 0;
+      invSnap.docs.forEach(d => sumRem += (d.data().remainingQuantity || 0));
+      await db.collection('products').doc(data.productId).update({
+        quantity: +sumRem.toFixed(3)
+      });
 
-      // 4) Recalculate weighted average wholesale price
-      let totalWholesale = 0;
+      /* 2‑d · weighted average wholesale for newQty             */
+      let tWh = 0;
       for (const u of updatedBatchesUsed) {
-        const bdoc = await batchDb.doc(u.id).get();
+        const bdoc = await batchCol.doc(u.id).get();
         if (!bdoc.exists) continue;
-        const pPrice = bdoc.data().purchasePrice;
-        totalWholesale += pPrice * u.qtyUsed;
+        tWh += bdoc.data().purchasePrice * u.qtyUsed;
       }
-      const avgWholesale = newQty > 0 ? (totalWholesale / newQty) : 0;
+      const avgWholesale = newQty ? +(tWh / newQty).toFixed(2) : 0;
 
-      // 5) Compute profit figures
-      const profitPerUnit = newRetail - avgWholesale;
-      const totalProfit   = profitPerUnit * newQty;
-      const totalSale     = newRetail * newQty;
+      /* 2‑e · profit math + update                              */
+      const profitPerUnit = +(newRetail - avgWholesale).toFixed(2);
+      const totalProfit   = +(profitPerUnit * newQty).toFixed(2);
+      const totalSale     = +(newRetail * newQty).toFixed(2);
 
-      // 6) Update the sale document
-      const updatedName = (newQty !== oldQty || newRetail !== oldRetail) && !data.productName.includes('(updated)')
-        ? data.productName + '(updated)'
+      const updatedName = (newQty !== oldQty || newRetail !== oldRetail) &&
+                          !data.productName.includes('(updated)')
+        ? data.productName + ' (updated)'
         : data.productName;
 
       await saleRef.update({
@@ -1294,91 +1394,100 @@ app.post('/api/edit-sale', async (req, res) => {
       });
     }
 
-    // ─────────── Recompute daily summary ───────────
+    /* ─── 3. recompute same‑day summary for the UI ─── */
     const date = data.saleDate;
-    const [salesSnap2, expSnap2] = await Promise.all([
+    const [salesSnap, expSnap] = await Promise.all([
       db.collection('sales').where('saleDate','==', date).get(),
       db.collection('expenses').where('saleDate','==', date).get()
     ]);
-    let tS=0, tP=0, cS=0, oS=0, nS=0, cE=0, oE=0;
-    salesSnap2.forEach(d => {
-      const s = d.data(), amt = s.retailPrice * s.saleQuantity;
-      tS += amt; tP += s.profit;
-      switch(s.status){
-        case 'Paid Cash': cS += amt; break;
-        case 'Paid Online': oS += amt; break;
-        case 'Not Paid': nS += amt; break;
-        case 'Half Cash + Half Online':
-          if(s.paymentDetail1) cS += parseFloat(s.paymentDetail1);
-          if(s.paymentDetail2) oS += parseFloat(s.paymentDetail2);
-          break;
-        case 'Half Cash + Not Paid':
-          if(s.paymentDetail1) cS += parseFloat(s.paymentDetail1);
-          if(s.paymentDetail2) nS += parseFloat(s.paymentDetail2);
-          break;
-        case 'Half Online + Not Paid':
-          if(s.paymentDetail1) oS += parseFloat(s.paymentDetail1);
-          if(s.paymentDetail2) nS += parseFloat(s.paymentDetail2);
-          break;
-      }
-    });
-    expSnap2.forEach(d => {
-      const e = d.data();
-      switch(e.expenseStatus){
-        case 'Paid Cash': cE += parseFloat(e.expenseCost); break;
-        case 'Paid Online': oE += parseFloat(e.expenseCost); break;
-        case 'Half Cash + Half Online':
-          if(e.expenseDetail1) cE += parseFloat(e.expenseDetail1);
-          if(e.expenseDetail2) oE += parseFloat(e.expenseDetail2);
-          break;
-        case 'Half Cash + Not Paid':
-          if(e.expenseDetail1) cE += parseFloat(e.expenseDetail1);
-          break;
-        case 'Half Online + Not Paid':
-          if(e.expenseDetail1) oE += parseFloat(e.expenseDetail1);
-          break;
-      }
-    });
-    const summary = {
-      totalSales:          tS,
-      totalProfit:         tP,
-      totalCashSales:      cS,
-      totalOnlineSales:    oS,
-      totalNotPaidSales:   nS,
-      totalCashExpenses:   cE,
-      totalOnlineExpenses: oE,
-      finalCash:           cS - cE
-    };
 
-    // 8) Return success + updatedRow + summary
-    // For status edits, include the two details in updatedRow
+    let sum   = { totalSales:0, totalProfit:0,
+                  totalCashSales:0, totalOnlineSales:0, totalNotPaidSales:0,
+                  totalCashExpenses:0, totalOnlineExpenses:0, finalCash:0 };
+
+    /* sales roll‑up */
+    salesSnap.forEach(d => {
+      const s   = d.data(),
+            amt = s.retailPrice * s.saleQuantity;
+      sum.totalSales  += amt;
+      sum.totalProfit += s.profit;
+
+      switch (s.status) {
+        case 'Paid Cash':                    sum.totalCashSales += amt; break;
+        case 'Paid Online':                  sum.totalOnlineSales += amt; break;
+        case 'Not Paid':                     sum.totalNotPaidSales += amt; break;
+        case 'Half Cash + Half Online':
+          if (s.paymentDetail1) sum.totalCashSales   += +s.paymentDetail1;
+          if (s.paymentDetail2) sum.totalOnlineSales += +s.paymentDetail2;
+          break;
+        case 'Half Cash + Not Paid':
+          if (s.paymentDetail1) sum.totalCashSales   += +s.paymentDetail1;
+          if (s.paymentDetail2) sum.totalNotPaidSales+= +s.paymentDetail2;
+          break;
+        case 'Half Online + Not Paid':
+          if (s.paymentDetail1) sum.totalOnlineSales += +s.paymentDetail1;
+          if (s.paymentDetail2) sum.totalNotPaidSales+= +s.paymentDetail2;
+          break;
+      }
+    });
+
+    /* expense roll‑up */
+    expSnap.forEach(d => {
+      const e = d.data();
+      switch (e.expenseStatus) {
+        case 'Paid Cash':                    sum.totalCashExpenses += +e.expenseCost; break;
+        case 'Paid Online':                  sum.totalOnlineExpenses += +e.expenseCost; break;
+        case 'Half Cash + Half Online':
+          if (e.expenseDetail1) sum.totalCashExpenses   += +e.expenseDetail1;
+          if (e.expenseDetail2) sum.totalOnlineExpenses += +e.expenseDetail2;
+          break;
+        case 'Half Cash + Not Paid':
+          if (e.expenseDetail1) sum.totalCashExpenses   += +e.expenseDetail1;
+          break;
+        case 'Half Online + Not Paid':
+          if (e.expenseDetail1) sum.totalOnlineExpenses += +e.expenseDetail1;
+          break;
+      }
+    });
+
+    sum.finalCash = +(sum.totalCashSales - sum.totalCashExpenses).toFixed(2);
+    sum.totalSales      = +sum.totalSales.toFixed(2);
+    sum.totalProfit     = +sum.totalProfit.toFixed(2);
+    sum.totalCashSales  = +sum.totalCashSales.toFixed(2);
+    sum.totalOnlineSales= +sum.totalOnlineSales.toFixed(2);
+    sum.totalNotPaidSales=+sum.totalNotPaidSales.toFixed(2);
+    sum.totalCashExpenses=+sum.totalCashExpenses.toFixed(2);
+    sum.totalOnlineExpenses=+sum.totalOnlineExpenses.toFixed(2);
+
+    /* build updatedRow payload (numeric values already 2‑dp)   */
     let updatedRow = {};
-    if (req.body.field === 'status') {
-      updatedRow.status = req.body.value;
-      if (req.body.paymentDetail1 !== undefined)
-        updatedRow.paymentDetail1 = parseFloat(req.body.paymentDetail1);
-      if (req.body.paymentDetail2 !== undefined)
-        updatedRow.paymentDetail2 = parseFloat(req.body.paymentDetail2);
-    } else {
-      // numeric edits already updated above; re-fetch if needed
-      const fresh = await saleRef.get();
-      const d = fresh.data();
+    if (field === 'status') {
       updatedRow = {
-        saleQuantity:   d.saleQuantity,
-        wholesalePrice: d.wholesalePrice,
-        retailPrice:    d.retailPrice,
-        totalSale:      d.totalSale,
-        profitPerUnit:  d.profitPerUnit,
-        profit:         d.profit,
-        productName:    d.productName
+        status: value,
+        ...(paymentDetail1 !== undefined && { paymentDetail1: +paymentDetail1 }),
+        ...(paymentDetail2 !== undefined && { paymentDetail2: +paymentDetail2 })
+      };
+    } else {
+      updatedRow = {
+        saleQuantity:   +newQty.toFixed(2),
+        wholesalePrice: avgWholesale,
+        retailPrice:    +newRetail.toFixed(2),
+        totalSale,
+        profitPerUnit,
+        profit:         totalProfit,
+        productName:    data.productName.includes('(updated)')
+                          ? data.productName
+                          : data.productName + ' (updated)'
       };
     }
 
-    return res.json({ success: true, updatedRow, summary });
+    return res.json({ success:true, updatedRow, summary:sum });
+
   } catch (error) {
-    return res.json({ success: false, error: error.message });
+    return res.json({ success:false, error:error.message });
   }
 });
+
 
 
 
