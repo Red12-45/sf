@@ -153,132 +153,99 @@ async function computeDailySummary(accountId, saleDate) {
 /* ─────────── processSale (shared full‑page + Ajax) ─────────── */
 async function processSale(body, user) {
   const accountId = user.accountId;
-
   let {
-    productId, customProductId, retailPrice,
-    saleQuantity, saleDate, status,
-    extraInfo, paymentDetail1, paymentDetail2
-  } = body;
-
-  /* -------------------------------------------------- */
-  /* basic look‑ups & validations                       */
-  /* -------------------------------------------------- */
-  const selectedProductId = (customProductId && customProductId.trim())
-      ? customProductId
-      : productId;
-
-  saleQuantity      = parseInt(saleQuantity, 10);
-  const chosenRetailPrice = parseFloat(retailPrice);
-
-  const productRef = db.collection('products').doc(selectedProductId);
-  const productDoc = await productRef.get();
-  if (!productDoc.exists)               throw new Error('Product not found');
-  const product = productDoc.data();
-  if (product.accountId !== accountId)  throw new Error('Unauthorized');
-
-  /* -------------------------------------------------- */
-  /* FIFO: walk through batches to get weighted prices  */
-  /* -------------------------------------------------- */
-  const batchesSnap = await db.collection('stockBatches')
-    .where('productId',        '==', selectedProductId)
-    .where('remainingQuantity','>',  0)
-    .orderBy('batchDate', 'asc')
-    .get();
-
-  let remaining        = saleQuantity;
-  let totalWholesale   = 0;
-  let weightedRetail   = 0;
-  const updates = [];              // batch‑quantity updates  (NOW stores qtyUsed)
-
-  batchesSnap.forEach(b => {
-    if (remaining <= 0) return;
-    const d    = b.data();
-    const take = Math.min(d.remainingQuantity, remaining);
-
-    totalWholesale += d.purchasePrice * take;
-    weightedRetail += d.salePrice     * take;
-    remaining      -= take;
-
-    updates.push({ id: b.id, qtyUsed: take,                 //  ◀── new
-                   newRemaining: d.remainingQuantity - take });
-  });
-
-  if (remaining > 0) throw new Error('Not enough stock (batches)');
-
-  /* -------------------------------------------------- */
-  /* maths                                              */
-  /* -------------------------------------------------- */
-  const avgWholesale     = totalWholesale  / saleQuantity;
-  const avgRetailDefault = weightedRetail  / saleQuantity;   // default retail
-  const profitPerUnit    = chosenRetailPrice - avgWholesale;
-  const totalProfit      = profitPerUnit * saleQuantity;
-  const totalSaleValue   = chosenRetailPrice * saleQuantity;
-
-  /* -------------------------------------------------- */
-  /* NEW: opening balance for this date                 */
-  /* -------------------------------------------------- */
-  const obDoc = await db.collection('openingBalances')
-                        .doc(`${accountId}_${saleDate}`)
-                        .get();
-  const openingBalance = obDoc.exists ? (obDoc.data().balance || 0) : 0;
-
-  /* -------------------------------------------------- */
-  /* update every batch’s remainingQuantity in one go   */
-  /* -------------------------------------------------- */
-  const batchUpdate = db.batch();
-  updates.forEach(u => {
-    batchUpdate.update(
-      db.collection('stockBatches').doc(u.id),
-      { remainingQuantity: u.newRemaining }
-    );
-  });
-  await batchUpdate.commit();
-
-  /* -------------------------------------------------- */
-  /* update product stock                               */
-  /* -------------------------------------------------- */
-  const newQty = product.quantity - saleQuantity;
-  if (newQty < 0) throw new Error('Not enough stock');
-  await productRef.update({ quantity: newQty });
-
-  /* -------------------------------------------------- */
-  /* build and store the sale document                  */
-  /* -------------------------------------------------- */
-  const saleData = {
-    productId      : selectedProductId,
-    productName    : product.productName,
-    wholesalePrice : avgWholesale,
-    retailPrice    : chosenRetailPrice,
-
-    defaultRetail  : avgRetailDefault,
-    openingBalance,
-
+    productId,
+    customProductId,
+    retailPrice,
     saleQuantity,
-    profit         : totalProfit,
-    profitPerUnit,
-    totalSale      : totalSaleValue,
-    unit           : product.unit || '-',
     saleDate,
     status,
-    extraInfo,
-    createdAt      : new Date(),
-    accountId,
-    customProductId: (product.productId && product.productId.trim())
-                      ? product.productId.trim()
-                      : '-',
+    extraInfo,        // ← will now always be defined (at worst an empty string)
+    paymentDetail1,
+    paymentDetail2
+  } = body;
 
-    /* batches involved → required for undo */
-    batchesUsed    : updates.map(u => ({ id: u.id, qtyUsed: u.qtyUsed }))
+  // ensure we never send undefined to Firestore
+  extraInfo = extraInfo || '';
+
+  // parse floats
+  saleQuantity = parseFloat(saleQuantity);
+  const userAmt = parseFloat(retailPrice);
+
+  // resolve product
+  const selectedProductId = customProductId?.trim() ? customProductId : productId;
+  const productRef = db.collection('products').doc(selectedProductId);
+  const productDoc = await productRef.get();
+  if (!productDoc.exists || productDoc.data().accountId !== accountId) {
+    throw new Error('Product not found or unauthorized');
+  }
+  const product = productDoc.data();
+
+  // FIFO from batches
+  const batchesSnap = await db.collection('stockBatches')
+    .where('productId','==',selectedProductId)
+    .where('remainingQuantity','>',0)
+    .orderBy('batchDate','asc')
+    .get();
+
+  let remaining = saleQuantity,
+      totalWh = 0,
+      totalRt = 0;
+
+  const batchUpdate = db.batch();
+  batchesSnap.forEach(b => {
+    if (remaining <= 0) return;
+    const d = b.data();
+    const take = Math.min(d.remainingQuantity, remaining);
+    totalWh += d.purchasePrice * take;
+    totalRt += d.salePrice     * take;
+    batchUpdate.update(b.ref, { remainingQuantity: d.remainingQuantity - take });
+    remaining -= take;
+  });
+  if (remaining > 0) throw new Error('Not enough stock');
+
+  await batchUpdate.commit();
+
+  // averages
+  const avgWholesale    = totalWh / saleQuantity;
+  const avgRetailDefault= totalRt / saleQuantity;
+
+  // interpret retailPrice as total sale
+  const totalSaleAmt    = (userAmt > 0 ? userAmt : avgRetailDefault * saleQuantity);
+  const perUnitRetail   = (userAmt > 0 ? userAmt / saleQuantity : avgRetailDefault);
+
+  const profitPerUnit   = perUnitRetail - avgWholesale;
+  const totalProfit     = totalSaleAmt - (avgWholesale * saleQuantity);
+
+  // decrement product.quantity
+  await productRef.update({
+    quantity: admin.firestore.FieldValue.increment(-saleQuantity)
+  });
+
+  // build sale record
+  const saleData = {
+    productId:       selectedProductId,
+    productName:     product.productName,
+    wholesalePrice:  avgWholesale,
+    retailPrice:     perUnitRetail,
+    defaultRetail:   avgRetailDefault,
+    saleQuantity,
+    profitPerUnit,
+    profit:          totalProfit,
+    totalSale:       totalSaleAmt,
+    status,
+    extraInfo,       // ← now always defined!
+    createdAt:       new Date(),
+    accountId,
+    ...(paymentDetail1 && { paymentDetail1: parseFloat(paymentDetail1) }),
+    ...(paymentDetail2 && { paymentDetail2: parseFloat(paymentDetail2) })
   };
 
-  if (paymentDetail1) saleData.paymentDetail1 = parseFloat(paymentDetail1);
-  if (paymentDetail2) saleData.paymentDetail2 = parseFloat(paymentDetail2);
-
-  /* save + return with its Firestore ID */
   const saleRef = await db.collection('sales').add(saleData);
-  saleData.id   = saleRef.id;
+  saleData.id = saleRef.id;
   return saleData;
 }
+
 
 
 /* ─────────── processExpense (shared) ─────────── */
