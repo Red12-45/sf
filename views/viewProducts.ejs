@@ -170,7 +170,6 @@
                               <th>Time Added</th>
                               <th>Purchase Price</th>
                               <th>Retail Price</th>
-                              <th>Product ID</th>
                               <th>Profit Margin</th>
                               <th>Quantity</th>
                               <th>Unit</th>
@@ -201,11 +200,7 @@
                                   <i class="fas fa-pencil-alt edit-icon"></i>
                                 </td>
 
-                                <td>
-                                  <%= batch.batchProductId 
-                                        ? batch.batchProductId 
-                                        : (product.productId ? product.productId : '-') %>
-                                </td>
+                              
                                 <td class="price-cell">
                                   <span class="currency">₹</span><%= Number(batch.profitMargin).toFixed(2) %>
                                 </td>
