@@ -62,7 +62,9 @@
             <label for="categorySelect">Category:</label>
             <select id="categorySelect">
               <option value="">-- Select a category --</option>
-              <% categories.sort().forEach(cat => { %>
+              <% categories
+                   .sort((a, b) => a.localeCompare(b))
+                   .forEach(cat => { %>
                 <option value="<%= cat %>"><%= cat %></option>
               <% }); %>
             </select>
@@ -73,13 +75,16 @@
             <label for="productSelect">Product:</label>
             <select id="productSelect" name="productId" required>
               <option value="">-- Select a product --</option>
-              <% products.forEach(product => { %>
+              <% products
+                   .sort((a, b) => a.productName.localeCompare(b.productName))
+                   .forEach(product => { %>
                 <option
                   value="<%= product.id %>"
                   data-category="<%= product.category %>"
                   data-retail="<%= product.retailPrice %>"
                   data-batches='<%= JSON.stringify(product.batches || []) %>'>
-                  <%= product.productName %> (Stock: <%= product.quantity %>)
+                  <%= product.productName %>
+                  (Stock: <%= parseFloat(product.quantity).toFixed(2) %>)
                 </option>
               <% }); %>
             </select>
@@ -112,31 +117,19 @@
           <!-- Computed Avg. Wholesale -->
           <div>
             <label for="wholesalePrice">Avg. Wholesale Price/Unit:</label>
-            <input
-              type="text"
-              id="wholesalePrice"
-              name="wholesalePrice"
-              readonly>
+            <input type="text" id="wholesalePrice" name="wholesalePrice" readonly>
           </div>
       
           <!-- Computed Profit/Unit -->
           <div>
             <label for="profitPerUnit">Profit/Unit:</label>
-            <input
-              type="text"
-              id="profitPerUnit"
-              name="profitPerUnit"
-              readonly>
+            <input type="text" id="profitPerUnit" name="profitPerUnit" readonly>
           </div>
       
           <!-- Computed Total Profit -->
           <div>
             <label for="totalProfit">Total Profit:</label>
-            <input
-              type="text"
-              id="totalProfit"
-              name="totalProfit"
-              readonly>
+            <input type="text" id="totalProfit" name="totalProfit" readonly>
           </div>
       
           <!-- Sale Date -->
@@ -166,14 +159,12 @@
           <!-- Extra Info -->
           <div>
             <label for="extraInfo">Extra Info:</label>
-            <textarea
-              id="extraInfo"
-              name="extraInfo"
-              rows="2"
-              cols="30"></textarea>
+            <textarea id="extraInfo" name="extraInfo" rows="2" cols="30"></textarea>
           </div>
       
-          <button type="submit"><i class="fas fa-check-circle"></i> Process Sale</button>
+          <button type="submit">
+            <i class="fas fa-check-circle"></i> Process Sale
+          </button>
         </form>
       </div>
       
@@ -291,16 +282,10 @@
                   <td><%= sale.productName %></td>
                   <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
                   <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
-                  <td><%= sale.saleQuantity %></td>
-                  <td><%= sale.unit || "-" %></td>
-                  <td>
-                    <% let totalSale = sale.totalSale || (sale.retailPrice * sale.saleQuantity); %>
-                    <%= parseFloat(totalSale).toFixed(2) %>
-                  </td>
-                  <td>
-                    <% let profitPerUnit = sale.profitPerUnit || (sale.retailPrice - sale.wholesalePrice); %>
-                    <%= parseFloat(profitPerUnit).toFixed(2) %>
-                  </td>
+                  <td><%= parseFloat(sale.saleQuantity).toFixed(2) %></td>
+                  <td><%= sale.unit %></td>
+                  <td><%= parseFloat(sale.totalSale).toFixed(2) %></td>
+                  <td><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
                   <td><%= parseFloat(sale.profit).toFixed(2) %></td>
                   <td>
                     <% 
@@ -319,9 +304,7 @@
                       </small>
                     <% } %>
                   </td>
-                  <td>
-                    <%= sale.extraInfo ? sale.extraInfo : "-" %>
-                  </td>
+                  <td><%= sale.extraInfo ? sale.extraInfo : "-" %></td>
                   <td>
                     <% 
                       let saleTime;
@@ -339,6 +322,7 @@
                 </tr>
               <% }); %>
             </tbody>
+            
           </table>
         <% } %>
       </div>

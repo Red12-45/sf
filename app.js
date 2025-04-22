@@ -160,7 +160,7 @@ async function processSale(body, user) {
     saleQuantity,
     saleDate,
     status,
-    extraInfo,        // ← will now always be defined (at worst an empty string)
+    extraInfo,
     paymentDetail1,
     paymentDetail2
   } = body;
@@ -183,9 +183,9 @@ async function processSale(body, user) {
 
   // FIFO from batches
   const batchesSnap = await db.collection('stockBatches')
-    .where('productId','==',selectedProductId)
-    .where('remainingQuantity','>',0)
-    .orderBy('batchDate','asc')
+    .where('productId', '==', selectedProductId)
+    .where('remainingQuantity', '>', 0)
+    .orderBy('batchDate', 'asc')
     .get();
 
   let remaining = saleQuantity,
@@ -198,7 +198,7 @@ async function processSale(body, user) {
     const d = b.data();
     const take = Math.min(d.remainingQuantity, remaining);
     totalWh += d.purchasePrice * take;
-    totalRt += d.salePrice     * take;
+    totalRt += d.salePrice * take;
     batchUpdate.update(b.ref, { remainingQuantity: d.remainingQuantity - take });
     remaining -= take;
   });
@@ -207,15 +207,15 @@ async function processSale(body, user) {
   await batchUpdate.commit();
 
   // averages
-  const avgWholesale    = totalWh / saleQuantity;
-  const avgRetailDefault= totalRt / saleQuantity;
+  const avgWholesale     = totalWh / saleQuantity;
+  const avgRetailDefault = totalRt / saleQuantity;
 
   // interpret retailPrice as total sale
-  const totalSaleAmt    = (userAmt > 0 ? userAmt : avgRetailDefault * saleQuantity);
-  const perUnitRetail   = (userAmt > 0 ? userAmt / saleQuantity : avgRetailDefault);
+  const totalSaleAmt  = (userAmt > 0 ? userAmt : avgRetailDefault * saleQuantity);
+  const perUnitRetail = (userAmt > 0 ? userAmt / saleQuantity : avgRetailDefault);
 
-  const profitPerUnit   = perUnitRetail - avgWholesale;
-  const totalProfit     = totalSaleAmt - (avgWholesale * saleQuantity);
+  const profitPerUnit = perUnitRetail - avgWholesale;
+  const totalProfit   = totalSaleAmt - (avgWholesale * saleQuantity);
 
   // decrement product.quantity
   await productRef.update({
@@ -224,18 +224,20 @@ async function processSale(body, user) {
 
   // build sale record
   const saleData = {
-    productId:       selectedProductId,
-    productName:     product.productName,
-    wholesalePrice:  avgWholesale,
-    retailPrice:     perUnitRetail,
-    defaultRetail:   avgRetailDefault,
+    productId:      selectedProductId,
+    productName:    product.productName,
+    unit:           product.unit || '',
+    wholesalePrice: avgWholesale,
+    retailPrice:    perUnitRetail,
+    defaultRetail:  avgRetailDefault,
     saleQuantity,
+    saleDate,   
     profitPerUnit,
-    profit:          totalProfit,
-    totalSale:       totalSaleAmt,
+    profit:         totalProfit,
+    totalSale:      totalSaleAmt,
     status,
-    extraInfo,       // ← now always defined!
-    createdAt:       new Date(),
+    extraInfo,
+    createdAt:      new Date(),
     accountId,
     ...(paymentDetail1 && { paymentDetail1: parseFloat(paymentDetail1) }),
     ...(paymentDetail2 && { paymentDetail2: parseFloat(paymentDetail2) })
