@@ -23,10 +23,8 @@
       <a href="/view-products"><i class="fas fa-boxes"></i> View Products</a>
       <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
       <a href="/expense"><i class="fas fa-receipt"></i> Expenses</a>
-      <% if (user && user.isMaster) { %>
-        <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
-        <a href="/permission"><i class="fas fa-lock"></i> Permissions</a>
-      <% } %>
+      <a href="/pricing"><i class="fas fa-tags"></i> Pricing</a>
+      
       <div class="subscription-info">
         <% if (user.subscriptionExpiry) { %>
           <span>

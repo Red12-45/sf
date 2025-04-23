@@ -1487,10 +1487,15 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
 
 /* ─────────── SUBSCRIPTION & PAYMENT ROUTES ─────────── */
 // GET /pricing
+// app.get('/pricing', (req, res) => {
+//   const now = new Date();
+//   if (req.session.user?.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now)
+//     return res.redirect('/');
+//   res.render('pricing', { user: req.session.user || null });
+// });
+
 app.get('/pricing', (req, res) => {
-  const now = new Date();
-  if (req.session.user?.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now)
-    return res.redirect('/');
+  // now all users—subscribed or not—can view pricing
   res.render('pricing', { user: req.session.user || null });
 });
 
@@ -1931,7 +1936,7 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
 
 
 // GET /tnc – Terms & Conditions
-app.get('/tnc', (req, res) => {
+app.get('/terms-and-conditions', (req, res) => {
   res.render('tnc', { host: req.get('host') });
 });
 
