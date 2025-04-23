@@ -311,6 +311,12 @@
       cell.innerHTML = `<input type="text" class="batch-input" value="${original}" />`;
       const input = cell.querySelector('input');
       input.focus();
+      input.addEventListener('blur', function() {
+        const num = parseFloat(this.value);
+        if (!isNaN(num)) {
+          this.value = num.toFixed(2);
+        }
+      });
 
       const save = async () => {
         const newVal = input.value.trim();

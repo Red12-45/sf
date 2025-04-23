@@ -512,30 +512,50 @@
     }
 
     function updateSaleCalculations() {
-      const opt = productSelect.options[productSelect.selectedIndex];
-      const qty = parseFloat(saleQuantityInput.value) || 0;
-      const wholesaleField = document.getElementById('wholesalePrice');
-      const profitUnitField = document.getElementById('profitPerUnit');
-      const totalProfitField = document.getElementById('totalProfit');
-      if (!opt || !opt.value || qty <= 0) {
-        wholesaleField.value = profitUnitField.value = totalProfitField.value = '';
-        retailInput.placeholder = '';
-        return;
-      }
-      let batches = [];
-      try { batches = JSON.parse(opt.getAttribute('data-batches')); } catch {};
-      const cmp = computeFIFO(batches, qty);
-      const avgWh = cmp.wholesale, avgRt = cmp.retail;
-      retailInput.placeholder = avgRt.toFixed(2);
-      const userAmt = parseFloat(retailInput.value);
-      const totalSaleAmt = userAmt > 0 ? userAmt : avgRt * qty;
-      const perUnitRetail = userAmt > 0 ? (userAmt/qty) : avgRt;
-      const profitUnit = perUnitRetail - avgWh;
-      const totalProfit = totalSaleAmt - (avgWh * qty);
-      wholesaleField.value = avgWh.toFixed(2);
-      profitUnitField.value = profitUnit.toFixed(2);
-      totalProfitField.value = totalProfit.toFixed(2);
+  const opt = productSelect.options[productSelect.selectedIndex];
+  const qty = parseFloat(saleQuantityInput.value) || 0;
+
+  const wholesaleField   = document.getElementById('wholesalePrice');
+  const profitUnitField  = document.getElementById('profitPerUnit');
+  const totalProfitField = document.getElementById('totalProfit');
+
+  /* reset if nothing chosen */
+  if (!opt || !opt.value || qty <= 0) {
+    wholesaleField.value = profitUnitField.value = totalProfitField.value = '';
+    retailInput.placeholder = '';
+    return;
+  }
+
+  /* FIFO averages from remaining batches */
+  let batches = [];
+  try { batches = JSON.parse(opt.getAttribute('data-batches')); } catch {}
+  const cmp   = computeFIFO(batches, qty);          // { wholesale, retail }
+  const avgWh = cmp.wholesale;
+  const defRt = cmp.retail;                         // default retail/unit
+
+  /* treat the user’s entry as a *unit* price by default */
+  let perUnitRetail = parseFloat(retailInput.value) || defRt;
+  let profitUnit    = perUnitRetail - avgWh;
+
+  /* auto-detect “total-price” mistakes and auto-correct */
+  if (profitUnit < 0 && qty > 0) {
+    const candidateUnit = +(perUnitRetail / qty).toFixed(2); // total→unit
+    const altProfit     = candidateUnit - avgWh;
+    if (altProfit >= 0) {
+      perUnitRetail = candidateUnit;
+      profitUnit    = altProfit;
     }
+  }
+
+  const totalSaleAmt = perUnitRetail * qty;
+  const totalProfit  = profitUnit   * qty;
+
+  /* UI */
+  retailInput.placeholder     = defRt.toFixed(2);
+  wholesaleField.value        = avgWh.toFixed(2);
+  profitUnitField.value       = profitUnit.toFixed(2);
+  totalProfitField.value      = totalProfit.toFixed(2);
+}
 
     retailInput.addEventListener('input', updateSaleCalculations);
     saleQuantityInput.addEventListener('input', updateSaleCalculations);

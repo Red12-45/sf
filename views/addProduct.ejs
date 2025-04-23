@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
-  <title>Add New Product/Stock Batch</title>
+  <title>Add New Product / Stock Batch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -34,7 +34,7 @@
           </ul>
         </div>
       </nav>
-      <div class="sidebar-footer">&copy; 2025 SalesFlow</div>
+      <div class="sidebar-footer">&copy; 2025 SalesFlow</div>
     </aside>
 
     <!-- Main Content Section -->
@@ -61,8 +61,8 @@
 
           <label for="sortOrder">Sort Order:</label>
           <select name="sortOrder" id="sortOrder">
-            <option value="asc"  <%= sortOrder==='asc'?'selected':'' %>>A‑Z</option>
-            <option value="desc" <%= sortOrder==='desc'?'selected':'' %>>Z‑A</option>
+            <option value="asc"  <%= sortOrder==='asc'?'selected':'' %>>A-Z</option>
+            <option value="desc" <%= sortOrder==='desc'?'selected':'' %>>Z-A</option>
           </select>
 
           <button type="submit">Apply Filters</button>
@@ -92,7 +92,6 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="productName">Product Name</label>
-                <!-- removed static `required` here -->
                 <input type="text" id="productName" name="productName" placeholder="Enter product name">
               </div>
             </div>
@@ -170,13 +169,13 @@
       const inputs = wrapper.querySelectorAll('input, select');
       if (sel.value === 'new') {
         wrapper.style.display = 'block';
-        inputs.forEach(i => { 
+        inputs.forEach(i => {
           i.disabled = false;
           if (i.id === 'productName') i.required = true;
         });
       } else {
         wrapper.style.display = 'none';
-        inputs.forEach(i => { 
+        inputs.forEach(i => {
           i.disabled = true;
           if (i.id === 'productName') i.required = false;
         });
@@ -184,6 +183,23 @@
     }
     document.addEventListener('DOMContentLoaded', toggleNewProductFields);
   </script>
+
+  <!-- NEW: format integers to two decimals on blur -->
+  <script>
+    ['wholesalePrice','retailPrice','quantity'].forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('blur', function() {
+        const v = this.value.trim();
+        if (!v) return;
+        const num = parseFloat(v);
+        // only if it's a whole number, add two decimals
+        if (Number.isFinite(num) && Number.isInteger(num)) {
+          this.value = num.toFixed(2);
+        }
+      });
+    });
+  </script>
+
   <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
 </html>
