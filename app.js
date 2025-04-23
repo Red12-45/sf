@@ -1314,6 +1314,42 @@ app.post('/api/edit-sale', isAuthenticated, async (req, res) => {
 
 
 
+
+app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const prodRef  = db.collection('products').doc(productId);
+    const prodSnap = await prodRef.get();
+    if (!prodSnap.exists)        return res.status(404).send('Product not found');
+    if (prodSnap.data().accountId !== req.session.user.accountId)
+      return res.status(403).send('Access denied');
+
+    /* 1. must have zero stock AND zero batches --------------------------- */
+    if (prodSnap.data().quantity > 0)
+      return res.status(400).send('Cannot delete – stock still available');
+
+    const batchCheck = await db.collection('stockBatches')
+                               .where('productId','==',productId)
+                               .limit(1)
+                               .get();
+    if (!batchCheck.empty)
+      return res.status(400).send('Cannot delete – batches still exist');
+
+    /* 2. delete product -------------------------------------------------- */
+    await prodRef.delete();
+
+    /* 3. reply ----------------------------------------------------------- */
+    if (req.xhr) {                        // AJAX call from viewProducts.ejs
+      return res.json({ success:true });
+    }
+    res.redirect('/view-products');
+  } catch (err) {
+    console.error(err);
+    if (req.xhr) return res.json({ success:false, error:err.toString() });
+    res.status(500).send(err.toString());
+  }
+});
+
 // GET /profit
 app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) => {
   try {
