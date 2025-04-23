@@ -320,15 +320,21 @@
                       else if (sale.status === "Not Paid") statusClass = "status-notpaid";
                       else statusClass = "status-mixed";
                     %>
-                    <span class="status-pill <%= statusClass %>"><%= sale.status %></span>
-                    <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
-                      <br>
-                      <small>
-                        <% if(sale.paymentDetail1) { %>Detail1: <%= sale.paymentDetail1 %><% } %>
-                        <% if(sale.paymentDetail2) { %>, Detail2: <%= sale.paymentDetail2 %><% } %>
-                      </small>
-                    <% } %>
+                    <div class="status-wrapper">
+                      <span class="status-pill <%= statusClass %>"><%= sale.status %></span>
+                      <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
+                        <div class="status-details-inline">
+                          <% if (sale.paymentDetail1) { %>
+                            <span><strong>Detail1:</strong> ₹<%= parseFloat(sale.paymentDetail1).toFixed(2) %></span>
+                          <% } %>
+                          <% if (sale.paymentDetail2) { %>
+                            <span><strong>Detail2:</strong> ₹<%= parseFloat(sale.paymentDetail2).toFixed(2) %></span>
+                          <% } %>
+                        </div>
+                      <% } %>
+                    </div>
                   </td>
+                  
                   <td><%= sale.extraInfo ? sale.extraInfo : "-" %></td>
                   <td>
                     <% 
