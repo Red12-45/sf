@@ -334,17 +334,22 @@
                   </td>
                   
                   <td><%= sale.extraInfo ? sale.extraInfo : "-" %></td>
-                  <td>
-                    <% 
-                      let saleTime;
-                      if (sale.createdAt && sale.createdAt.toDate) {
-                        saleTime = sale.createdAt.toDate().toLocaleTimeString();
-                      } else {
-                        saleTime = new Date(sale.createdAt).toLocaleTimeString();
-                      }
-                    %>
-                    <%= saleTime %>
-                  </td>
+                  <!-- NEW: force IST formatting -->
+                    <td>
+                      <% 
+                        // get a JS Date from Firestore Timestamp or raw date
+                        const createdDate = (sale.createdAt && sale.createdAt.toDate)
+                          ? sale.createdAt.toDate()
+                          : new Date(sale.createdAt);
+                        // explicitly format in IST, 24-hour clock
+                        const saleTime = createdDate.toLocaleTimeString('en-IN', {
+                          hour12: false,
+                          timeZone: 'Asia/Kolkata'
+                        });
+                      %>
+                      <%= saleTime %>
+                    </td>
+
                   <td style="text-align:center;">
                     <i class="fas fa-trash-alt delete-sale-btn" data-id="<%= sale.id %>"></i>
                   </td>

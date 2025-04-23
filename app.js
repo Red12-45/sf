@@ -31,6 +31,14 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
 
+app.locals.formatIST = date => {
+  const d = (typeof date?.toDate === 'function') 
+            ? date.toDate() 
+            : new Date(date);
+  return d.toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' });
+};
+
+
 
 app.use(session({
   store: new FirestoreStore({ dataset: admin.firestore(), kind: 'express-sessions' }),
@@ -46,6 +54,8 @@ if (process.env.NODE_ENV === 'production') app.set('view cache', true);
 
 // ─────────── helpers ───────────
 const pad = n => String(n).padStart(2, '0');
+
+
 
 const getCategories = async accountId => {
   const key = `categories_${accountId}`;
@@ -554,8 +564,12 @@ app.post('/permission', isAuthenticated, restrictRoute('/permission'), async (re
 app.get('/', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
-    const today     = new Date();
-    const defaultDate = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+    // NEW – force “now” to IST before extracting year/month/day
+    const istNow = new Date(
+      new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })
+    );
+    const defaultDate = `${istNow.getFullYear()}-${pad(istNow.getMonth()+1)}-${pad(istNow.getDate())}`;
+
     const saleDate  = req.query.saleDate || defaultDate;
 
     // Fetch products + batches
