@@ -1020,6 +1020,61 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   }
 });
 
+// POST /api/edit-stock-batch-field/:batchId
+app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const { field, value } = req.body;
+    const batchRef = db.collection('stockBatches').doc(batchId);
+    const batchSnap = await batchRef.get();
+    if (!batchSnap.exists) throw new Error('Batch not found');
+    if (batchSnap.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
+
+    // build update
+    const update = { updatedAt: new Date() };
+    if (field === 'purchasePrice' || field === 'salePrice') {
+      update[field] = parseFloat(value);
+    } else if (field === 'quantity') {
+      const qty = parseInt(value, 10);
+      update.quantity = qty;
+      update.remainingQuantity = qty;
+    } else {
+      throw new Error('Invalid field');
+    }
+    await batchRef.update(update);
+
+    // re‑compute profitMargin on this batch only
+    const updated = (await batchRef.get()).data();
+    const profitMargin = updated.salePrice - updated.purchasePrice;
+    await batchRef.update({ profitMargin });
+
+    // **NEW**: recalc parent product and fetch its updated data
+    const productId = batchSnap.data().productId;
+    await recalcProductFromBatches(productId);
+    const productSnap = await db.collection('products').doc(productId).get();
+    const prod = productSnap.data();
+
+    res.json({
+      success: true,
+      batch: {
+        purchasePrice: updated.purchasePrice,
+        salePrice:     updated.salePrice,
+        quantity:      updated.quantity,
+        remainingQuantity: updated.remainingQuantity,
+        profitMargin
+      },
+      product: {
+        id: productSnap.id,
+        wholesalePrice: prod.wholesalePrice,
+        retailPrice:    prod.retailPrice,
+        quantity:       prod.quantity,
+        profitMargin:   prod.profitMargin
+      }
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.toString() });
+  }
+});
 
 // POST /edit-stock-batch/:batchId
 app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
@@ -1036,32 +1091,47 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
       selectedUnit
     } = req.body;
 
-    const batchRef = db.collection('stockBatches').doc(batchId);
+    /* 0. validate ownership -------------------------------------------- */
+    const batchRef  = db.collection('stockBatches').doc(batchId);
     const batchSnap = await batchRef.get();
-    if (!batchSnap.exists) return res.status(404).send('Stock batch not found');
-    if (batchSnap.data().accountId !== req.session.user.accountId) return res.status(403).send('Access denied');
+    if (!batchSnap.exists)               return res.status(404).send('Stock batch not found');
+    if (batchSnap.data().accountId !== req.session.user.accountId)
+      return res.status(403).send('Access denied');
 
-    // only update the batch—no parent product update or recalc
+    /* 1. normalise inputs ---------------------------------------------- */
+    const pp  = +parseFloat(purchasePrice);
+    const sp  = +parseFloat(salePrice);
+    const qty = +parseFloat(quantity);
+
+    /* 2. build update payload ------------------------------------------ */
     const updateData = {
-      purchasePrice: parseFloat(purchasePrice),
-      salePrice:     parseFloat(salePrice),
-      quantity:      parseFloat(quantity),
-      remainingQuantity: parseFloat(quantity),
-      updatedAt:     new Date()
+      purchasePrice     : pp,
+      salePrice         : sp,
+      quantity          : qty,
+      remainingQuantity : qty,                   // reset FIFO baseline
+      profitMargin      : +(sp - pp).toFixed(2), // NEW ➊
+      updatedAt         : new Date()
     };
-    if (productName?.trim()) updateData.productName = productName.trim();
-    const unitRaw = newUnit?.trim() || selectedUnit;
-    if (unitRaw) updateData.unit = unitRaw.toLowerCase();
-    const category = newCategory?.trim() || selectedCategory;
-    if (category) updateData.category = category;
 
+    if (productName?.trim())              updateData.productName = productName.trim();
+    const unitRaw = newUnit?.trim() || selectedUnit;
+    if (unitRaw)                          updateData.unit = unitRaw.toLowerCase();
+    const catRaw  = newCategory?.trim() || selectedCategory;
+    if (catRaw)                           updateData.category = catRaw;
+
+    /* 3. write batch ---------------------------------------------------- */
     await batchRef.update(updateData);
+
+    /* 4. recompute parent-product -------------------------------------- */
+    const productId = batchSnap.data().productId;
+    await recalcProductFromBatches(productId);    // NEW ➋
+
+    /* 5. done ----------------------------------------------------------- */
     res.redirect('/view-products');
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
-
 
 
 
@@ -1794,48 +1864,70 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
 // ─────────── AJAX: DELETE SALE ───────────
 app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
   const { saleId } = req.body;
+
   try {
-    // 0. pull the sale we’re undoing
+    /* 0. pull the sale we’re undoing ------------------------------------ */
     const saleRef = db.collection('sales').doc(saleId);
     const saleDoc = await saleRef.get();
-    if (!saleDoc.exists) throw new Error('Sale not found');
+    if (!saleDoc.exists)        throw new Error('Sale not found');
     const sale = saleDoc.data();
-    if (sale.accountId !== req.session.user.accountId) throw new Error('Access denied');
+    if (sale.accountId !== req.session.user.accountId)
+      throw new Error('Access denied');
 
-    // 1. restore product stock
-    await db.collection('products')
-      .doc(sale.productId)
-      .update({
-        // this line increments the product.quantity by the number you originally sold
-        quantity: admin.firestore.FieldValue.increment(sale.saleQuantity)
-      });
+    const productId   = sale.productId;
+    const accountId   = sale.accountId;
+    const batchCol    = db.collection('stockBatches');
 
-    // 2. restore every batch that the sale had pulled from
-    if (Array.isArray(sale.batchesUsed) && sale.batchesUsed.length) {
-      const batch = db.batch();
-      sale.batchesUsed.forEach(bu => {
-        batch.update(
-          db.collection('stockBatches').doc(bu.id),
-          { remainingQuantity: admin.firestore.FieldValue.increment(bu.qtyUsed) }
-        );
-      });
-      await batch.commit();
+    /* 1. try to return the stock to every batch that *still* exists ----- */
+    const batch        = db.batch();
+    const missingBatches = [];           // keep track of ones that are gone
+
+    if (Array.isArray(sale.batchesUsed)) {
+      for (const bu of sale.batchesUsed) {
+        const ref  = batchCol.doc(bu.id);
+        const snap = await ref.get();
+        if (snap.exists) {
+          batch.update(ref, {
+            remainingQuantity: admin.firestore.FieldValue.increment(bu.qtyUsed)
+          });
+        } else {
+          missingBatches.push(bu);       // will rebuild later
+        }
+      }
     }
 
-    // 3. delete the sale document
+    if (batch._ops.length) await batch.commit();   // commit only if we queued ops
+
+    /* 2. recreate “recovered” batches for every missing doc ------------- */
+    for (const bu of missingBatches) {
+      await batchCol.add({
+        productId,
+        productName      : sale.productName.replace(/ \(updated\)$/,''),
+        purchasePrice    : sale.wholesalePrice,   // best guess
+        salePrice        : sale.retailPrice,
+        quantity         : bu.qtyUsed,
+        remainingQuantity: bu.qtyUsed,
+        batchDate        : new Date(),            // now
+        accountId,
+        unit             : sale.unit || ''
+      });
+    }
+
+    /* 3. bring product.stock & averages back in sync ------------------- */
+    await recalcProductFromBatches(productId);
+
+    /* 4. finally delete the sale record -------------------------------- */
     await saleRef.delete();
 
-    // 4. recompute today’s summary so the client stays in‑sync
-    const { summary } = await computeDailySummary(
-      req.session.user.accountId,
-      sale.saleDate
-    );
-    res.json({ success: true, summary });
+    /* 5. return fresh day summary so the UI stays live ------------------ */
+    const { summary } = await computeDailySummary(accountId, sale.saleDate);
+    res.json({ success:true, summary });
+
   } catch (e) {
-    res.json({ success: false, error: e.toString() });
+    console.error('delete-sale error:', e);
+    res.json({ success:false, error:e.toString() });
   }
 });
-
 
 
 // GET /tnc – Terms & Conditions

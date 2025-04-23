@@ -143,24 +143,49 @@
               required>
           </div>
       
-          <!-- Payment Status -->
-          <div>
-            <label for="status">Payment Status:</label>
-            <select id="status" name="status" required>
-              <option>Paid Cash</option>
-              <option>Paid Online</option>
-              <option>Not Paid</option>
-              <option>Half Cash + Half Online</option>
-              <option>Half Cash + Not Paid</option>
-              <option>Half Online + Not Paid</option>
-            </select>
-          </div>
-      
-          <!-- Extra Info -->
-          <div>
-            <label for="extraInfo">Extra Info:</label>
-            <textarea id="extraInfo" name="extraInfo" rows="2" cols="30"></textarea>
-          </div>
+       
+        <!-- Payment Status -->
+  <div>
+    <label for="status">Payment Status:</label>
+    <select id="status" name="status" required>
+      <option>Paid Cash</option>
+      <option>Paid Online</option>
+      <option>Not Paid</option>
+      <option>Half Cash + Half Online</option>
+      <option>Half Cash + Not Paid</option>
+      <option>Half Online + Not Paid</option>
+    </select>
+  </div>
+
+  <!-- ▼ NEW: visible only for the three “Half …” cases ▼ -->
+  <div id="combinedPaymentFields" style="display: none;">
+    <div>
+      <label id="paymentLabel1" for="paymentDetail1">Cash Amount:</label>
+      <input  type="number"
+              step="0.01"
+              id="paymentDetail1"
+              name="paymentDetail1"
+              placeholder="Enter amount">
+    </div>
+
+    <div>
+      <label id="paymentLabel2" for="paymentDetail2">Online Amount:</label>
+      <input  type="number"
+              step="0.01"
+              id="paymentDetail2"
+              name="paymentDetail2"
+              placeholder="Enter amount">
+    </div>
+  </div>
+  <!-- ▲ NEW block ends here ▲ -->
+
+  <!-- Extra Info -->
+  <div>
+    <label for="extraInfo">Extra Info:</label>
+    <textarea id="extraInfo" name="extraInfo" rows="2" cols="30"></textarea>
+  </div>
+
+        
       
           <button type="submit">
             <i class="fas fa-check-circle"></i> Process Sale

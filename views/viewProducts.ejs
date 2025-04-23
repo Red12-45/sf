@@ -30,6 +30,7 @@
   </style>
 </head>
 <body>
+  <!-- ──────────  SIDEBAR  ────────── -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-logo"><i class="fas fa-chart-line"></i><span>Stocks List</span></div>
     <div class="sidebar-nav">
@@ -59,6 +60,7 @@
     <div class="sidebar-footer"><a href="/logout"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a></div>
   </div>
 
+  <!-- ──────────  MAIN  ────────── -->
   <div class="main-content" id="main-content">
     <div class="page-container">
 
@@ -84,8 +86,8 @@
             <div class="filter-group">
               <label for="sortOrder">Sort Alphabetically:</label>
               <select id="sortOrder" name="sortOrder">
-                <option value="asc"  <%= sortOrder==='asc'  ? 'selected' : '' %>>A‑Z</option>
-                <option value="desc" <%= sortOrder==='desc' ? 'selected' : '' %>>Z‑A</option>
+                <option value="asc"  <%= sortOrder==='asc'  ? 'selected' : '' %>>A-Z</option>
+                <option value="desc" <%= sortOrder==='desc' ? 'selected' : '' %>>Z-A</option>
               </select>
             </div>
             <button type="submit" class="filter-button"><i class="fas fa-filter"></i> Apply Filters</button>
@@ -200,7 +202,8 @@
                                   <i class="fas fa-edit edit-icon"></i>
                                 </td>
 
-                                <td class="price-cell">
+                                <!--  NEW explicit class  -->
+                                <td class="price-cell profit-margin-cell">
                                   <span class="currency">₹</span><%= Number(batch.profitMargin).toFixed(2) %>
                                 </td>
                                 <td class="editable" data-batch-id="<%= batch.id %>" data-field="quantity">
@@ -249,7 +252,9 @@
     </div>
   </div>
 
+  <!-- ──────────  SCRIPTS  ────────── -->
   <script>
+    /* Expand / collapse batch rows */
     function toggleBatches(id) {
       const row = document.getElementById('batches-' + id);
       const icon = document.getElementById('icon-' + id);
@@ -258,6 +263,7 @@
       icon.classList.toggle('fa-chevron-down');
     }
 
+    /* Handle product / batch deletion */
     document.addEventListener('submit', async e => {
       const form = e.target;
       if (!form.matches('.delete-product-form, .delete-batch-form')) return;
@@ -284,7 +290,7 @@
 
         form.closest('tr').remove();
 
-        // update aggregate product row
+        /* refresh product summary */
         const p = data.product;
         const prodRow = document.getElementById(`product-row-${p.id}`);
         if (prodRow) {
@@ -300,55 +306,74 @@
       }
     });
 
+    /* Inline-edit handler */
     document.addEventListener('click', function(e) {
       if (!e.target.classList.contains('edit-icon')) return;
-      const cell = e.target.closest('.editable');
-      const batchId = cell.dataset.batchId;
-      const field = cell.dataset.field;
-      const valueSpan = cell.querySelector('.value');
+      const cell     = e.target.closest('.editable');
+      const batchId  = cell.dataset.batchId;
+      const field    = cell.dataset.field;
+      const valueSpan= cell.querySelector('.value');
       const original = valueSpan.innerText.replace('₹','').trim();
+
       cell.classList.add('editing');
       cell.innerHTML = `<input type="text" class="batch-input" value="${original}" />`;
       const input = cell.querySelector('input');
       input.focus();
+
+      /* keep two-decimal format on blur */
       input.addEventListener('blur', function() {
         const num = parseFloat(this.value);
-        if (!isNaN(num)) {
-          this.value = num.toFixed(2);
-        }
+        if (!isNaN(num)) this.value = num.toFixed(2);
       });
+
+      const cancel = () => {
+        cell.innerHTML = `<span class="value">${original}</span>
+                          <i class="fas fa-edit edit-icon"></i>`;
+        cell.classList.remove('editing');
+      };
 
       const save = async () => {
         const newVal = input.value.trim();
         if (newVal === original) return cancel();
-        const res = await fetch(`/api/edit-stock-batch-field/${batchId}`, {
-          method: 'POST',
+
+        const res  = await fetch(`/api/edit-stock-batch-field/${batchId}`, {
+          method : 'POST',
           headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ field, value: newVal })
+          body   : JSON.stringify({ field, value: newVal })
         });
         const data = await res.json();
         if (!data.success) { alert(data.error); return cancel(); }
+
         const b = data.batch;
 
+        /* update edited cell */
         if (field === 'purchasePrice' || field === 'salePrice') {
           cell.innerHTML =
             `<span class="value"><span class="currency">₹</span>${b[field].toFixed(2)}</span>
              <i class="fas fa-edit edit-icon"></i>`;
-          const profitCell = cell.closest('tr').querySelector('.price-cell:nth-child(6)');
-          profitCell.innerHTML =
-            `<span class="currency">₹</span>${b.profitMargin.toFixed(2)}`;
+
+          /*  ▼——— fix: use explicit selector  */
+          const profitCell = cell.closest('tr').querySelector('.profit-margin-cell');
+          if (profitCell) {
+            profitCell.innerHTML =
+              `<span class="currency">₹</span>${b.profitMargin.toFixed(2)}`;
+          }
         } else {
-          // quantity edit
+          /* quantity edit */
           cell.innerHTML =
             `<span class="value">${b.quantity.toFixed(2)}</span>
              <i class="fas fa-edit edit-icon"></i>`;
+
           const remCell = cell.closest('tr').querySelector('.remaining-cell');
-          remCell.innerHTML =
-            `${b.remainingQuantity.toFixed(2)}${b.remainingQuantity===0?'<span class="stock-badge empty">Empty</span>':''}`;
+          if (remCell) {
+            remCell.innerHTML =
+              `${b.remainingQuantity.toFixed(2)}${b.remainingQuantity===0
+                ? '<span class="stock-badge empty">Empty</span>' : ''}`;
+          }
         }
 
-        // update product row summary
-        const p = data.product;
+        /* refresh parent product row */
+        const p       = data.product;
         const prodRow = document.getElementById(`product-row-${p.id}`);
         if (prodRow) {
           prodRow.querySelector('.wholesale-cell').innerHTML =
@@ -362,14 +387,8 @@
         }
       };
 
-      const cancel = () => {
-        cell.innerHTML = `<span class="value">${original}</span>
-                          <i class="fas fa-edit edit-icon"></i>`;
-        cell.classList.remove('editing');
-      };
-
       input.addEventListener('keydown', ev => {
-        if (ev.key === 'Enter') save();
+        if (ev.key === 'Enter')  save();
         if (ev.key === 'Escape') cancel();
       });
       input.addEventListener('blur', save);

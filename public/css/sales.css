@@ -585,3 +585,44 @@ table tr:hover {
         margin-top: 0.25rem;
     }
 }
+
+/* compact form inside status cell (v2) */
+.status-edit-form{
+    display:flex;
+    flex-wrap:wrap;
+    gap:0.35rem;
+    align-items:center;
+  }
+  
+  .status-edit-form select,
+  .status-edit-form .status-input{
+    flex:1 1 120px;
+    padding:4px 6px;
+    font-size:0.8rem;
+    border-radius:6px;
+  }
+  
+  /* pill buttons with icons */
+  .status-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:28px;           /* ⬅️ small & square */
+    height:28px;
+    padding:0;
+    font-size:0.9rem;
+    border:none;
+    border-radius:999px;  /* pill / circle */
+    cursor:pointer;
+    box-shadow:none;
+    transition:transform 0.15s ease,background 0.25s ease;
+  }
+  
+  .status-btn.save  { background:var(--success-color); color:#fff; }
+  .status-btn.cancel{ background:var(--danger-color);  color:#fff; }
+  
+  .status-btn:hover{
+    transform:translateY(-1px);
+    filter:brightness(1.1);
+  }
+  
