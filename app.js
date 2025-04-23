@@ -732,110 +732,139 @@ app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (r
 });
 
 // ─────────── POST /add-product – create or update ───────────
-app.post('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    const {
-      existingProduct,
-      productName,
-      wholesalePrice,
-      retailPrice,
-      quantity,
-      selectedCategory,
-      newCategory,
-      selectedUnit,
-      newUnit
-    } = req.body;
+app.post(
+  '/add-product',
+  isAuthenticated,
+  restrictRoute('/add-product'),
+  async (req, res) => {
+    try {
+      const accountId = req.session.user.accountId;
+      const {
+        existingProduct,
+        productName,
+        wholesalePrice,
+        retailPrice,
+        quantity,
+        selectedCategory,
+        newCategory,
+        selectedUnit,
+        newUnit
+      } = req.body;
 
-    const wp       = parseFloat(wholesalePrice);
-    const rp       = parseFloat(retailPrice);
-    const qty      = parseFloat(quantity);
-    const category = (newCategory?.trim()) ? newCategory.trim() : (selectedCategory || '');
-    const unitRaw  = (newUnit?.trim())     ? newUnit.trim()     : (selectedUnit   || '');
-    const unit     = unitRaw.toLowerCase();
+      const wp  = parseFloat(wholesalePrice);
+      const rp  = parseFloat(retailPrice);
+      const qty = parseFloat(quantity);
 
-    let productDoc;
-    if (existingProduct && existingProduct !== 'new') {
-      // update existing
-      const ref  = db.collection('products').doc(existingProduct);
-      const snap = await ref.get();
-      if (!snap.exists) return res.status(404).send('Selected product not found');
+      const category = newCategory?.trim()
+        ? newCategory.trim()
+        : (selectedCategory || '');
 
-      const d    = snap.data();
-      const curQ = d.quantity || 0;
-      const newQ = curQ + qty;
-      const wW   = ((curQ * d.wholesalePrice) + (qty * wp)) / newQ;
-      const wR   = ((curQ * d.retailPrice ) + (qty * rp)) / newQ;
+      const unitRaw  = newUnit?.trim()
+        ? newUnit.trim()
+        : (selectedUnit || '');
 
-      await ref.update({
-        quantity:      newQ,
-        wholesalePrice:wW,
-        retailPrice:   wR,
-        profitMargin:  wR - wW,
-        updatedAt:     new Date(),
-        ...(unit     && { unit }),
-        ...(category && { category })
-      });
-      productDoc = snap;
+      const unit = unitRaw.toLowerCase();
 
-    } else {
-      // new product
-      const dup = await db.collection('products')
-        .where('accountId','==',accountId)
-        .where('productName','==',productName)
-        .limit(1).get();
+      /* -------------------------------------------------------------
+         1.  Work out whether we’re **updating** an existing product
+             or **creating** a brand-new one
+         ------------------------------------------------------------- */
+      let productRef;
+      let productSnap;
 
-      if (!dup.empty) {
-        // if same name exists, re-run as update
-        productDoc            = dup.docs[0];
-        req.body.existingProduct = productDoc.id;
-        return app._router.handle(req, res);
+      if (existingProduct && existingProduct !== 'new') {
+        // explicit “update existing”
+        productRef  = db.collection('products').doc(existingProduct);
+        productSnap = await productRef.get();
+        if (!productSnap.exists)
+          return res.status(404).send('Selected product not found');
+      } else {
+        // “new” – but first check for duplicate name
+        const dupSnap = await db.collection('products')
+          .where('accountId', '==', accountId)
+          .where('productName', '==', productName.trim())
+          .limit(1)
+          .get();
+
+        if (!dupSnap.empty) {
+          productRef  = dupSnap.docs[0].ref;   // treat as update
+          productSnap = dupSnap.docs[0];
+        }
       }
 
-      const data = {
-        productName,
-        wholesalePrice: wp,
-        retailPrice:    rp,
-        quantity:       qty,
-        profitMargin:   rp - wp,
-        category,
-        unit,
-        createdAt:      new Date(),
+      /* -------------------------------------------------------------
+         2-A. UPDATE flow
+         ------------------------------------------------------------- */
+      if (productRef && productSnap) {
+        const d    = productSnap.data();
+        const curQ = d.quantity || 0;
+        const newQ = curQ + qty;
+
+        const newWholesale = ((curQ * d.wholesalePrice) + (qty * wp)) / newQ;
+        const newRetail    = ((curQ * d.retailPrice ) + (qty * rp)) / newQ;
+
+        await productRef.update({
+          quantity: newQ,
+          wholesalePrice: newWholesale,
+          retailPrice: newRetail,
+          profitMargin: newRetail - newWholesale,
+          updatedAt: new Date(),
+          ...(unit     && { unit }),
+          ...(category && { category })
+        });
+
+      /* -------------------------------------------------------------
+         2-B. CREATE flow
+         ------------------------------------------------------------- */
+      } else {
+        const data = {
+          productName : productName.trim(),
+          wholesalePrice: wp,
+          retailPrice   : rp,
+          quantity      : qty,
+          profitMargin  : rp - wp,
+          category,
+          unit,
+          createdAt     : new Date(),
+          accountId,
+          // legacy fields kept for backwards compatibility
+          oldestWholesale: wp,
+          oldestBatchQty : qty,
+          secondWholesale: null,
+          oldestRetail   : rp,
+          secondRetail   : null
+        };
+        productRef = await db.collection('products').add(data);
+        productSnap = { id: productRef.id, data: () => data };
+      }
+
+      /* -------------------------------------------------------------
+         3.  Always create a *new* stock batch for the received qty
+         ------------------------------------------------------------- */
+      await db.collection('stockBatches').add({
+        productId        : productRef.id,
+        productName      : productSnap.data().productName,
+        purchasePrice    : wp,
+        salePrice        : rp,
+        quantity         : qty,
+        remainingQuantity: qty,
+        batchDate        : new Date(),
         accountId,
-        // legacy batch‑tracking fields kept for backwards compatibility
-        oldestWholesale: wp,
-        oldestBatchQty:  qty,
-        secondWholesale: null,
-        oldestRetail:    rp,
-        secondRetail:    null
-      };
-      const ref = await db.collection('products').add(data);
-      productDoc = { id: ref.id, data: () => data };
+        unit
+      });
+
+      /* -------------------------------------------------------------
+         4.  Bust caches + redirect with success banner
+         ------------------------------------------------------------- */
+      cache.del(`categories_${accountId}`);
+      cache.del(`units_${accountId}`);
+
+      res.redirect('/add-product?success=1');
+    } catch (err) {
+      res.status(500).send(err.toString());
     }
-
-    // always add a new stockBatch
-    await db.collection('stockBatches').add({
-      productId:         productDoc.id,
-      productName:       productDoc.data().productName,
-      purchasePrice:     wp,
-      salePrice:         rp,
-      quantity:          qty,
-      remainingQuantity: qty,
-      batchDate:         new Date(),
-      accountId,
-      unit
-    });
-
-    // clear our caches so the sidebar/category lists refresh
-    cache.del(`categories_${accountId}`);
-    cache.del(`units_${accountId}`);
-
-    res.redirect('/add-product?success=1');
-  } catch (err) {
-    res.status(500).send(err.toString());
   }
-});
-
+);
 
 
 // GET /view-products
