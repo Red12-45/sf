@@ -1807,24 +1807,30 @@ app.post('/api/delete-expense', isAuthenticated, async (req, res) => {
   try {
     const expRef = db.collection('expenses').doc(expenseId);
     const expDoc = await expRef.get();
-    if (!expDoc.exists) throw new Error('Expense not found');
+
+    /* NEW ✨ — idempotent */
+    if (!expDoc.exists) {
+      return res.json({ success: true });          // already deleted
+    }
+
     const exp = expDoc.data();
-    if (exp.accountId !== req.session.user.accountId) throw new Error('Access denied');
+    if (exp.accountId !== req.session.user.accountId)
+      return res.json({ success: false, error: 'Access denied' });
 
-    // delete the expense
+    // delete & refresh
     await expRef.delete();
-
-    // recompute summary for that date
     const { summary } = await computeDailySummary(
       req.session.user.accountId,
       exp.saleDate
     );
-
     res.json({ success: true, summary });
   } catch (e) {
     res.json({ success: false, error: e.toString() });
   }
 });
+
+
+
 app.post('/api/expense', isAuthenticated, async (req, res) => {
   try {
     const saved = await processExpense(req.body, req.session.user);
@@ -1881,6 +1887,7 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
 
 /* ─────────── AJAX:  DELETE SALE  ─────────── */
 // ─────────── AJAX: DELETE SALE ───────────
+// ─────────── AJAX:  DELETE SALE  ───────────
 app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
   const { saleId } = req.body;
 
@@ -1888,10 +1895,15 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
     /* 0. pull the sale we’re undoing ------------------------------------ */
     const saleRef = db.collection('sales').doc(saleId);
     const saleDoc = await saleRef.get();
-    if (!saleDoc.exists)        throw new Error('Sale not found');
+
+    /* NEW ✨ — make this endpoint idempotent */
+    if (!saleDoc.exists) {
+      return res.json({ success: true });          // already gone – no error
+    }
+
     const sale = saleDoc.data();
     if (sale.accountId !== req.session.user.accountId)
-      throw new Error('Access denied');
+      return res.json({ success: false, error: 'Access denied' });
 
     const productId   = sale.productId;
     const accountId   = sale.accountId;
@@ -1899,7 +1911,7 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
 
     /* 1. try to return the stock to every batch that *still* exists ----- */
     const batch        = db.batch();
-    const missingBatches = [];           // keep track of ones that are gone
+    const missingBatches = [];
 
     if (Array.isArray(sale.batchesUsed)) {
       for (const bu of sale.batchesUsed) {
@@ -1910,43 +1922,44 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
             remainingQuantity: admin.firestore.FieldValue.increment(bu.qtyUsed)
           });
         } else {
-          missingBatches.push(bu);       // will rebuild later
+          missingBatches.push(bu);
         }
       }
     }
 
-    if (batch._ops.length) await batch.commit();   // commit only if we queued ops
+    if (batch._ops.length) await batch.commit();
 
-    /* 2. recreate “recovered” batches for every missing doc ------------- */
+    /* 2. recreate batches that had been deleted ------------------------ */
     for (const bu of missingBatches) {
       await batchCol.add({
         productId,
-        productName      : sale.productName.replace(/ \(updated\)$/,''),
-        purchasePrice    : sale.wholesalePrice,   // best guess
+        productName      : sale.productName.replace(/ \(updated\)$/, ''),
+        purchasePrice    : sale.wholesalePrice,
         salePrice        : sale.retailPrice,
         quantity         : bu.qtyUsed,
         remainingQuantity: bu.qtyUsed,
-        batchDate        : new Date(),            // now
+        batchDate        : new Date(),
         accountId,
         unit             : sale.unit || ''
       });
     }
 
-    /* 3. bring product.stock & averages back in sync ------------------- */
+    /* 3. sync parent product ------------------------------------------- */
     await recalcProductFromBatches(productId);
 
-    /* 4. finally delete the sale record -------------------------------- */
+    /* 4. delete the sale ----------------------------------------------- */
     await saleRef.delete();
 
-    /* 5. return fresh day summary so the UI stays live ------------------ */
+    /* 5. fresh summary for that date ----------------------------------- */
     const { summary } = await computeDailySummary(accountId, sale.saleDate);
-    res.json({ success:true, summary });
+    res.json({ success: true, summary });
 
   } catch (e) {
     console.error('delete-sale error:', e);
-    res.json({ success:false, error:e.toString() });
+    res.json({ success: false, error: e.toString() });
   }
 });
+
 
 
 // GET /tnc – Terms & Conditions
