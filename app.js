@@ -1155,8 +1155,6 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 });
 
 
-
-
 /* ─────────── SALES & PROFIT REPORTING ─────────── */
 // ────────────────────────────────────────────────────────────────
 // GET  /sales  – Sales + Expense report with optional filters
@@ -1846,7 +1844,6 @@ app.post('/api/sale', isAuthenticated, async (req, res) => {
 
 
 
-
 // AJAX: POST /api/opening-balance
 app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
   try {
@@ -1928,7 +1925,6 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
     res.json({ success:false, error:e.toString() });
   }
 });
-
 
 
 

@@ -13,7 +13,11 @@
   <header>
     <nav>
       <a href="/"><i class="fa fa-home"></i> Dashboard</a>
-      <a href="/billing"><i class="fa fa-money-bill-wave"></i>Billing</a>
+      <% if (user.isMaster) { %>
+        <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
+        <a href="/permission"><i class="fas fa-lock"></i> Permissions</a>
+      <% } %>
+      <a href="/billing"><i class="fa fa-money-bill-wave"></i> Billing</a>
       <a href="/logout"><i class="fa fa-sign-out-alt"></i> Logout</a>
     </nav>
   </header>
