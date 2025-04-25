@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 });
 
 // serve static assets with a long maxAge—but they'll be re-requested whenever `v` changes
-app.use(express.static('public', { maxAge: '1d' }));
+app.use(express.static('public', { maxAge: '365d' }));
 
 app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 app.use(express.urlencoded({ extended: false }));
@@ -183,25 +183,24 @@ async function computeDailySummary(accountId, saleDate) {
 async function processSale(body, user) {
   const accountId = user.accountId;
 
+  // NOTICE:  `retailPrice` in the incoming body is now the **TOTAL Sale value**
   let {
     productId,
     customProductId,
-    retailPrice,          // number typed in the form
+    retailPrice: totalSaleInput,      // ① renamed for clarity
     saleQuantity,
     saleDate,
     status,
-    extraInfo     = '',
+    extraInfo = '',
     paymentDetail1,
     paymentDetail2
   } = body;
 
-  saleQuantity = +parseFloat(saleQuantity);
-  retailPrice  = +parseFloat(retailPrice);
+  saleQuantity     = +parseFloat(saleQuantity);
+  const totalSale  = +parseFloat(totalSaleInput);   // ② total amount    (₹)
 
-  /* 1. resolve the product ------------------------------------------------ */
-  const selectedProductId =
-    (customProductId?.trim()) ? customProductId : productId;
-
+  /* 1. resolve the product (unchanged) ---------------------------------- */
+  const selectedProductId = (customProductId?.trim()) ? customProductId : productId;
   const productRef = db.collection('products').doc(selectedProductId);
   const productDoc = await productRef.get();
   if (!productDoc.exists || productDoc.data().accountId !== accountId)
@@ -209,11 +208,11 @@ async function processSale(body, user) {
 
   const product = productDoc.data();
 
-  /* 2. FIFO stock consumption -------------------------------------------- */
+  /* 2. FIFO stock consumption (unchanged) ------------------------------- */
   const batchesSnap = await db.collection('stockBatches')
-    .where('productId','==',selectedProductId)
-    .where('remainingQuantity','>',0)
-    .orderBy('batchDate','asc')
+    .where('productId', '==', selectedProductId)
+    .where('remainingQuantity', '>', 0)
+    .orderBy('batchDate', 'asc')
     .get();
 
   let remaining      = saleQuantity;
@@ -225,50 +224,39 @@ async function processSale(body, user) {
     if (remaining <= 0) break;
     const d    = b.data();
     const take = Math.min(d.remainingQuantity, remaining);
+
     batch.update(b.ref, {
+      quantity         : admin.firestore.FieldValue.increment(-take),
       remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
     });
+
     totalWholesale += d.purchasePrice * take;
     batchesUsed.push({ id: b.id, qtyUsed: take });
     remaining -= take;
   }
+
   if (remaining > 0) throw new Error('Not enough stock');
   await batch.commit();
 
-  /* 3. robust profit math ------------------------------------------------- */
-  const avgWholesale = +(totalWholesale / saleQuantity).toFixed(2);
+  /* 3. profit maths – re-keyed for TOTAL-SALE input --------------------- */
+  const avgWholesale  = +(totalWholesale / saleQuantity).toFixed(2);      // FIFO ₹ / unit
+  const retailPerUnit = +(totalSale / saleQuantity).toFixed(2);           // NEW
+  const profitPerUnit = +(retailPerUnit - avgWholesale).toFixed(2);
+  const totalProfit   = +(profitPerUnit * saleQuantity).toFixed(2);
 
-  let perUnitRetail = retailPrice;                       // assume unit
-  let profitPerUnit = +(perUnitRetail - avgWholesale).toFixed(2);
+  /* 4. parent-product stock refresh (unchanged) ------------------------- */
+  await recalcProductFromBatches(selectedProductId);
 
-  /* auto-correct if the user gave a TOTAL instead of UNIT price */
-  if (profitPerUnit < 0 && saleQuantity > 0) {
-    const candidateUnit = +(retailPrice / saleQuantity).toFixed(2);
-    const altProfit     = +(candidateUnit - avgWholesale).toFixed(2);
-    if (altProfit >= 0) {
-      perUnitRetail = candidateUnit;
-      profitPerUnit = altProfit;
-    }
-  }
-
-  const totalSale   = +(perUnitRetail * saleQuantity).toFixed(2);
-  const totalProfit = +(profitPerUnit * saleQuantity).toFixed(2);
-
-  /* 4. update product stock ---------------------------------------------- */
-  await productRef.update({
-    quantity: admin.firestore.FieldValue.increment(-saleQuantity)
-  });
-
-  /* 5. write the sale ----------------------------------------------------- */
+  /* 5. write the sale --------------------------------------------------- */
   const saleData = {
     productId      : selectedProductId,
     productName    : product.productName,
     unit           : product.unit || '',
-    wholesalePrice : avgWholesale,
-    retailPrice    : perUnitRetail,
+    wholesalePrice : avgWholesale,   // FIFO ₹ / unit
+    retailPrice    : retailPerUnit,  // still stored *per-unit* for reports
     saleQuantity,
     saleDate,
-    totalSale,
+    totalSale,                       // NEW: exact user-entered amount
     profitPerUnit,
     profit         : totalProfit,
     status,
@@ -1257,48 +1245,51 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
 });
 
 
+/* ─────────── AJAX inline edit   /api/edit-sale ─────────── */
 app.post('/api/edit-sale', isAuthenticated, async (req, res) => {
   try {
     const { saleId, field, value, paymentDetail1, paymentDetail2 } = req.body;
-
-    /* 0. fetch the original sale ----------------------------------------- */
     const saleRef  = db.collection('sales').doc(saleId);
     const saleSnap = await saleRef.get();
-    if (!saleSnap.exists)
-      return res.json({ success:false, error:'Sale not found' });
+    if (!saleSnap.exists) return res.json({ success:false, error:'Sale not found' });
 
     const data = saleSnap.data();
     if (data.accountId !== req.session.user.accountId)
       return res.json({ success:false, error:'Access denied' });
 
-    /* keep mutable copies */
-    let newQty        = +data.saleQuantity;
-    let newRetailPU   = +data.retailPrice;      // *per-unit* retail
-    let batchesUsed   = Array.isArray(data.batchesUsed) ? [...data.batchesUsed] : [];
-
-    /* 1. STATUS-ONLY edit ------------------------------------------------- */
+    /* ------------------------------------------------------------------
+       1️⃣ Pure-status edits (unchanged) – skip all quantity / price maths
+    ------------------------------------------------------------------ */
     if (field === 'status') {
       const update = { status:value };
       if (paymentDetail1 !== undefined) update.paymentDetail1 = +parseFloat(paymentDetail1 || 0);
       if (paymentDetail2 !== undefined) update.paymentDetail2 = +parseFloat(paymentDetail2 || 0);
       await saleRef.update(update);
-
-      const { summary } = await computeDailySummary(
-        req.session.user.accountId, data.saleDate
-      );
+      const { summary } = await computeDailySummary(req.session.user.accountId, data.saleDate);
       return res.json({ success:true, updatedRow:update, summary });
     }
 
-    /* 2. NUMERIC edits (qty or retailPrice) ------------------------------- */
-    if (field === 'saleQuantity') newQty      = +parseFloat(value);
-    if (field === 'retailPrice')  newRetailPU = +parseFloat(value);
+    /* ------------------------------------------------------------------
+       2️⃣ We’re changing either **saleQuantity** or **totalSale**
+          → need to return/consume stock, recalc FIFO & profit
+    ------------------------------------------------------------------ */
+    let newQty       = +data.saleQuantity;
+    let newTotalSale = +data.totalSale;
 
-    /* 2-a. stock delta (FIFO consume / return) --------------------------- */
+    if (field === 'saleQuantity') newQty       = +parseFloat(value);
+    if (field === 'totalSale')    newTotalSale = +parseFloat(value);
+
+    /* early sanity */
+    if (newQty <= 0)  return res.json({ success:false, error:'Quantity must be > 0' });
+    if (newTotalSale < 0) return res.json({ success:false, error:'Total amount cannot be negative' });
+
+    /* Δ stock adjustment (same FIFO logic as before) ------------------- */
     const delta = +(newQty - data.saleQuantity);
     const batchCol = db.collection('stockBatches');
     const stockOps = db.batch();
+    let batchesUsed = Array.isArray(data.batchesUsed) ? [...data.batchesUsed] : [];
 
-    if (delta > 0) {                        /* need more stock */
+    if (delta > 0) {                                // need MORE stock
       let need = delta;
       const fifo = await batchCol
         .where('productId','==',data.productId)
@@ -1311,99 +1302,74 @@ app.post('/api/edit-sale', isAuthenticated, async (req, res) => {
         const d    = b.data();
         const take = Math.min(d.remainingQuantity, need);
         stockOps.update(b.ref, {
+          quantity         : admin.firestore.FieldValue.increment(-take),
           remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
         });
-        const idx = batchesUsed.findIndex(x => x.id === b.id);
-        if (idx > -1) batchesUsed[idx].qtyUsed += take;
-        else          batchesUsed.push({ id:b.id, qtyUsed:take });
+
+        const idx = batchesUsed.findIndex(x=>x.id===b.id);
+        if (idx>-1) batchesUsed[idx].qtyUsed += take;
+        else        batchesUsed.push({ id:b.id, qtyUsed:take });
         need -= take;
       }
-      if (need > 0)
-        return res.json({ success:false, error:'Not enough stock to increase quantity' });
+      if (need > 0) return res.json({ success:false, error:'Not enough stock' });
 
-    } else if (delta < 0) {                 /* return surplus stock */
+    } else if (delta < 0) {                         // RETURN stock
       let give = -delta;
       for (const u of [...batchesUsed].reverse()) {
         if (give <= 0) break;
         const ret = Math.min(u.qtyUsed, give);
         const ref = batchCol.doc(u.id);
-        const bd  = await ref.get();
-        if (!bd.exists) continue;
         stockOps.update(ref, {
-          remainingQuantity: +(bd.data().remainingQuantity + ret).toFixed(3)
+          quantity         : admin.firestore.FieldValue.increment(ret),
+          remainingQuantity: admin.firestore.FieldValue.increment(ret)
         });
         u.qtyUsed -= ret;
-        give      -= ret;
+        give -= ret;
       }
-      batchesUsed = batchesUsed.filter(u => u.qtyUsed > 0.0001);
+      batchesUsed = batchesUsed.filter(u=>u.qtyUsed>0.0001);
     }
+    if (stockOps._ops.length) await stockOps.commit();
 
-    await stockOps.commit();
+    /* refresh parent product ------------------------------------------ */
+    await recalcProductFromBatches(data.productId);
 
-    /* 2-b. refresh product stock figure ---------------------------------- */
-    const invSnap = await batchCol.where('productId','==',data.productId).get();
-    let prodQty = 0;
-    invSnap.forEach(d => prodQty += +d.data().remainingQuantity);
-    await db.collection('products').doc(data.productId).update({
-      quantity:+prodQty.toFixed(3)
-    });
-
-    /* 2-c. weighted average wholesale for newQty ------------------------- */
+    /* FIFO weighted wholesale ----------------------------------------- */
     let wSum = 0;
     for (const u of batchesUsed) {
       const bd = await batchCol.doc(u.id).get();
       if (bd.exists) wSum += bd.data().purchasePrice * u.qtyUsed;
     }
-    const avgWholesale = newQty ? +(wSum / newQty).toFixed(2) : 0;
+    const avgWholesale  = +(wSum / newQty).toFixed(2);   // ₹ / unit
+    const retailPerUnit = +(newTotalSale / newQty).toFixed(2);
+    const profitPerUnit = +(retailPerUnit - avgWholesale).toFixed(2);
+    const totalProfit   = +(profitPerUnit * newQty).toFixed(2);
 
-    /* 2-d. sign-safe retail & profit math -------------------------------- */
-    let adjustedRetail = newRetailPU;                 // assume unit
-    let profitPerUnit  = +(adjustedRetail - avgWholesale).toFixed(2);
-
-    if (profitPerUnit < 0 && newQty > 0) {
-      const candidate = +(newRetailPU / newQty).toFixed(2);     // treat as TOTAL→UNIT
-      const altProfit = +(candidate - avgWholesale).toFixed(2);
-      if (altProfit >= 0) {
-        adjustedRetail = candidate;
-        profitPerUnit  = altProfit;
-      }
-    }
-
-    const totalSale   = +(adjustedRetail * newQty).toFixed(2);
-    const totalProfit = +(profitPerUnit * newQty).toFixed(2);
-
-    /* 2-e. update the sale document ------------------------------------- */
+    /* write back ------------------------------------------------------- */
     await saleRef.update({
       saleQuantity   : newQty,
-      retailPrice    : adjustedRetail,
+      totalSale      : newTotalSale,
+      retailPrice    : retailPerUnit,   // still per-unit for reports
       wholesalePrice : avgWholesale,
-      totalSale,
       profitPerUnit,
       profit         : totalProfit,
       batchesUsed,
-      productName    : data.productName.includes('(updated)')
-                        ? data.productName
-                        : data.productName + ' (updated)'
+      productName    : data.productName.includes('(updated)') ? data.productName
+                                                              : data.productName + ' (updated)'
     });
 
-    /* 3. recompute the day’s summary for UI ------------------------------ */
-    const { summary } = await computeDailySummary(
-      req.session.user.accountId, data.saleDate
-    );
+    const { summary } = await computeDailySummary(req.session.user.accountId, data.saleDate);
 
-    /* 4. respond ---------------------------------------------------------- */
     return res.json({
       success:true,
       updatedRow:{
-        saleQuantity   : +newQty.toFixed(3),
-        retailPrice    : +adjustedRetail.toFixed(2),
-        wholesalePrice : avgWholesale,
-        totalSale,
+        saleQuantity : +newQty.toFixed(3),
+        totalSale    : +newTotalSale.toFixed(2),
+        retailPrice  : retailPerUnit,
+        wholesalePrice:avgWholesale,
         profitPerUnit,
-        profit         : totalProfit,
-        productName    : data.productName.includes('(updated)')
-                          ? data.productName
-                          : data.productName + ' (updated)'
+        profit       : totalProfit,
+        productName  : data.productName.includes('(updated)') ? data.productName
+                                                              : data.productName + ' (updated)'
       },
       summary
     });
@@ -1413,9 +1379,6 @@ app.post('/api/edit-sale', isAuthenticated, async (req, res) => {
     return res.json({ success:false, error:err.message });
   }
 });
-
-
-
 
 
 app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
@@ -1909,47 +1872,38 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
 // ─────────── AJAX:  DELETE SALE  ───────────
 app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
   const { saleId } = req.body;
-
   try {
-    /* 0. pull the sale we’re undoing ------------------------------------ */
     const saleRef = db.collection('sales').doc(saleId);
     const saleDoc = await saleRef.get();
-
-    /* NEW ✨ — make this endpoint idempotent */
-    if (!saleDoc.exists) {
-      return res.json({ success: true });          // already gone – no error
-    }
+    if (!saleDoc.exists) return res.json({ success:true });
 
     const sale = saleDoc.data();
     if (sale.accountId !== req.session.user.accountId)
-      return res.json({ success: false, error: 'Access denied' });
+      return res.json({ success:false, error:'Access denied' });
 
-    const productId   = sale.productId;
-    const accountId   = sale.accountId;
-    const batchCol    = db.collection('stockBatches');
-
-    /* 1. try to return the stock to every batch that *still* exists ----- */
-    const batch        = db.batch();
-    const missingBatches = [];
+    const productId = sale.productId;
+    const batchCol  = db.collection('stockBatches');
+    const batchOps  = db.batch();
+    const missing   = [];
 
     if (Array.isArray(sale.batchesUsed)) {
       for (const bu of sale.batchesUsed) {
         const ref  = batchCol.doc(bu.id);
         const snap = await ref.get();
         if (snap.exists) {
-          batch.update(ref, {
+          batchOps.update(ref, {
+            quantity         : admin.firestore.FieldValue.increment(bu.qtyUsed),
             remainingQuantity: admin.firestore.FieldValue.increment(bu.qtyUsed)
           });
         } else {
-          missingBatches.push(bu);
+          missing.push(bu);
         }
       }
     }
+    if (batchOps._ops.length) await batchOps.commit();
 
-    if (batch._ops.length) await batch.commit();
-
-    /* 2. recreate batches that had been deleted ------------------------ */
-    for (const bu of missingBatches) {
+    /* recreate missing batches with correct numbers --------------------- */
+    for (const bu of missing) {
       await batchCol.add({
         productId,
         productName      : sale.productName.replace(/ \(updated\)$/, ''),
@@ -1958,26 +1912,23 @@ app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
         quantity         : bu.qtyUsed,
         remainingQuantity: bu.qtyUsed,
         batchDate        : new Date(),
-        accountId,
+        accountId        : sale.accountId,
         unit             : sale.unit || ''
       });
     }
 
-    /* 3. sync parent product ------------------------------------------- */
-    await recalcProductFromBatches(productId);
-
-    /* 4. delete the sale ----------------------------------------------- */
+    await recalcProductFromBatches(productId);                            // NEW
     await saleRef.delete();
 
-    /* 5. fresh summary for that date ----------------------------------- */
-    const { summary } = await computeDailySummary(accountId, sale.saleDate);
-    res.json({ success: true, summary });
+    const { summary } = await computeDailySummary(sale.accountId, sale.saleDate);
+    res.json({ success:true, summary });
 
   } catch (e) {
     console.error('delete-sale error:', e);
-    res.json({ success: false, error: e.toString() });
+    res.json({ success:false, error:e.toString() });
   }
 });
+
 
 
 

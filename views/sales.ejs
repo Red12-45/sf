@@ -164,9 +164,8 @@
                   <td data-field="wholesalePrice"><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
 
                   <!-- Retail Price inline edit -->
-                  <td class="editable" data-id="<%= sale.id %>" data-field="retailPrice" data-date="<%= date %>">
-                    <span class="value"><%= parseFloat(sale.retailPrice).toFixed(2) %></span>
-                    <i class="fas fa-edit edit-icon"></i>
+                  <td>
+                    <%= parseFloat(sale.retailPrice).toFixed(2) %>
                   </td>
 
                   <!-- Quantity inline edit -->
@@ -176,7 +175,15 @@
                   </td>
 
                   <td><%= sale.unit||'-' %></td>
-                  <td data-field="totalSale"><%= tot.toFixed(2) %></td>
+                  <!-- ▼ NEW: Total-Sale cell is now inline-editable ▼ -->
+                  <td class="editable"
+                  data-id   ="<%= sale.id %>"
+                  data-field="totalSale"
+                  data-date ="<%= date %>">
+                  <span class="value"><%= tot.toFixed(2) %></span>
+                  <i class="fas fa-edit edit-icon"></i>
+                  </td>
+
                   <td data-field="profitPerUnit"><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
                   <td data-field="profit"><%= parseFloat(sale.profit).toFixed(2) %></td>
 
@@ -523,7 +530,9 @@ btnCancel.innerHTML = '<i class="fas fa-times"></i>';
 
   
         // —— NUMERIC fields (saleQuantity or retailPrice) ——
-        if (field === 'saleQuantity' || field === 'retailPrice') {
+        // —— NUMERIC fields (saleQuantity • retailPrice • totalSale) ——
+        if (field === 'saleQuantity' || field === 'totalSale') {
+
           const oldNum = td.querySelector('.value').textContent.trim();
           td.classList.add('editing');
           td.innerHTML = `<input type="number" step="0.01" value="${oldNum}">`;

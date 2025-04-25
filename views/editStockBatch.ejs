@@ -38,7 +38,7 @@
         </ul>
       </div>
     </nav>
-    <div class="sidebar-footer">© 2025 SalesFlow</div>
+    <div class="sidebar-footer">© 2025 SalesFlow</div>
   </aside>
 
   <!-- ── Main Content ───────────────────────────────────────────────────── -->
@@ -57,7 +57,7 @@
         <!-- ── Product name (if stored on batch) ────────────────────────── -->
         <div class="form-row">
           <div class="form-group full-width">
-            <label for="productName">Product Name</label>
+            <label for="productName">Product Name</label>
             <input type="text"
                    id="productName"
                    name="productName"
@@ -69,7 +69,7 @@
         <!-- ── Category choose / create ─────────────────────────────────── -->
         <div class="form-row">
           <div class="form-group">
-            <label for="selectedCategory">Choose Category</label>
+            <label for="selectedCategory">Choose Category</label>
             <select id="selectedCategory" name="selectedCategory">
               <option value="">-- Select Category --</option>
               <% categories.forEach(cat => { %>
@@ -81,7 +81,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="newCategory">Or Create Category</label>
+            <label for="newCategory">Or Create Category</label>
             <input type="text" id="newCategory" name="newCategory" placeholder="New category">
           </div>
         </div>
@@ -89,7 +89,7 @@
         <!-- ── Unit choose / create ─────────────────────────────────────── -->
         <div class="form-row">
           <div class="form-group">
-            <label for="selectedUnit">Choose Unit</label>
+            <label for="selectedUnit">Choose Unit</label>
             <select id="selectedUnit" name="selectedUnit">
               <option value="">-- Select Unit --</option>
               <% units.forEach(u => { %>
@@ -101,29 +101,33 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="newUnit">Or Create Unit</label>
-            <input type="text" id="newUnit" name="newUnit" placeholder="e.g. kg, pcs">
+            <label for="newUnit">Or Create Unit</label>
+            <input type="text" id="newUnit" name="newUnit" placeholder="e.g. kg, pcs">
           </div>
         </div>
 
         <!-- ── Pricing & Quantity ───────────────────────────────────────── -->
         <div class="form-row">
           <div class="form-group">
-            <label for="purchasePrice">Purchase Price</label>
+            <label for="purchasePrice">Purchase Price</label>
             <input type="number"
                    step="0.01"
                    id="purchasePrice"
                    name="purchasePrice"
-                   value="<%= batch.purchasePrice %>"
+                   value="<%= (Number(batch.purchasePrice) % 1 === 0
+                             ? Number(batch.purchasePrice).toFixed(2)
+                             : batch.purchasePrice) %>"
                    required>
           </div>
           <div class="form-group">
-            <label for="salePrice">Retail Price</label>
+            <label for="salePrice">Retail Price</label>
             <input type="number"
                    step="0.01"
                    id="salePrice"
                    name="salePrice"
-                   value="<%= batch.salePrice %>"
+                   value="<%= (Number(batch.salePrice) % 1 === 0
+                             ? Number(batch.salePrice).toFixed(2)
+                             : batch.salePrice) %>"
                    required>
           </div>
           <div class="form-group">
@@ -137,11 +141,11 @@
           </div>
         </div>
 
-        <button type="submit">Update Batch</button>
+        <button type="submit">Update Batch</button>
       </form>
 
       <br>
-      <a href="/view-products" class="back-link">Back to Products List</a>
+      <a href="/view-products" class="back-link">Back to Products List</a>
     </section>
   </main>
 </div>

@@ -77,21 +77,22 @@
               <% products
                    .sort((a, b) => a.productName.localeCompare(b.productName))
                    .forEach(product => { %>
-                <option
-                  value="<%= product.id %>"
-                  data-category="<%= product.category %>"
-                  data-retail="<%= product.retailPrice %>"
-                  data-batches='<%= JSON.stringify(product.batches || []) %>'>
-                  <%= product.productName %>
-                  (Stock: <%= parseFloat(product.quantity).toFixed(2) %>)
-                </option>
+                    <option
+                    value="<%= product.id %>"
+                    data-category="<%= product.category %>"
+                    data-retail="<%= product.retailPrice %>"
+                    data-quantity="<%= product.quantity %>"
+                    data-batches='<%= JSON.stringify(product.batches || []) %>'>
+                    <%= product.productName %> (Stock: <%= parseFloat(product.quantity).toFixed(2) %>)
+                  </option>
+                  
               <% }); %>
             </select>
           </div>
       
           <!-- Total Sale -->
           <div>
-            <label for="retailPrice">Sale Price/Unit:</label>
+            <label for="retailPrice">Total Price:</label>
             <input
               type="number"
               step="0.01"
@@ -351,9 +352,14 @@
                       <%= saleTime %>
                     </td>
 
-                  <td style="text-align:center;">
-                    <i class="fas fa-trash-alt delete-sale-btn" data-id="<%= sale.id %>"></i>
-                  </td>
+                    <td style="text-align:center;">
+                      <i
+                        class="fas fa-trash-alt delete-sale-btn"
+                        data-id="<%= sale.id %>"
+                        data-product-id="<%= sale.productId %>"
+                        data-quantity="<%= sale.saleQuantity %>"
+                      ></i>
+                    </td>
                 </tr>
               <% }); %>
             </tbody>
@@ -440,16 +446,38 @@
   <!-- Client‑Side Script -->
   <script>
     document.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.delete-sale-btn');
-      if (!btn) return;
+  const btn = e.target.closest('.delete-sale-btn');
+  if (!btn) return;
+  if (!confirm('Delete this sale and restore stock?')) return;
 
-      if (!confirm('Delete this sale and restore stock?')) return;
-      try {
-        const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
-        btn.closest('tr').remove();
-        refreshSummary(res.summary);
-      } catch (err) { alert(err.message); }
-    });
+  // grab the two new data-attributes
+  const saleQty = parseFloat(btn.getAttribute('data-quantity')) || 0;
+  const prodId  = btn.getAttribute('data-product-id');
+
+  try {
+    const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
+
+    // 1) remove the row and update your summary
+    const row = btn.closest('tr');
+    row.remove();
+    refreshSummary(res.summary);
+
+    // 2) now patch the <option> in your dropdown
+    const option = productSelect.querySelector(`option[value="${prodId}"]`);
+    if (option) {
+      const oldQty = parseFloat(option.getAttribute('data-quantity')) || 0;
+      const newQty = oldQty + saleQty;
+      option.setAttribute('data-quantity', newQty);
+
+      // rebuild its label to show the new stock
+      const label = option.textContent.split(' (Stock:')[0];
+      option.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
 
     document.addEventListener('click', async e => {
       const btn = e.target.closest('.delete-expense-btn');
@@ -563,30 +591,23 @@
 
   /* FIFO averages from remaining batches */
   let batches = [];
-  try { batches = JSON.parse(opt.getAttribute('data-batches')); } catch {}
+  try { batches = JSON.parse(opt.getAttribute('data-batches') || '[]'); } catch {}
   const cmp   = computeFIFO(batches, qty);          // { wholesale, retail }
-  const avgWh = cmp.wholesale;
-  const defRt = cmp.retail;                         // default retail/unit
+  const avgWh = cmp.wholesale;                      // ₹ / unit (FIFO)
 
-  /* treat the user’s entry as a *unit* price by default */
-  let perUnitRetail = parseFloat(retailInput.value) || defRt;
-  let profitUnit    = perUnitRetail - avgWh;
+  /* The input box ALWAYS holds the **TOTAL** sale amount */
+  const totalEntered   = parseFloat(retailInput.value) || 0;
 
-  /* auto-detect “total-price” mistakes and auto-correct */
-  if (profitUnit < 0 && qty > 0) {
-    const candidateUnit = +(perUnitRetail / qty).toFixed(2); // total→unit
-    const altProfit     = candidateUnit - avgWh;
-    if (altProfit >= 0) {
-      perUnitRetail = candidateUnit;
-      profitUnit    = altProfit;
-    }
-  }
+  /* Convert that total into a per-unit retail for profit maths */
+  const perUnitRetail  = qty > 0 ? +(totalEntered / qty).toFixed(2) : 0;
+  const profitUnit     = perUnitRetail - avgWh;
 
-  const totalSaleAmt = perUnitRetail * qty;
-  const totalProfit  = profitUnit   * qty;
+  /* Derived totals */
+  const totalSaleAmt   = totalEntered;              // what the user typed
+  const totalProfit    = profitUnit * qty;
 
-  /* UI */
-  retailInput.placeholder     = defRt.toFixed(2);
+  /* UI updates */
+  retailInput.placeholder     = cmp.retail.toFixed(2); // default per-unit hint
   wholesaleField.value        = avgWh.toFixed(2);
   profitUnitField.value       = profitUnit.toFixed(2);
   totalProfitField.value      = totalProfit.toFixed(2);
@@ -634,6 +655,19 @@
         const obj = Object.fromEntries(new FormData(e.target).entries());
         const res = await postJSON('/api/sale', obj);
         const s = res.sale;
+
+        const opt = productSelect.querySelector(`option[value="${s.productId}"]`);
+    if (opt) {
+      const oldQty  = parseFloat(opt.getAttribute('data-quantity')) || 0;
+      const soldQty = parseFloat(s.saleQuantity)   || 0;
+      const newQty  = oldQty - soldQty;
+
+      opt.setAttribute('data-quantity', newQty);
+
+      const label = opt.textContent.split(' (Stock:')[0];
+      opt.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
+    }
+
         const row = document.createElement('tr');
         const pillClass = {
           'Paid Cash': 'status-cash',
