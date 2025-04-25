@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+  <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
 
   <title>SalesFlow Dashboard</title>
   
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/css/index.css">
+  <link rel="stylesheet" href="/css/index.css?v=<%= v %>">
 </head>
 
 <body>
@@ -747,6 +748,6 @@
       setTimeout(() => location.href = '/pricing', nav.type === "back_forward" ? 10000 : 5000);
     }
   </script>
-  <script src="/js/firebasePersistence.js" type="module"></script>
+  <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
 </body>
 </html>

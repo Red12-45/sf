@@ -25,7 +25,26 @@ const db = admin.firestore();
 // ─────────── Express base ───────────
 const app = express();
 app.use(compression());
+const buildId = process.env.RENDER_GIT_COMMIT || Date.now().toString();
+
+app.use((req, res, next) => {
+  // expose buildId to every EJS template as `v`
+  res.locals.v = buildId;
+
+  // disable caching for HTML responses so templates always re-render with the newest `v`
+  if (req.accepts('html')) {
+    res.setHeader('Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma',  'no-cache');
+    res.setHeader('Expires', '0');
+  }
+
+  next();
+});
+
+// serve static assets with a long maxAge—but they'll be re-requested whenever `v` changes
 app.use(express.static('public', { maxAge: '1d' }));
+
 app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
