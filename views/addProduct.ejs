@@ -8,13 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
   <link rel="stylesheet" href="/css/addProduct.css?v=<%= v %>">
   <style>.hidden{display:none}</style>
 </head>
 <body>
   <div class="page-wrapper">
-    <!-- Sidebar Navigation (unchanged) -->
+    <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-header"><div class="logo">Manage Inventory</div></div>
       <nav>
@@ -38,7 +37,7 @@
       <div class="sidebar-footer">&copy; 2025 SalesFlow</div>
     </aside>
 
-    <!-- Main Content Section -->
+    <!-- Main Content -->
     <main class="content">
       <header class="page-header"><h1>Add New Product / Stock Batch</h1></header>
 
@@ -49,7 +48,7 @@
         <div class="error-message"><%= errorMessage %></div>
       <% } %>
 
-      <!-- Filter Section -->
+      <!-- Filters -->
       <section class="filter-section">
         <form method="GET" action="/add-product">
           <label for="categoryFilter">Filter by Category:</label>
@@ -70,11 +69,11 @@
         </form>
       </section>
 
-      <!-- Form Section -->
+      <!-- Form -->
       <section class="form-container">
         <div class="form-section-header">Product Information</div>
 
-        <form action="/add-product" method="POST">
+        <form action="/add-product" method="POST" onsubmit="return validateForm()">
           <!-- Existing Product Dropdown -->
           <div class="form-row">
             <div class="form-group full-width">
@@ -97,7 +96,7 @@
               </div>
             </div>
 
-            <!-- Category choose / create -->
+            <!-- Category -->
             <div class="form-row">
               <div class="form-group">
                 <label for="selectedCategory">Choose Category</label>
@@ -114,7 +113,7 @@
               </div>
             </div>
 
-            <!-- UNIT choose / create -->
+            <!-- Unit -->
             <div class="form-row">
               <div class="form-group">
                 <label for="selectedUnit">Choose Unit</label>
@@ -130,7 +129,7 @@
                 <input type="text" id="newUnit" name="newUnit" placeholder="e.g. kg, pcs, m">
               </div>
             </div>
-          </div><!-- /newProductFields -->
+          </div>
 
           <!-- Pricing & Quantity -->
           <div class="form-row">
@@ -185,7 +184,7 @@
     document.addEventListener('DOMContentLoaded', toggleNewProductFields);
   </script>
 
-  <!-- NEW: format integers to two decimals on blur -->
+  <!-- Format integers to two decimals on blur -->
   <script>
     ['wholesalePrice','retailPrice','quantity'].forEach(id => {
       const el = document.getElementById(id);
@@ -193,7 +192,6 @@
         const v = this.value.trim();
         if (!v) return;
         const num = parseFloat(v);
-        // only if it's a whole number, add two decimals
         if (Number.isFinite(num) && Number.isInteger(num)) {
           this.value = num.toFixed(2);
         }
@@ -201,13 +199,12 @@
     });
   </script>
 
-  <!-- NEW: Title-case Product Name -->
+  <!-- Title-case Product Name -->
   <script>
     function titleCaseProductName() {
       const input = document.getElementById('productName');
       if (!input) return;
       const words = input.value.trim().split(/\s+/).map(word => {
-        // Only transform fully alphabetic words
         if (/^[A-Za-z]+$/.test(word)) {
           return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
         }
@@ -219,8 +216,32 @@
       const prodInput = document.getElementById('productName');
       if (prodInput) prodInput.addEventListener('blur', titleCaseProductName);
       const addProductForm = document.querySelector('form[action="/add-product"][method="POST"]');
-      if (addProductForm) addProductForm.addEventListener('submit', titleCaseProductName);
+      if (addProductForm) {
+        addProductForm.addEventListener('submit', titleCaseProductName);
+      }
     });
+  </script>
+
+  <!-- Validation for Category & Unit -->
+  <script>
+    function validateForm() {
+      const existing = document.getElementById('existingProduct').value;
+      if (existing === 'new') {
+        const selectedCat = document.getElementById('selectedCategory').value.trim();
+        const newCat = document.getElementById('newCategory').value.trim();
+        if (!selectedCat && !newCat) {
+          alert('Please select an existing category or create a new one.');
+          return false;
+        }
+        const selectedUnit = document.getElementById('selectedUnit').value.trim();
+        const newUnit = document.getElementById('newUnit').value.trim();
+        if (!selectedUnit && !newUnit) {
+          alert('Please select an existing unit or create a new one.');
+          return false;
+        }
+      }
+      return true;
+    }
   </script>
 
 <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
