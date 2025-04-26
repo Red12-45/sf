@@ -201,6 +201,28 @@
     });
   </script>
 
+  <!-- NEW: Title-case Product Name -->
+  <script>
+    function titleCaseProductName() {
+      const input = document.getElementById('productName');
+      if (!input) return;
+      const words = input.value.trim().split(/\s+/).map(word => {
+        // Only transform fully alphabetic words
+        if (/^[A-Za-z]+$/.test(word)) {
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }
+        return word;
+      });
+      input.value = words.join(' ');
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const prodInput = document.getElementById('productName');
+      if (prodInput) prodInput.addEventListener('blur', titleCaseProductName);
+      const addProductForm = document.querySelector('form[action="/add-product"][method="POST"]');
+      if (addProductForm) addProductForm.addEventListener('submit', titleCaseProductName);
+    });
+  </script>
+
 <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
 </body>
 </html>
