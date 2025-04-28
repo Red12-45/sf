@@ -8,6 +8,7 @@ const session             = require('express-session');
 const { FirestoreStore }  = require('@google-cloud/connect-firestore');
 const favicon             = require('serve-favicon');
 const Razorpay            = require('razorpay');
+const ExcelJS             = require('exceljs');      
 const compression         = require('compression');
 const cluster = require('cluster');
 const os = require('os');
@@ -74,7 +75,12 @@ if (process.env.NODE_ENV === 'production') app.set('view cache', true);
 // ─────────── helpers ───────────
 const pad = n => String(n).padStart(2, '0');
 
-
+/* NEW ➜ case-insensitive, space-insensitive key */
+const normalizeName = s =>
+  s
+    .toLowerCase()          // ignore case
+    .replace(/\s+/g, ' ')   // collapse whitespace runs
+    .trim(); 
 
 const getCategories = async accountId => {
   const key = `categories_${accountId}`;
@@ -765,7 +771,7 @@ app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (r
   }
 });
 
-// ─────────── POST /add-product – create or update ───────────
+/* ─────────── POST /add-product – create or update ─────────── */
 app.post(
   '/add-product',
   isAuthenticated,
@@ -785,50 +791,65 @@ app.post(
         newUnit
       } = req.body;
 
-      const wp  = parseFloat(wholesalePrice);
-      const rp  = parseFloat(retailPrice);
-      const qty = parseFloat(quantity);
+      const wp  = +parseFloat(wholesalePrice);
+      const rp  = +parseFloat(retailPrice);
+      const qty = +parseFloat(quantity);
 
       const category = newCategory?.trim()
         ? newCategory.trim()
         : (selectedCategory || '');
 
-      const unitRaw  = newUnit?.trim()
-        ? newUnit.trim()
-        : (selectedUnit || '');
+      const unitRaw = newUnit?.trim() || selectedUnit || '';
+      const unit    = unitRaw.toLowerCase();
 
-      const unit = unitRaw.toLowerCase();
-
-      /* -------------------------------------------------------------
-         1.  Work out whether we’re **updating** an existing product
-             or **creating** a brand-new one
-         ------------------------------------------------------------- */
-      let productRef;
-      let productSnap;
+      /* --------------------------------------------------------------
+         Duplicate detection (case-insensitive, space-insensitive)
+      -------------------------------------------------------------- */
+      const nameKey = normalizeName(productName);
+      let productRef = null;
+      let productSnap = null;
 
       if (existingProduct && existingProduct !== 'new') {
-        // explicit “update existing”
+        // explicit update path
         productRef  = db.collection('products').doc(existingProduct);
         productSnap = await productRef.get();
         if (!productSnap.exists)
           return res.status(404).send('Selected product not found');
+
       } else {
-        // “new” – but first check for duplicate name
-        const dupSnap = await db.collection('products')
+        // fast path – does another product already have this nameKey?
+        const fastDup = await db.collection('products')
           .where('accountId', '==', accountId)
-          .where('productName', '==', productName.trim())
+          .where('nameKey',   '==', nameKey)
           .limit(1)
           .get();
 
-        if (!dupSnap.empty) {
-          productRef  = dupSnap.docs[0].ref;   // treat as update
-          productSnap = dupSnap.docs[0];
+        if (!fastDup.empty) {
+          productRef  = fastDup.docs[0].ref;
+          productSnap = fastDup.docs[0];
+
+        } else {
+          /* ─── Legacy fallback – scan once, patch missing nameKey ─── */
+          const all = await db.collection('products')
+            .where('accountId','==', accountId)
+            .select('productName')        // lighter payload
+            .get();
+
+          const legacy = all.docs.find(d =>
+            normalizeName(d.data().productName) === nameKey
+          );
+
+          if (legacy) {
+            await legacy.ref.update({ nameKey });  // back-fill
+            productRef  = legacy.ref;
+            productSnap = legacy;
+          }
         }
       }
 
-      /* -------------------------------------------------------------
-         2-A. UPDATE flow
-         ------------------------------------------------------------- */
+      /* --------------------------------------------------------------
+         1. UPDATE flow
+      -------------------------------------------------------------- */
       if (productRef && productSnap) {
         const d    = productSnap.data();
         const curQ = d.quantity || 0;
@@ -838,21 +859,22 @@ app.post(
         const newRetail    = ((curQ * d.retailPrice ) + (qty * rp)) / newQ;
 
         await productRef.update({
-          quantity: newQ,
+          quantity      : newQ,
           wholesalePrice: newWholesale,
-          retailPrice: newRetail,
-          profitMargin: newRetail - newWholesale,
-          updatedAt: new Date(),
+          retailPrice   : newRetail,
+          profitMargin  : newRetail - newWholesale,
+          updatedAt     : new Date(),
           ...(unit     && { unit }),
           ...(category && { category })
         });
 
-      /* -------------------------------------------------------------
-         2-B. CREATE flow
-         ------------------------------------------------------------- */
+      /* --------------------------------------------------------------
+         2. CREATE flow
+      -------------------------------------------------------------- */
       } else {
         const data = {
           productName : productName.trim(),
+          nameKey,                               // ⬅️  NEW / ALWAYS
           wholesalePrice: wp,
           retailPrice   : rp,
           quantity      : qty,
@@ -861,20 +883,20 @@ app.post(
           unit,
           createdAt     : new Date(),
           accountId,
-          // legacy fields kept for backwards compatibility
+          // legacy compat
           oldestWholesale: wp,
           oldestBatchQty : qty,
           secondWholesale: null,
           oldestRetail   : rp,
           secondRetail   : null
         };
-        productRef = await db.collection('products').add(data);
+        productRef  = await db.collection('products').add(data);
         productSnap = { id: productRef.id, data: () => data };
       }
 
-      /* -------------------------------------------------------------
-         3.  Always create a *new* stock batch for the received qty
-         ------------------------------------------------------------- */
+      /* --------------------------------------------------------------
+         3. Always create a NEW stock batch
+      -------------------------------------------------------------- */
       await db.collection('stockBatches').add({
         productId        : productRef.id,
         productName      : productSnap.data().productName,
@@ -887,9 +909,6 @@ app.post(
         unit
       });
 
-      /* -------------------------------------------------------------
-         4.  Bust caches + redirect with success banner
-         ------------------------------------------------------------- */
       cache.del(`categories_${accountId}`);
       cache.del(`units_${accountId}`);
 
@@ -899,6 +918,7 @@ app.post(
     }
   }
 );
+
 
 
 // GET /view-products
@@ -944,6 +964,103 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
     res.status(500).send(err.toString());
   }
 });
+
+/* ─────────── DOWNLOAD PRODUCTS → EXCEL ─────────── */
+// GET /download-products
+app.get('/download-products', isAuthenticated, restrictRoute('/view-products'), async (req, res) => {
+  try {
+    const accountId                  = req.session.user.accountId;
+    const { filterCategory='', stockThreshold='', sortOrder='asc' } = req.query;
+
+    /* 1. replicate the same Firestore query used in /view-products */
+    let q = db.collection('products').where('accountId','==',accountId);
+    if (filterCategory.trim() !== '')
+      q = q.where('category','==',filterCategory);
+    if (stockThreshold.trim() !== '')
+      q = q.where('quantity','<',parseFloat(stockThreshold));
+    q = q.orderBy('productName', sortOrder);
+
+    const prodSnap  = await q.get();
+    const products  = prodSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+    const productIds= products.map(p=>p.id);
+
+    /* 2. pull batches so we can compute avg profit */
+    const batchesMap = {};
+    if (productIds.length) {
+      const batchPromises = [];
+      for (let i=0; i<productIds.length; i+=10) {
+        const slice = productIds.slice(i,i+10);
+        batchPromises.push(
+          db.collection('stockBatches')
+            .where('productId','in',slice)
+            .get()
+        );
+      }
+      const batchSnaps = await Promise.all(batchPromises);
+      batchSnaps.forEach(s=>{
+        s.docs.forEach(b=>{
+          const d=b.data(); const pid=d.productId;
+          if (!batchesMap[pid]) batchesMap[pid]=[];
+          batchesMap[pid].push(d);
+        });
+      });
+    }
+
+    /* 3. create workbook */
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Products');
+
+    ws.columns = [
+      { header:'Serial',          key:'serial',          width:8  },
+      { header:'Product Name',    key:'productName',     width:30 },
+      { header:'Wholesale ₹',     key:'wholesalePrice',  width:14 },
+      { header:'Retail ₹',        key:'retailPrice',     width:12 },
+      { header:'Quantity',        key:'quantity',        width:10 },
+      { header:'Unit',            key:'unit',            width:8  },
+      { header:'Profit /Unit ₹',  key:'profitMargin',    width:16 },
+      { header:'Avg Profit ₹',    key:'avgProfit',       width:14 },
+      { header:'Category',        key:'category',        width:16 }
+    ];
+
+    products.forEach((p, idx) => {
+      /* compute average profit exactly like the page does */
+      let avgProfit = 0;
+      const batches = batchesMap[p.id] || [];
+      if (batches.length) {
+        const tQty  = batches.reduce((s,b)=>s+(+b.quantity||0), 0);
+        const tProf = batches.reduce((s,b)=>
+                      s + ((+b.salePrice - +b.purchasePrice)*(+b.quantity||0)), 0);
+        avgProfit = tQty ? tProf / tQty : 0;
+      } else {
+        avgProfit = (+p.retailPrice - +p.wholesalePrice);
+      }
+
+      ws.addRow({
+        serial        : (idx+1).toFixed(2),
+        productName   : p.productName,
+        wholesalePrice: (+p.wholesalePrice).toFixed(2),
+        retailPrice   : (+p.retailPrice).toFixed(2),
+        quantity      : (+p.quantity).toFixed(2),
+        unit          : p.unit || '',
+        profitMargin  : (+p.profitMargin).toFixed(2),
+        avgProfit     : avgProfit.toFixed(2),
+        category      : p.category || ''
+      });
+    });
+
+    /* 4. stream to client */
+    res.setHeader('Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',
+      `attachment; filename="products_${Date.now()}.xlsx"`);
+
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    res.status(500).send(err.toString());
+  }
+});
+
 
 
 /* ─────────── STOCK BATCH MANAGEMENT ─────────── */
@@ -1020,19 +1137,33 @@ async function recalcProductFromBatches(productId) {
 app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
     const { batchId } = req.params;
-    const batchRef = db.collection('stockBatches').doc(batchId);
-    const batchDoc = await batchRef.get();
-    if (!batchDoc.exists) return res.status(404).send('Stock batch not found');
-    if (batchDoc.data().accountId !== req.session.user.accountId) return res.status(403).send('Access denied');
+    const batchRef    = db.collection('stockBatches').doc(batchId);
+    const batchSnap   = await batchRef.get();
+    if (!batchSnap.exists) {
+      return res.status(404).send('Stock batch not found');
+    }
+    if (batchSnap.data().accountId !== req.session.user.accountId) {
+      return res.status(403).send('Access denied');
+    }
 
-    // still load categories/units, but no parent‐product lookup
+    // load categories and units for the dropdowns
     const [categories, units] = await Promise.all([
       getCategories(req.session.user.accountId),
       getUnits(req.session.user.accountId)
     ]);
 
+    // build a mutable batch object
+    const batchData = { id: batchSnap.id, ...batchSnap.data() };
+
+    // if the batch has no category, fall back to the parent product's category
+    const productRef  = db.collection('products').doc(batchData.productId);
+    const productSnap = await productRef.get();
+    if (productSnap.exists) {
+      batchData.category = batchData.category || productSnap.data().category || '';
+    }
+
     res.render('editStockBatch', {
-      batch: { id: batchDoc.id, ...batchDoc.data() },
+      batch:      batchData,
       categories,
       units
     });
@@ -1040,6 +1171,7 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     res.status(500).send(e.toString());
   }
 });
+
 
 // POST /api/edit-stock-batch-field/:batchId
 app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, res) => {
@@ -1097,62 +1229,94 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, re
   }
 });
 
+
 // POST /edit-stock-batch/:batchId
 app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
-    const { batchId } = req.params;
+    const { batchId }   = req.params;
     const {
-      productName,
-      purchasePrice,
-      salePrice,
-      quantity,
-      newCategory,
-      selectedCategory,
-      newUnit,
-      selectedUnit
+      productName, purchasePrice, salePrice, quantity,
+      newCategory, selectedCategory, newUnit, selectedUnit
     } = req.body;
 
-    /* 0. validate ownership -------------------------------------------- */
+    /* 0. permissions --------------------------------------------------- */
     const batchRef  = db.collection('stockBatches').doc(batchId);
     const batchSnap = await batchRef.get();
-    if (!batchSnap.exists)               return res.status(404).send('Stock batch not found');
+    if (!batchSnap.exists)                   return res.status(404).send('Stock batch not found');
     if (batchSnap.data().accountId !== req.session.user.accountId)
       return res.status(403).send('Access denied');
 
-    /* 1. normalise inputs ---------------------------------------------- */
+    const accountId   = req.session.user.accountId;
+    const productId   = batchSnap.data().productId;
+    const newName     = productName.trim();
+    const newNameKey  = normalizeName(newName);
+
+    /* 1. apply field edits to this *batch* ----------------------------- */
     const pp  = +parseFloat(purchasePrice);
     const sp  = +parseFloat(salePrice);
     const qty = +parseFloat(quantity);
 
-    /* 2. build update payload ------------------------------------------ */
-    const updateData = {
-      purchasePrice     : pp,
-      salePrice         : sp,
-      quantity          : qty,
-      remainingQuantity : qty,                   // reset FIFO baseline
-      profitMargin      : +(sp - pp).toFixed(2), // NEW ➊
-      updatedAt         : new Date()
-    };
+    const unitRaw = newUnit?.trim() || selectedUnit || '';
+    const catRaw  = newCategory?.trim() || selectedCategory || '';
 
-    if (productName?.trim())              updateData.productName = productName.trim();
-    const unitRaw = newUnit?.trim() || selectedUnit;
-    if (unitRaw)                          updateData.unit = unitRaw.toLowerCase();
-    const catRaw  = newCategory?.trim() || selectedCategory;
-    if (catRaw)                           updateData.category = catRaw;
+    await batchRef.update({
+      productName : newName,
+      purchasePrice: pp,
+      salePrice   : sp,
+      quantity    : qty,
+      remainingQuantity: qty,
+      profitMargin: +(sp - pp).toFixed(2),
+      ...(unitRaw && { unit: unitRaw.toLowerCase() }),
+      ...(catRaw  && { category: catRaw }),
+      updatedAt: new Date()
+    });
 
-    /* 3. write batch ---------------------------------------------------- */
-    await batchRef.update(updateData);
+    /* 2. 🆕 merge-duplicates if another product already has newNameKey -- */
+    const dupSnap = await db.collection('products')
+      .where('accountId','==',accountId)
+      .where('nameKey','==',newNameKey)
+      .limit(1).get();
 
-    /* 4. recompute parent-product -------------------------------------- */
-    const productId = batchSnap.data().productId;
-    await recalcProductFromBatches(productId);    // NEW ➋
+    let targetProdId = productId;                 // assume we keep the same doc
+    if (!dupSnap.empty && dupSnap.docs[0].id !== productId) {
+      /* a duplicate exists → we’ll keep *that* doc and migrate batches */
+      const keeperId = dupSnap.docs[0].id;
+      const batchList = await db.collection('stockBatches')
+                                .where('productId','==',productId)
+                                .get();
 
-    /* 5. done ----------------------------------------------------------- */
+      const moveOps = db.batch();
+      batchList.docs.forEach(doc => {
+        moveOps.update(doc.ref, { productId: keeperId });
+      });
+      await moveOps.commit();
+
+      // delete the now-orphaned product doc
+      await db.collection('products').doc(productId).delete();
+      targetProdId = keeperId;
+    }
+
+    /* 3. refresh the surviving product doc ---------------------------- */
+    const prodRef = db.collection('products').doc(targetProdId);
+    await prodRef.set({
+      productName : newName,
+      nameKey     : newNameKey,
+      ...(unitRaw && { unit: unitRaw.toLowerCase() }),
+      ...(catRaw  && { category: catRaw }),
+      updatedAt   : new Date()
+    }, { merge: true });
+
+    await recalcProductFromBatches(targetProdId);
+    cache.del(`categories_${accountId}`);
+    cache.del(`units_${accountId}`);
+
     res.redirect('/view-products');
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
+
+
 
 
 /* ─────────── SALES & PROFIT REPORTING ─────────── */
@@ -1241,6 +1405,78 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
     res.status(500).send(err.toString());
   }
 });
+
+
+/* ─────────── DOWNLOAD SALES → EXCEL ─────────── */
+// GET /download-sales
+app.get('/download-sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => {
+  try {
+    const accountId           = req.session.user.accountId;
+    const { saleDate, month, status } = req.query;
+
+    /* 1. build the same query logic used in /sales */
+    let q = db.collection('sales')
+              .where('accountId', '==', accountId)
+              .orderBy('createdAt', 'desc');
+
+    if (saleDate) {
+      q = q.where('saleDate', '==', saleDate);
+    } else if (month) {
+      const [y, m] = month.split('-');
+      const start  = `${month}-01`;
+      let nextM    = parseInt(m, 10) + 1,
+          nextY    = parseInt(y, 10);
+      if (nextM > 12) { nextM = 1; nextY++; }
+      const end = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+      q = q.where('saleDate', '>=', start).where('saleDate', '<', end);
+    }
+    if (status && status.trim() && status !== 'All') {
+      q = q.where('status', '==', status);
+    }
+
+    const snap  = await q.get();
+    const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    /* 2. create the workbook */
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Sales');
+
+    ws.columns = [
+      { header: 'Sale Date',       key: 'saleDate',        width: 12 },
+      { header: 'Product',         key: 'productName',     width: 32 },
+      { header: 'Wholesale ₹',     key: 'wholesalePrice',  width: 14 },
+      { header: 'Retail ₹',        key: 'retailPrice',     width: 12 },
+      { header: 'Quantity',        key: 'saleQuantity',    width: 10 },
+      { header: 'Unit',            key: 'unit',            width: 8  },
+      { header: 'Total Sale ₹',    key: 'totalSale',       width: 14 },
+      { header: 'Profit / Unit ₹', key: 'profitPerUnit',   width: 16 },
+      { header: 'Total Profit ₹',  key: 'profit',          width: 14 },
+      { header: 'Status',          key: 'status',          width: 24 },
+      { header: 'Extra Info',      key: 'extraInfo',       width: 32 },
+      { header: 'Created At',      key: 'createdAt',       width: 22 }
+    ];
+
+    sales.forEach(s => ws.addRow({
+      ...s,
+      totalSale:     s.totalSale || (s.retailPrice * s.saleQuantity),
+      createdAt:     (s.createdAt?.toDate ? s.createdAt.toDate()
+                                          : new Date(s.createdAt))
+                     .toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+    }));
+
+    /* 3. stream it to the client */
+    res.setHeader('Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition',
+      `attachment; filename="sales_${Date.now()}.xlsx"`);
+
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    res.status(500).send(err.toString());
+  }
+});
+
 
 
 /* ─────────── AJAX inline edit   /api/edit-sale ─────────── */

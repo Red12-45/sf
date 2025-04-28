@@ -626,3 +626,9 @@ table tr:hover {
     filter:brightness(1.1);
   }
   
+  .btn-download{
+    display:inline-block;margin-left:12px;padding:6px 12px;
+    background:#2d8f2d;color:#fff;border-radius:4px;text-decoration:none;
+  }
+  .btn-download:hover{background:#227522;}
+  
