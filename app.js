@@ -398,27 +398,95 @@ app.post('/register', async (req, res) => {
   }
 });
 
+
+
+
+// ─────────── brute‑force protection ───────────
+const MAX_LOGIN_ATTEMPTS  = 5;      // failures before block
+const BLOCK_TIME_SECONDS  = 15 * 60; // 15‑minute lock‑out
+
+/**
+ * Returns current failure count for key.
+ * key =   "bf:<identifier>"  (preferred)  when user types an email / sub‑user ID / phone
+ *       or "bfip:<ip>"       (fallback)   when identifier missing/garbled
+ */
+const getAttempts = async key =>
+  parseInt(await redisClient.get(key) || '0', 10);
+
+/** Increment failures and (re)set expiry. */
+const recordFailure = async key => {
+  const attempts = await redisClient.incr(key);
+  if (attempts === 1) await redisClient.expire(key, BLOCK_TIME_SECONDS);
+  return attempts;
+};
+
+/** On successful login → wipe the counter. */
+const clearFailures = async key => redisClient.del(key);
+
+
+
 // GET /login
 app.get('/login', (req, res) => {
   if (req.session && req.session.user) return res.redirect('/');
   res.render('login');
 });
 // POST /login
+// POST /login  (brute‑force protected)
 app.post('/login', async (req, res) => {
   try {
     let { identifier, password } = req.body;
+
+    // normalise identifier early (same logic as before)
     if (identifier.includes('@')) identifier = identifier.trim().toLowerCase();
+    const bruteKey = identifier ? `bf:${identifier}` : `bfip:${req.ip}`;
+
+    /* ─── 1️⃣  Lock‑out check ─── */
+    const currentAttempts = await getAttempts(bruteKey);
+    if (currentAttempts >= MAX_LOGIN_ATTEMPTS) {
+      return res.status(429).send(
+        `Too many failed attempts. Please try again after ${
+          Math.ceil(await redisClient.ttl(bruteKey) / 60)
+        } minutes.`
+      );
+    }
+
+    /* ─── 2️⃣  Existing user lookup (unchanged) ─── */
     const [emailQ, subUserQ, phoneQ] = await Promise.all([
-      db.collection('users').where('email','==',identifier).get(),
-      db.collection('users').where('subUserId','==',identifier).get(),
-      db.collection('users').where('phone','==',identifier).get()
+      db.collection('users').where('email',    '==', identifier).get(),
+      db.collection('users').where('subUserId','==', identifier).get(),
+      db.collection('users').where('phone',    '==', identifier).get()
     ]);
-    let userDoc = !emailQ.empty ? emailQ.docs[0] : !subUserQ.empty ? subUserQ.docs[0] : !phoneQ.empty ? phoneQ.docs[0] : null;
-    if (!userDoc) return res.status(400).send('User not found');
+    const userDoc = !emailQ.empty ? emailQ.docs[0]
+                    : !subUserQ.empty ? subUserQ.docs[0]
+                    : !phoneQ.empty   ? phoneQ.docs[0]
+                    : null;
+    if (!userDoc) {
+      await recordFailure(bruteKey);
+      return res.status(400).send('User not found');
+    }
 
     const userData = userDoc.data();
+
+    /* ─── 3️⃣  Password check ─── */
+    const validPassword = await bcrypt.compare(password, userData.password);
+    if (!validPassword) {
+      const tries = await recordFailure(bruteKey);
+      const left  = MAX_LOGIN_ATTEMPTS - tries;
+      return res.status(400).send(
+        left > 0
+          ? `Invalid password – ${left} attempt${left === 1 ? '' : 's'} remaining`
+          : 'Too many failed attempts. Please try again later.'
+      );
+    }
+
+    /* ─── 4️⃣  Success → clear failures ─── */
+    await clearFailures(bruteKey);
+
+    /* ─── 5️⃣  Subscription logic (same as before) ─── */
     let subscriptionExpiry = userData.subscriptionExpiry
-      ? (typeof userData.subscriptionExpiry.toDate === 'function' ? userData.subscriptionExpiry.toDate() : new Date(userData.subscriptionExpiry))
+      ? (typeof userData.subscriptionExpiry.toDate === 'function'
+         ? userData.subscriptionExpiry.toDate()
+         : new Date(userData.subscriptionExpiry))
       : null;
 
     if (!userData.isMaster) {
@@ -430,9 +498,7 @@ app.post('/login', async (req, res) => {
       }
     }
 
-    const validPassword = await bcrypt.compare(password, userData.password);
-    if (!validPassword) return res.status(400).send('Invalid password');
-
+    /* ─── 6️⃣  Session payload (unchanged) ─── */
     req.session.user = {
       id: userDoc.id,
       name: userData.name,
@@ -443,15 +509,20 @@ app.post('/login', async (req, res) => {
     };
 
     if (!req.session.user.isMaster) {
-      const permDoc = await db.collection('permissions').doc(req.session.user.accountId).get();
-      req.session.lockedRoutes = permDoc.exists ? (permDoc.data().lockedRoutes || []) : [];
+      const permDoc = await db.collection('permissions')
+                              .doc(req.session.user.accountId).get();
+      req.session.lockedRoutes = permDoc.exists
+        ? (permDoc.data().lockedRoutes || [])
+        : [];
     }
 
     res.redirect('/');
   } catch (error) {
+    console.error(error);
     res.status(500).send(error.toString());
   }
 });
+
 
 // GET /logout
 app.get('/logout', (req, res) => {
@@ -1339,7 +1410,6 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 /* ─────────── SALES & PROFIT REPORTING ─────────── */
 // ────────────────────────────────────────────────────────────────
 // GET  /sales  – Sales + Expense report with optional filters
-// ────────────────────────────────────────────────────────────────
 app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
@@ -1361,7 +1431,7 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
       const start = `${month}-01`;
       let nextM   = parseInt(m,10) + 1, nextY = parseInt(y,10);
       if (nextM > 12) { nextM = 1; nextY++; }
-      const end = `${nextY}-${String(nextM).padStart(2,'0')}-01`;
+      const end   = `${nextY}-${String(nextM).padStart(2,'0')}-01`;
       salesQ   = salesQ.where('saleDate','>=',start).where('saleDate','<',end);
       expenseQ = expenseQ.where('saleDate','>=',start).where('saleDate','<',end);
     }
@@ -1375,15 +1445,25 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
     const sales    = salesSnap.docs.map(d => ({ id:d.id, ...d.data() }));
     const expenses = expSnap .docs.map(d => ({ id:d.id, ...d.data() }));
 
-    // 3. Gather every unique date we touched
+    // 3. Totals
+    const profitWithoutExpenses = sales.reduce((sum,s)=>sum+s.profit,0);
+    const totalExpensesAmount   = expenses.reduce((sum,e)=>sum+e.expenseCost,0);
+    const profitAfterExpenses   = profitWithoutExpenses - totalExpensesAmount;
+
+    const totalRevenueAmount = sales.reduce((sum,s)=>
+      sum + (s.totalSale !== undefined
+               ? parseFloat(s.totalSale)
+               : s.retailPrice * s.saleQuantity)
+    ,0);
+
+    // 4. Opening balances / times (unchanged)
     const dateSet = new Set();
     sales.forEach(s   => dateSet.add(s.saleDate));
     expenses.forEach(e=> dateSet.add(e.saleDate));
     const allDates = Array.from(dateSet);
 
-    // 4. Fetch opening / closing times and balances for each date
-    const openingTimes      = {};
-    const openingBalances   = {};
+    const openingTimes    = {};
+    const openingBalances = {};
     await Promise.all(allDates.map(async date => {
       const obRef = db.collection('openingBalances').doc(`${accountId}_${date}`);
       const obDoc = await obRef.get();
@@ -1400,12 +1480,7 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
       }
     }));
 
-    // 5. Profit & expense roll‑ups (unchanged)
-    const profitWithoutExpenses = sales.reduce((sum,s)=>sum+s.profit,0);
-    const totalExpensesAmount   = expenses.reduce((sum,e)=>sum+e.expenseCost,0);
-    const profitAfterExpenses   = profitWithoutExpenses - totalExpensesAmount;
-
-    // 6. Render
+    // 5. Render
     res.render('sales', {
       sales,
       expenses,
@@ -1415,13 +1490,15 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
       profitWithoutExpenses,
       totalExpensesAmount,
       profitAfterExpenses,
+      totalRevenueAmount,        // ➜ NEW
       openingTimes,
-      openingBalances    // 👈 new
+      openingBalances
     });
   } catch (err) {
     res.status(500).send(err.toString());
   }
 });
+
 
 
 /* ─────────── DOWNLOAD SALES → EXCEL ─────────── */

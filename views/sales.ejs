@@ -29,11 +29,49 @@
       width: 100%; border: none; padding: 4px;
       box-sizing: border-box; font-size: inherit;
     }
+
     /* Detail input style */
     td.editable-status .status-input {
       width: 45%; margin-right: 4%; padding: 2px; box-sizing: border-box;
       font-size: inherit;
     }
+
+    /* NEW ➜ inline totals beside Filter */
+    .summary-inline {
+  display: inline-flex;
+  gap: .8rem;
+  margin-left: 1rem;
+  align-items: center;
+  font-size: .85em;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .2rem .6rem;
+  border-radius: .5rem;
+  font-weight: 500;
+}
+
+.summary-item.revenue {
+  background: rgba(46, 204, 113, 0.1);
+  color: #2ecc71;
+}
+
+.summary-item.profit {
+  background: rgba(52, 152, 219, 0.1);
+  color: #3498db;
+}
+
+.summary-item.expense {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+}
+
+.summary-item .fas {
+  font-size: .9em;
+}
   </style>
 </head>
 <body>
@@ -74,9 +112,16 @@
   <div class="main-content" id="main-content">
     <div class="page-container">
 
-      <!-- Filter Form -->
       <div class="formBox filter-form">
-        <h2><i class="fas fa-filter"></i> Filter Sales</h2>
+        <h2>
+          <i class="fas fa-filter"></i> Filter 
+          <span class="summary-inline">
+            Total&nbsp;Revenue:&nbsp;₹<%= totalRevenueAmount.toFixed(2) %>&emsp;
+            Total&nbsp;Profit:&nbsp;₹<%= profitWithoutExpenses.toFixed(2) %>&emsp;
+            Total&nbsp;Expense:&nbsp;₹<%= totalExpensesAmount.toFixed(2) %>
+          </span>
+        </h2>
+
         <form action="/sales" method="GET" class="form-inline">
           <div class="form-field">
             <label for="saleDate">Sale Date:</label>
@@ -98,12 +143,11 @@
               <option value="Half Online + Not Paid" <%= status==='Half Online + Not Paid'?'selected':'' %>>Half Online + Not Paid</option>
             </select>
           </div>
+
           <button type="submit"><i class="fas fa-search"></i> Filter</button>
-          <button type="submit"
-        formaction="/download-sales"
-        formmethod="GET">
-  <i class="fas fa-file-excel"></i> Download Excel
-</button>
+          <button type="submit" formaction="/download-sales" formmethod="GET">
+            <i class="fas fa-file-excel"></i> Download Excel
+          </button>
         </form>
       </div>
 
