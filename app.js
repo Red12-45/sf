@@ -4,14 +4,20 @@ const express             = require('express');
 const admin               = require('firebase-admin');
 const path                = require('path');
 const bcrypt              = require('bcrypt');
-const session             = require('express-session');
-const { FirestoreStore }  = require('@google-cloud/connect-firestore');
+const session = require('express-session');
+const { createClient } = require('redis');       // using Node Redis client
+const { RedisStore } = require('connect-redis'); // import RedisStore from connect-redis
+
+
+
 const favicon             = require('serve-favicon');
 const Razorpay            = require('razorpay');
 const ExcelJS             = require('exceljs');      
 const compression         = require('compression');
+
 const cluster = require('cluster');
 const os = require('os');
+
 require('dotenv').config();
 
 // ─────────── cache ───────────
@@ -60,12 +66,23 @@ app.locals.formatIST = date => {
 
 
 
+const redisClient = createClient({
+  url: process.env.REDIS_URL
+});
+redisClient.connect().catch(console.error);  // connect to Redis (for node-redis v4)
+
+// 2. Create RedisStore instance for sessions
+const redisStore = new RedisStore({
+  client: redisClient,
+  prefix: 'sess:'  // optional key prefix in Redis, defaults to "sess:"
+});
+
 app.use(session({
-  store: new FirestoreStore({ dataset: admin.firestore(), kind: 'express-sessions' }),
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 } // 30 days
+  store: redisStore,              // use Redis store for session storage
+  secret: 'your_session_secret',  // replace with your own secret
+  resave: false,                  // don't save session if unmodified
+  saveUninitialized: false,       // don't create session until something stored
+  cookie: { maxAge: 86400000 }    // e.g. cookie expiration in ms (optional)
 }));
 
 app.set('view engine', 'ejs');
