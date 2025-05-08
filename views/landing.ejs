@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DashInsight – Retail Analytics Dashboard | SalesFlow Store</title>
+
+  <!-- SEO -->
+  <meta name="description"
+        content="Transform your retail business with DashInsight. Track inventory, sales, profit, expenses and staff with our all-in-one dashboard. Real-time analytics, instant exports, and role-based access. Start your 30-day free trial today.">
+  <meta name="keywords" content="retail dashboard, inventory management, sales analytics, profit tracking, retail POS, business intelligence">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="DashInsight – Retail Analytics Dashboard | SalesFlow Store">
+  <meta property="og:description" content="Transform your retail business with real-time analytics. Start free today.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dashinsight.com">
+  
+  <!-- Fonts / Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/inter-ui/3.19.3/inter.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Landing styles -->
+  <link rel="stylesheet" href="/css/landing.css?v=<%= v %>">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container">
+      <div class="logo">
+        <img src="/images/dashinsight-logo.svg" alt="DashInsight Logo" onerror="this.src='/api/placeholder/180/60'; this.onerror=null;">
+        <span>DashInsight</span>
+      </div>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#workflow">How It Works</a>
+        <a href="#testimonials">Testimonials</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/login" class="nav-login">Log In</a>
+        <a href="/register" class="nav-signup">Start Free</a>
+      </div>
+      <div class="menu-toggle">
+        <i class="fas fa-bars"></i>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ────────── Hero ────────── -->
+  <header class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-text">
+          <h1>
+            <span class="gradient-text">Your retail business,</span>
+            <span class="tagline">crystal-clear.</span>
+          </h1>
+          <p class="hero-subtitle">All-in-one dashboard that gives you complete visibility into your sales, inventory, and profit in real-time.</p>
+          
+          <ul class="punchlines">
+            <li><i class="fas fa-check-circle"></i> Real-time profit & loss tracking</li>
+            <li><i class="fas fa-check-circle"></i> Intelligent stock management with FIFO</li>
+            <li><i class="fas fa-check-circle"></i> Staff attendance & performance metrics</li>
+            <li><i class="fas fa-check-circle"></i> One-click reports for accountants</li>
+          </ul>
+
+          <div class="cta">
+            <a href="/register" class="btn primary pulse"><i class="fas fa-rocket"></i> Start 30-Day Free Trial</a>
+            <a href="/demo" class="btn outline"><i class="fas fa-play-circle"></i> Watch Demo</a>
+          </div>
+          <p class="trial-note">No credit card required • Cancel anytime • Full feature access</p>
+        </div>
+        <div class="hero-image">
+          <img src="/images/dashboard-preview.png" alt="DashInsight Dashboard Preview" onerror="this.src='/api/placeholder/550/400'; this.onerror=null;">
+        </div>
+      </div>
+    </div>
+    <div class="hero-shape">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+        <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z"></path>
+      </svg>
+    </div>
+  </header>
+
+  <!-- ────────── Trust Indicators ────────── -->
+  <section class="trust-bar">
+    <div class="container">
+      <p>Trusted by 7,500+ businesses across India</p>
+      <div class="logos">
+        <img src="/images/client-1.png" alt="Client logo" onerror="this.src='/api/placeholder/120/40'; this.onerror=null;">
+        <img src="/images/client-2.png" alt="Client logo" onerror="this.src='/api/placeholder/120/40'; this.onerror=null;">
+        <img src="/images/client-3.png" alt="Client logo" onerror="this.src='/api/placeholder/120/40'; this.onerror=null;">
+        <img src="/images/client-4.png" alt="Client logo" onerror="this.src='/api/placeholder/120/40'; this.onerror=null;">
+        <img src="/images/client-5.png" alt="Client logo" onerror="this.src='/api/placeholder/120/40'; this.onerror=null;">
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── Benefits ────────── -->
+  <section id="features" class="benefits">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Features</span>
+        <h2>Everything you need in one powerful view</h2>
+        <p class="section-subtitle">DashInsight combines all critical retail operations into a single, intuitive dashboard.</p>
+      </div>
+
+      <div class="benefit-grid">
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-bolt"></i></div>
+          <h3>Real-Time Analytics</h3>
+          <p>Sales, expenses, and profit calculations update instantly with each transaction. No delays, no refresh needed.</p>
+        </article>
+
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-box-open"></i></div>
+          <h3>Smart Inventory</h3>
+          <p>FIFO batch tracking, low-stock alerts, and category management — all automatically synced with your sales.</p>
+        </article>
+
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+          <h3>Visual Reporting</h3>
+          <p>Beautiful Apache ECharts visualizations for profit trends, best-selling products, and revenue forecasting.</p>
+        </article>
+
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-user-shield"></i></div>
+          <h3>Secure User Roles</h3>
+          <p>Create sub-users with customized access levels, keeping sensitive financial data visible only to management.</p>
+        </article>
+
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-file-excel"></i></div>
+          <h3>Instant Exports</h3>
+          <p>Generate perfectly formatted Excel reports for products, sales, or expenses with a single click.</p>
+        </article>
+
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-indian-rupee-sign"></i></div>
+          <h3>Flexible Payments</h3>
+          <p>Handle cash, online, partial payments, and credit sales with native Razorpay integration for faster checkout.</p>
+        </article>
+
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-clock"></i></div>
+          <h3>Staff Management</h3>
+          <p>Digital check-in/out system accessible from any device, with attendance reports and performance tracking.</p>
+        </article>
+
+        <article class="card">
+          <div class="card-icon"><i class="fas fa-cloud"></i></div>
+          <h3>Enterprise Security</h3>
+          <p>Google Firestore backend with Redis sessions and advanced encryption keeps your business data safe.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── Dashboard Preview ──────────
+  <section class="dashboard-preview">
+    <div class="container">
+      <div class="preview-content">
+        <div class="preview-text">
+          <span class="section-tag">The Experience</span>
+          <h2>Beautiful design meets powerful functionality</h2>
+          <p>DashInsight's intuitive interface makes complex retail analytics simple. See your entire business at a glance and drill down with just a few clicks.</p>
+          <ul class="preview-features">
+            <li><i class="fas fa-check"></i> Clean, modern interface with dark/light modes</li>
+            <li><i class="fas fa-check"></i> Mobile-optimized for on-the-go management</li>
+            <li><i class="fas fa-check"></i> Customizable widgets and dashboard layouts</li>
+            <li><i class="fas fa-check"></i> Lightning-fast performance on any device</li>
+          </ul>
+          <a href="/features" class="btn outline">Explore All Features</a>
+        </div>
+        <div class="preview-image">
+          <img src="/images/dashboard-full.png" alt="DashInsight Full Dashboard" onerror="this.src='/api/placeholder/600/380'; this.onerror=null;">
+        </div>
+      </div>
+    </div>
+  </section> -->
+
+  <!-- ────────── Numbers strip ────────── -->
+  <section class="numbers">
+    <div class="container">
+      <div class="numbers-inner">
+        <div class="number-item">
+          <div class="number-icon"><i class="fas fa-store"></i></div>
+          <div class="number-value">3,000+</div>
+          <div class="number-label">Daily Bills Processed</div>
+        </div>
+        <div class="number-item">
+          <div class="number-icon"><i class="fas fa-chart-pie"></i></div>
+          <div class="number-value">₹50 Cr+</div>
+          <div class="number-label">Revenue Tracked</div>
+        </div>
+        <div class="number-item">
+          <div class="number-icon"><i class="fas fa-truck"></i></div>
+          <div class="number-value">150k</div>
+          <div class="number-label">Stock Batches Managed</div>
+        </div>
+        <div class="number-item">
+          <div class="number-icon"><i class="fas fa-user-friends"></i></div>
+          <div class="number-value">7,500</div>
+          <div class="number-label">Active Business Users</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── How it works ────────── -->
+  <section id="workflow" class="workflow">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">The Process</span>
+        <h2>How DashInsight transforms your business day</h2>
+        <p class="section-subtitle">Get up and running in minutes with our streamlined workflow</p>
+      </div>
+      
+      <ol class="steps">
+        <li>
+          <div class="step-content">
+            <span class="step-number">1</span>
+            <div class="step-icon"><i class="fas fa-box"></i></div>
+            <h3>Set up your inventory</h3>
+            <p>Upload your existing products or add them one by one. Include units, categories, purchase prices, and opening stock in just a few clicks.</p>
+          </div>
+          <div class="step-image">
+            <img src="/images/step1.png" alt="Inventory Setup" onerror="this.src='/api/placeholder/320/240'; this.onerror=null;">
+          </div>
+        </li>
+        
+        <li>
+          <div class="step-content">
+            <span class="step-number">2</span>
+            <div class="step-icon"><i class="fas fa-receipt"></i></div>
+            <h3>Process transactions effortlessly</h3>
+            <p>Record sales with multiple payment methods, manage partial payments, and categorize expenses—all from a single intuitive interface.</p>
+          </div>
+          <div class="step-image">
+            <img src="/images/step2.png" alt="Transaction Processing" onerror="this.src='/api/placeholder/320/240'; this.onerror=null;">
+          </div>
+        </li>
+        
+        <li>
+          <div class="step-content">
+            <span class="step-number">3</span>
+            <div class="step-icon"><i class="fas fa-chart-area"></i></div>
+            <h3>Gain real-time business insights</h3>
+            <p>Interactive charts show you profit margins, product performance, and revenue trends at a glance. Make data-driven decisions instantly.</p>
+          </div>
+          <div class="step-image">
+            <img src="/images/step3.png" alt="Business Analytics" onerror="this.src='/api/placeholder/320/240'; this.onerror=null;">
+          </div>
+        </li>
+        
+        <li>
+          <div class="step-content">
+            <span class="step-number">4</span>
+            <div class="step-icon"><i class="fas fa-file-export"></i></div>
+            <h3>Share reports with one click</h3>
+            <p>Generate professional Excel reports or PDFs for accountants, partners, or team members—no more manual data compilation or late-night calls.</p>
+          </div>
+          <div class="step-image">
+            <img src="/images/step4.png" alt="Report Sharing" onerror="this.src='/api/placeholder/320/240'; this.onerror=null;">
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ────────── Testimonials ────────── -->
+  <section id="testimonials" class="testimonials">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Success Stories</span>
+        <h2>What our customers are saying</h2>
+        <p class="section-subtitle">Join thousands of satisfied retail businesses that have transformed their operations</p>
+      </div>
+      
+      <div class="testimonial-grid">
+        <div class="testimonial-card">
+          <div class="quote"><i class="fas fa-quote-left"></i></div>
+          <p class="testimonial-text">"DashInsight has completely transformed how I run my business. I finally have real-time visibility into profits and inventory. The time saved on monthly reports alone is worth every rupee."</p>
+          <div class="testimonial-author">
+            <img src="/images/testimonial1.jpg" alt="Rajiv Sharma" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;">
+            <div class="author-info">
+              <h4>Rajiv Sharma</h4>
+              <p>Fashion Retailer, Mumbai</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="testimonial-card">
+          <div class="quote"><i class="fas fa-quote-left"></i></div>
+          <p class="testimonial-text">"We reduced inventory discrepancies by 94% in the first month. The batch tracking feature is a game-changer for our electronics store, and staff attendance tracking has improved punctuality."</p>
+          <div class="testimonial-author">
+            <img src="/images/testimonial2.jpg" alt="Priya Patel" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;">
+            <div class="author-info">
+              <h4>Priya Patel</h4>
+              <p>Electronics Store Owner, Bangalore</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="testimonial-card">
+          <div class="quote"><i class="fas fa-quote-left"></i></div>
+          <p class="testimonial-text">"My accountant loves the Excel exports, and I love seeing exactly how my business is performing at any moment. Setup was surprisingly easy and customer support has been exceptional."</p>
+          <div class="testimonial-author">
+            <img src="/images/testimonial3.jpg" alt="Anand Gupta" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;">
+            <div class="author-info">
+              <h4>Anand Gupta</h4>
+              <p>Grocery Chain Owner, Delhi</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── Price Comparison ────────── -->
+  <section class="pricing">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Value Proposition</span>
+        <h2>DashInsight vs. traditional solutions</h2>
+        <p class="section-subtitle">See why thousands of businesses are making the switch</p>
+      </div>
+      
+      <div class="comparison-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Traditional POS</th>
+              <th>Spreadsheets</th>
+              <th>DashInsight</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Real-time profit tracking</td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-check"></i></td>
+            </tr>
+            <tr>
+              <td>FIFO batch management</td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-check"></i></td>
+            </tr>
+            <tr>
+              <td>Staff attendance</td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-check"></i></td>
+              <td><i class="fas fa-check"></i></td>
+            </tr>
+            <tr>
+              <td>One-click reporting</td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-check"></i></td>
+            </tr>
+            <tr>
+              <td>Mobile friendly</td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-times"></i></td>
+              <td><i class="fas fa-check"></i></td>
+            </tr>
+            <tr>
+              <td>Setup time</td>
+              <td>Days or weeks</td>
+              <td>Hours</td>
+              <td>Minutes</td>
+            </tr>
+            <tr>
+              <td>Monthly cost</td>
+              <td>₹10,000+</td>
+              <td>Low/DIY</td>
+              <td>Starting ₹999</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  
+  <!-- ────────── FAQ Section ────────── -->
+  <section class="faq">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Common Questions</span>
+        <h2>Frequently Asked Questions</h2>
+      </div>
+      
+      <div class="faq-grid">
+        <div class="faq-item">
+          <h3><i class="fas fa-plus"></i> How long does it take to set up?</h3>
+          <div class="faq-answer">
+            <p>Most users are up and running in less than 30 minutes. Our guided setup process helps you import products and configure your dashboard quickly. If you need help, our support team is available 24/7.</p>
+          </div>
+        </div>
+        
+        <div class="faq-item">
+          <h3><i class="fas fa-plus"></i> Can I import my existing inventory?</h3>
+          <div class="faq-answer">
+            <p>Yes! DashInsight supports Excel/CSV imports for your product catalog and opening inventory. Our template makes it easy to organize your data for a smooth transition.</p>
+          </div>
+        </div>
+        
+        <div class="faq-item">
+          <h3><i class="fas fa-plus"></i> Do I need technical knowledge to use it?</h3>
+          <div class="faq-answer">
+            <p>Not at all. DashInsight is designed for retail business owners, not IT professionals. The interface is intuitive and user-friendly. If you can use a smartphone, you can use DashInsight.</p>
+          </div>
+        </div>
+        
+        <div class="faq-item">
+          <h3><i class="fas fa-plus"></i> What payment methods do you support?</h3>
+          <div class="faq-answer">
+            <p>We support all major payment methods including UPI, credit/debit cards, net banking, and cash. Our Razorpay integration makes online payments seamless for your customers.</p>
+          </div>
+        </div>
+        
+        <div class="faq-item">
+          <h3><i class="fas fa-plus"></i> Is my data secure?</h3>
+          <div class="faq-answer">
+            <p>Absolutely. We use Google Firestore for database management with enterprise-level encryption. All data is backed up daily, and our system includes brute-force protection and secure session management.</p>
+          </div>
+        </div>
+        
+        <div class="faq-item">
+          <h3><i class="fas fa-plus"></i> What happens after the free trial?</h3>
+          <div class="faq-answer">
+            <p>After your 30-day trial, you can choose from our flexible pricing plans starting at just ₹999/month. We'll notify you before your trial ends, and there's no automatic billing—you decide if you want to continue.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── Call to Action ────────── -->
+  <section class="cta-banner">
+    <div class="container">
+      <div class="cta-content">
+        <h2>Stop guessing. Start knowing.</h2>
+        <p>Join 7,500+ successful businesses that have transformed their operations with DashInsight.</p>
+        <a href="/register" class="btn big primary">
+          Start your free 30-day trial <i class="fas fa-arrow-right"></i>
+        </a>
+        <div class="cta-features">
+          <span><i class="fas fa-laptop-code"></i> No coding required</span>
+          <span><i class="fas fa-mobile-alt"></i> Works on any device</span>
+          <span><i class="fas fa-headset"></i> 24×7 support</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── Footer ────────── -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-column">
+          <h3>DashInsight</h3>
+          <p>Your complete retail management solution that gives you crystal-clear visibility into your business performance.</p>
+          <div class="social-links">
+            <a href="#"><i class="fab fa-facebook-f"></i></a>
+            <a href="#"><i class="fab fa-twitter"></i></a>
+            <a href="#"><i class="fab fa-instagram"></i></a>
+            <a href="#"><i class="fab fa-linkedin-in"></i></a>
+          </div>
+        </div>
+        
+        <div class="footer-column">
+          <h3>Product</h3>
+          <ul>
+            <li><a href="/features">Features</a></li>
+            <li><a href="/pricing">Pricing</a></li>
+            <li><a href="/integrations">Integrations</a></li>
+            <li><a href="/updates">What's New</a></li>
+          </ul>
+        </div>
+        
+        <div class="footer-column">
+          <h3>Resources</h3>
+          <ul>
+            <li><a href="/blog">Blog</a></li>
+            <li><a href="/guides">User Guides</a></li>
+            <li><a href="/webinars">Webinars</a></li>
+            <li><a href="/help">Help Center</a></li>
+          </ul>
+        </div>
+        
+        <div class="footer-column">
+          <h3>Company</h3>
+          <ul>
+            <li><a href="/about">About Us</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/careers">Careers</a></li>
+            <li><a href="/partners">Partners</a></li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <p>&copy; <%= new Date().getFullYear() %> DashInsight / SalesFlow Store. All rights reserved.</p>
+        <div class="footer-links">
+          <a href="/terms">Terms of Service</a>
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/security">Security</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ────────── Javascript ────────── -->
+  <script>
+    // Mobile menu toggle
+    document.querySelector('.menu-toggle').addEventListener('click', function() {
+      document.querySelector('.nav-links').classList.toggle('active');
+    });
+    
+    // FAQ accordions
+    document.querySelectorAll('.faq-item h3').forEach(item => {
+      item.addEventListener('click', event => {
+        const parent = event.target.closest('.faq-item');
+        parent.classList.toggle('active');
+        
+        // Toggle icon
+        const icon = item.querySelector('i');
+        if (parent.classList.contains('active')) {
+          icon.classList.remove('fa-plus');
+          icon.classList.add('fa-minus');
+        } else {
+          icon.classList.remove('fa-minus');
+          icon.classList.add('fa-plus');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

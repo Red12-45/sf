@@ -15,6 +15,9 @@ const Razorpay            = require('razorpay');
 const ExcelJS             = require('exceljs');      
 const compression         = require('compression');
 
+const crypto     = require('crypto');      
+const nodemailer = require('nodemailer'); 
+
 const cluster = require('cluster');
 const os = require('os');
 
@@ -363,6 +366,20 @@ const razorpay = new Razorpay({
   key_secret:process.env.RAZORPAY_KEY_SECRET
 });
 
+
+// ─────────── email (nodemailer) ───────────
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
+
+
 /* ─────────── AUTHENTICATION ROUTES ─────────── */
 // GET /register
 app.get('/register', (req, res) => {
@@ -662,7 +679,19 @@ app.post('/permission', isAuthenticated, restrictRoute('/permission'), async (re
 
 /* ─────────── PROTECTED APP ROUTES ─────────── */
 // GET /
-app.get('/', isAuthenticated, async (req, res) => {
+/* ─────────── PUBLIC LANDING ────────── */
+// (Insert this near the very top of your route section)
+app.get('/', (req, res) => {
+  // Logged-in users get forwarded to their dashboard
+  if (req.session?.user) return res.redirect('/dashboard');
+  // Everyone else sees the beautiful marketing page
+  res.render('landing');         // v is already supplied by the global middleware
+});
+
+
+/* ─────────── DASHBOARD (was GET "/") ─────────── */
+// -- identical logic, ONLY the path changed to "/dashboard" --
+app.get('/dashboard', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
     // NEW – force “now” to IST before extracting year/month/day
@@ -725,7 +754,8 @@ app.get('/', isAuthenticated, async (req, res) => {
     }
 
     // Summaries
-    let totalProfit = 0, totalSales = 0, totalCashSales = 0, totalOnlineSales = 0, totalNotPaidSales = 0;
+    let totalProfit = 0, totalSales = 0, totalCashSales = 0,
+        totalOnlineSales = 0, totalNotPaidSales = 0;
     sales.forEach(s => {
       totalProfit += s.profit;
       const amt = s.retailPrice * s.saleQuantity;
@@ -785,6 +815,7 @@ app.get('/', isAuthenticated, async (req, res) => {
     res.status(500).send(err.toString());
   }
 });
+
 
 // GET /expense – monthly expenses view
 app.get('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res) => {
@@ -2534,6 +2565,126 @@ app.get(
   }
 );
 
+/* ─────────── PASSWORD RESET ROUTES (MASTER-ONLY) ─────────── */
+
+// GET /forgot-password
+app.get('/forgot-password', (req, res) => {
+  if (req.session?.user) return res.redirect('/');
+  res.render('forgotPassword', { sent: false, error: null });
+});
+
+// POST /forgot-password
+app.post('/forgot-password', async (req, res) => {
+  try {
+    const emailRaw = req.body.email || '';
+    const email    = emailRaw.trim().toLowerCase();
+    if (!email) {
+      return res.status(400).render('forgotPassword',
+        { sent: false, error: 'Please enter your registered email.' });
+    }
+
+    // master-account lookup
+    const snap = await db.collection('users')
+                         .where('email',    '==', email)
+                         .where('isMaster', '==', true)
+                         .limit(1).get();
+
+    /* Always show success even if no match → no user enumeration */
+    if (snap.empty) return res.render('forgotPassword', { sent: true, error: null });
+
+    const userDoc = snap.docs[0];
+
+    // generate & persist token
+    const token   = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000);   // 1 hour
+
+    await db.collection('passwordResets').doc(token).set({
+      userId   : userDoc.id,
+      email,
+      expiresAt: expires,
+      used     : false,
+      createdAt: new Date()
+    });
+
+    const link = `${process.env.BASE_URL || 'http://localhost:3000'}/reset-password/${token}`;
+
+    // fire the email
+    await transporter.sendMail({
+      to      : email,
+      from    : process.env.EMAIL_USER,
+      subject : 'Reset your DashInsight master password',
+      html    : `
+        <p>Hi ${userDoc.data().name},</p>
+        <p>You (or someone using your email) requested a password reset.</p>
+        <p><a href="${link}">Click here to choose a new password</a><br>
+           (this link is valid for 1 hour and can be used once).</p>
+        <p>If you didn’t request this, just ignore the email.</p>`
+    });
+
+    res.render('forgotPassword', { sent: true, error: null });
+  } catch (err) {
+    console.error('/forgot-password error:', err);
+    res.status(500).render('forgotPassword',
+      { sent: false, error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// GET /reset-password/:token
+app.get('/reset-password/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const doc = await db.collection('passwordResets').doc(token).get();
+    if (!doc.exists) {
+      return res.status(400).render('resetPassword',
+        { token: '', invalid: true, error: 'Invalid or expired link.' });
+    }
+    const data = doc.data();
+    if (data.used || data.expiresAt.toDate() < new Date()) {
+      return res.status(400).render('resetPassword',
+        { token: '', invalid: true, error: 'Link has expired. Request a new one.' });
+    }
+    res.render('resetPassword', { token, invalid: false, error: null });
+  } catch (err) {
+    res.status(500).send(err.toString());
+  }
+});
+
+// POST /reset-password
+app.post('/reset-password', async (req, res) => {
+  try {
+    const { token, password, confirmPassword } = req.body;
+    if (!password || password !== confirmPassword) {
+      return res.status(400).render('resetPassword',
+        { token, invalid: false, error: 'Passwords do not match.' });
+    }
+
+    const tokenRef  = db.collection('passwordResets').doc(token);
+    const tokenSnap = await tokenRef.get();
+    if (!tokenSnap.exists) {
+      return res.status(400).render('resetPassword',
+        { token: '', invalid: true, error: 'Invalid or expired link.' });
+    }
+
+    const tData = tokenSnap.data();
+    if (tData.used || tData.expiresAt.toDate() < new Date()) {
+      return res.status(400).render('resetPassword',
+        { token: '', invalid: true, error: 'Link has expired. Request a new one.' });
+    }
+
+    // update master password
+    const hashed = await bcrypt.hash(password, 10);
+    await db.collection('users').doc(tData.userId).update({ password: hashed });
+
+    // mark token consumed
+    await tokenRef.update({ used: true, usedAt: new Date() });
+
+    res.redirect('/login');
+  } catch (err) {
+    console.error('/reset-password error:', err);
+    res.status(500).render('resetPassword',
+      { token, invalid: false, error: 'Something went wrong. Please try again.' });
+  }
+});
 
 
 /* ─────────── START THE SERVER ─────────── */

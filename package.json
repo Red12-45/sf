@@ -23,6 +23,7 @@
     "firebase": "^11.6.0",
     "firebase-admin": "^13.2.0",
     "node-cache": "^5.1.2",
+    "nodemailer": "^7.0.3",
     "pm2": "^6.0.5",
     "razorpay": "^2.9.6",
     "redis": "^4.7.0",
