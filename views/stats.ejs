@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sales & Profit Analytics | DashInsight</title>
+
+  <!-- Icons / Fonts -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/inter-ui/3.19.3/inter.min.css" rel="stylesheet">
+
+  <!-- Core dashboard styles -->
+  <link rel="stylesheet" href="/css/stats.css?v=<%= v %>">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
+  <style>
+    /* Extra font-clarity tweaks */
+    html { text-rendering: optimizeLegibility; }
+    body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  </style>
+</head>
+<body>
+
+  <!-- ────────── Navigation ────────── -->
+  <nav>
+    <div class="nav-brand"><i class="fas fa-chart-line"></i><span>DashInsight</span></div>
+    <div class="nav-links">
+      <a href="/"><i class="fas fa-home"></i> Home</a>
+      <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
+      <a href="/expense"><i class="fas fa-money-bill-wave"></i> Expenses</a>
+      <a href="/profit"><i class="fas fa-file-invoice-dollar"></i> Profit</a>
+      <a href="/performance"><i class="fas fa-chart-column"></i> Performance</a>
+      <a href="/stats" class="active"><i class="fas fa-chart-area"></i> Stats</a>
+    </div>
+  </nav>
+
+  <div class="main-container">
+
+    <!-- ────────── Filter Panel ────────── -->
+    <section class="filter-panel">
+      <h2><i class="fas fa-filter"></i> Filter Statistics</h2>
+
+      <form action="/stats" method="GET" class="filter-form">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="month">Month (YYYY-MM)</label>
+            <input type="month" id="month" name="month" value="<%= month || '' %>">
+          </div>
+
+          <div class="form-field">
+            <label for="from">From (YYYY-MM)</label>
+            <input type="month" id="from" name="from" value="<%= from || '' %>">
+          </div>
+
+          <div class="form-field">
+            <label for="to">To (YYYY-MM)</label>
+            <input type="month" id="to" name="to" value="<%= to || '' %>">
+          </div>
+
+          <div class="form-field">
+            <label for="year">Year</label>
+            <input type="number" id="year" name="year" min="2000" max="3000" value="<%= year || '' %>">
+          </div>
+
+          <div class="form-field">
+            <label for="top">Top Results</label>
+            <input type="number" id="top" name="top" min="1" value="<%= topN %>">
+          </div>
+
+          <div class="form-field" style="flex:0 0 auto;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Apply Filters</button>
+          </div>
+
+          <div class="period-label"><i class="fas fa-calendar-alt"></i> <%= periodLabel %></div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ────────── KPI Cards ────────── -->
+    <section class="kpi-cards">
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-chart-line"></i></div>
+        <div class="kpi-content">
+          <h3>Total Revenue</h3>
+          <div class="kpi-value" id="kpiRevenue">...</div>
+          <div class="kpi-trend positive" id="kpiRevenueTrend">...</div>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-sack-dollar"></i></div>
+        <div class="kpi-content">
+          <h3>Net Profit</h3>
+          <div class="kpi-value" id="kpiProfit">...</div>
+          <div class="kpi-trend positive" id="kpiProfitTrend">...</div>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-money-bill-wave"></i></div>
+        <div class="kpi-content">
+          <h3>Total Expenses</h3>
+          <div class="kpi-value" id="kpiExpense">...</div>
+          <div class="kpi-trend negative" id="kpiExpenseTrend">...</div>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon"><i class="fas fa-percent"></i></div>
+        <div class="kpi-content">
+          <h3>Profit Margin</h3>
+          <div class="kpi-value" id="kpiMargin">...</div>
+          <div class="kpi-trend positive" id="kpiMarginTrend">...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ────────── Layout Toggle ────────── -->
+    <div class="layout-toggle">
+      <span><i class="fas fa-th-large"></i> Layout:</span>
+      <button class="layout-btn" data-cols="1" aria-pressed="false" title="1 per row"><i class="fas fa-square"></i></button>
+      <button class="layout-btn" data-cols="2" aria-pressed="true"  title="2 per row"><i class="fas fa-th-large"></i></button>
+      <button class="layout-btn" data-cols="3" aria-pressed="false" title="3 per row"><i class="fas fa-th"></i></button>
+      <button class="layout-btn" data-cols="4" aria-pressed="false" title="4 per row"><i class="fas fa-th-large"></i><i class="fas fa-th-large" style="margin-left:-0.3rem;"></i></button>
+    </div>
+
+    <!-- ────────── Charts ────────── -->
+    <section id="chartsWrapper" class="charts-wrapper cols-2">
+      <!-- Top-selling products -->
+      <div class="chart-card">
+        <h2><i class="fas fa-cubes"></i> Top-Selling Products</h2>
+        <div class="chart-container"><canvas id="chartUnits"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <h2><i class="fas fa-hand-holding-dollar"></i> Top Revenue Products</h2>
+        <div class="chart-container"><canvas id="chartRevenue"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <h2><i class="fas fa-sack-dollar"></i> Top Profit Products</h2>
+        <div class="chart-container"><canvas id="chartProductProfit"></canvas></div>
+      </div>
+
+      <!-- Monthly trends -->
+      <div class="chart-card">
+        <h2><i class="fas fa-chart-line"></i> Monthly Net Profit Trend</h2>
+        <div class="chart-container"><canvas id="chartMonthlyProfit"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <h2><i class="fas fa-chart-line"></i> Monthly Expense Trend</h2>
+        <div class="chart-container"><canvas id="chartMonthlyExpense"></canvas></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ────────── Data Payload ────────── -->
+  <script>
+    /* PRODUCT-level "Top-N" */
+    window.STATS_DATA = {
+      topSelling : <%- JSON.stringify(topSelling)  %>,
+      topRevenue : <%- JSON.stringify(topRevenue)  %>,
+      topProfit  : <%- JSON.stringify(topProfit)   %>
+    };
+
+    /* MONTH-level totals (keyed YYYY-MM) */
+    window.MONTHLY_DATA = {
+      profit  : <%- JSON.stringify(monthlyProfit  || {}) %>,
+      expense : <%- JSON.stringify(monthlyExpense || {}) %>
+    };
+  </script>
+
+  <!-- Chart.js & plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+
+  <!-- ────────── Page Script ────────── -->
+  <script>
+  /* global Chart, ChartDataLabels, STATS_DATA, MONTHLY_DATA */
+  (() => {
+
+    /* ⇢⇢ Register plugin & high-DPI defaults */
+    Chart.register(ChartDataLabels);
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.font.size   = 14;
+    Chart.defaults.font.weight = '600';
+    Chart.defaults.color       = '#495057';
+    Chart.defaults.responsive  = true;
+    Chart.defaults.scale.grid.color = 'rgba(0,0,0,.07)';
+
+    /* ⇢⇢ Color palette */
+    const colors = {
+      blue  : { primary:'#4361ee', bg:'rgba(67,97,238,.75)',  light:'rgba(67,97,238,.18)' },
+      green : { primary:'#38b000', bg:'rgba(56,176,0,.75)',   light:'rgba(56,176,0,.18)' },
+      orange: { primary:'#ffaa00', bg:'rgba(255,170,0,.75)',  light:'rgba(255,170,0,.18)' },
+      red   : { primary:'#ef476f', bg:'rgba(239,71,111,.75)', light:'rgba(239,71,111,.18)' }
+    };
+
+    /* ⇢⇢ Formatting helpers */
+    const fmtRupee = v => `₹${v.toLocaleString('en-IN',{minimumFractionDigits:2})}`;
+    const fmtRupeeShort = v => (
+      v >= 1e7 ? `₹${(v/1e7).toFixed(2)}Cr` :
+      v >= 1e5 ? `₹${(v/1e5).toFixed(2)}L`  :
+      v >= 1e3 ? `₹${(v/1e3).toFixed(1)}K`  : `₹${v.toFixed(2)}`
+    );
+    const fmtUnitsShort = v => (
+      v >= 1e6 ? `${(v/1e6).toFixed(1)}M` :
+      v >= 1e3 ? `${(v/1e3).toFixed(1)}K` : v.toFixed(1)
+    );
+
+    /* ⇢⇢ KPI Calculation (Net Profit = Profit − Expense) */
+    const calcKPIs = () => {
+      let totalRevenue = 0, grossProfit = 0, totalExpense = 0;
+
+      STATS_DATA.topRevenue.forEach(i => totalRevenue += i.revenue); // Top-N revenue
+      Object.values(MONTHLY_DATA.profit ).forEach(v => grossProfit  += v); // full gross profit
+      Object.values(MONTHLY_DATA.expense).forEach(v => totalExpense += v);
+
+      const netProfit    = grossProfit - totalExpense;
+      const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
+
+      document.getElementById('kpiRevenue').textContent = fmtRupee(totalRevenue);
+      document.getElementById('kpiProfit' ).textContent = fmtRupee(netProfit);
+      document.getElementById('kpiExpense').textContent = fmtRupee(totalExpense);
+      document.getElementById('kpiMargin' ).textContent = profitMargin.toFixed(2) + '%';
+
+      /* Placeholder trend values */
+      document.getElementById('kpiRevenueTrend').textContent = '↑ 8.2%';
+      document.getElementById('kpiProfitTrend' ).textContent = '↑ 12.5%';
+      document.getElementById('kpiExpenseTrend').textContent = '↓ 3.7%';
+      document.getElementById('kpiMarginTrend' ).textContent = '↑ 4.3%';
+    };
+    calcKPIs();
+
+    /* ⇢⇢ Bar config helper */
+    const barCfg = (labels, values, valueType, c) => ({
+      type : 'bar',
+      data : {
+        labels,
+        datasets : [{
+          label : valueType,
+          data  : values,
+          categoryPercentage : .55,
+          barPercentage      : .67,
+          maxBarThickness    : 48,
+          backgroundColor    : c.bg,
+          borderColor        : c.primary,
+          borderWidth        : 1,
+          borderRadius       : 6,
+          hoverBackgroundColor : c.primary
+        }]
+      },
+      options : {
+        devicePixelRatio : 2,
+        layout : {                       // extra head-room so the top label isn’t clipped
+  padding : { top : 30 }         // ← was 10
+},
+        plugins : {
+          datalabels : {
+            anchor:'end', align:'end', offset:6, clamp:true,
+            font:{weight:'700', size:12},
+            formatter:v => valueType === 'Units Sold' ? fmtUnitsShort(v) : fmtRupeeShort(v)
+          },
+          tooltip : {
+            backgroundColor : 'rgba(33,37,41,.9)',
+            titleFont       : { weight:'700' },
+            bodyFont        : { size:14 },
+            padding : 12,
+            cornerRadius : 8,
+            callbacks : {
+              label : ctx => valueType === 'Units Sold'
+                ? `${ctx.parsed.y} units`
+                : fmtRupee(ctx.parsed.y)
+            }
+          },
+          legend : { display:false }
+        },
+        scales : {
+          x : { grid:{ display:false }, ticks:{ maxRotation:45, minRotation:45 } },
+          y : {
+  beginAtZero : true,
+  grace       : '10%',          // ← NEW: 10 % extra height
+  grid        : { color:'rgba(0,0,0,.05)' }
+}
+        },
+        animation : { duration:1200, easing:'easeOutQuart' },
+        responsive : true,
+        maintainAspectRatio : false
+      }
+    });
+
+    /* ⇢⇢ Create top-N bar charts */
+    new Chart(document.getElementById('chartUnits'),
+      barCfg(STATS_DATA.topSelling.map(r => r.productName),
+             STATS_DATA.topSelling.map(r => +r.unitsSold.toFixed(2)),
+             'Units Sold', colors.blue));
+
+    new Chart(document.getElementById('chartRevenue'),
+      barCfg(STATS_DATA.topRevenue.map(r => r.productName),
+             STATS_DATA.topRevenue.map(r => +r.revenue.toFixed(2)),
+             'Revenue', colors.orange));
+
+    new Chart(document.getElementById('chartProductProfit'),
+      barCfg(STATS_DATA.topProfit.map(r => r.productName),
+             STATS_DATA.topProfit.map(r => +r.profit.toFixed(2)),
+             'Profit', colors.green));
+
+    /* ⇢⇢ Monthly series builder */
+    const buildSeries = obj => {
+      const keys = Object.keys(obj).sort();
+      return {
+        labels : keys.map(k => new Date(k + '-01')
+                      .toLocaleString('default',{ month:'short', year:'2-digit' })),
+        map    : keys.reduce((acc,k)=>{ acc[k]=obj[k]; return acc; }, {}),
+        values : keys.map(k => +obj[k].toFixed(2))
+      };
+    };
+
+    const profitSeries  = buildSeries(MONTHLY_DATA.profit);
+    const expenseSeries = buildSeries(MONTHLY_DATA.expense);
+
+    /* Build Net-Profit series (profit − expense) */
+    const allMonths = Array.from(new Set([
+      ...Object.keys(profitSeries.map),
+      ...Object.keys(expenseSeries.map)
+    ])).sort();
+
+    const netProfitSeries = {
+      labels : allMonths.map(m =>
+        new Date(m + '-01').toLocaleString('default',{ month:'short', year:'2-digit' })
+      ),
+      values : allMonths.map(m =>
+        +( (profitSeries.map[m] || 0) - (expenseSeries.map[m] || 0) ).toFixed(2)
+      )
+    };
+
+    /* ⇢⇢ Line config helper */
+    const lineCfg = (labels, values, label, c) => ({
+      type : 'line',
+      data : {
+        labels,
+        datasets : [{
+          label,
+          data     : values,
+          tension  : .25,
+          fill     : true,
+          backgroundColor   : c.light,
+          borderColor       : c.primary,
+          borderWidth       : 2,
+          pointBackgroundColor : c.primary,
+          pointBorderColor  : '#fff',
+          pointBorderWidth  : 2,
+          pointRadius       : 5,
+          pointHoverRadius  : 7
+        }]
+      },
+      options : {
+        devicePixelRatio : 2,
+        plugins : {
+          datalabels : {
+            color:'#000',
+            backgroundColor:'rgba(255,255,255,.85)',
+            borderRadius:4,
+            padding:4,
+            font:{weight:'700',size:11},
+            formatter:fmtRupeeShort
+          },
+          tooltip : {
+            backgroundColor:'rgba(33,37,41,.9)',
+            titleFont:{weight:'700'},
+            bodyFont:{size:14},
+            padding:12,
+            cornerRadius:8,
+            callbacks:{ label:ctx => fmtRupee(ctx.parsed.y) }
+          },
+          legend : { display:false }
+        },
+        scales : {
+          x : { grid:{ display:false } },
+          y : { beginAtZero:true, grid:{ color:'rgba(0,0,0,.05)' } }
+        },
+        animation : { duration:1200, easing:'easeOutQuart' },
+        responsive : true,
+        maintainAspectRatio : false
+      }
+    });
+
+    new Chart(document.getElementById('chartMonthlyProfit'),
+      lineCfg(netProfitSeries.labels, netProfitSeries.values,
+              'Net Profit', colors.green));
+
+    new Chart(document.getElementById('chartMonthlyExpense'),
+      lineCfg(expenseSeries.labels, expenseSeries.values,
+              'Monthly Expense', colors.red));
+
+    /* ⇢⇢ Layout-toggle logic */
+    const wrapper = document.getElementById('chartsWrapper');
+    document.querySelectorAll('.layout-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cols = btn.dataset.cols;
+        wrapper.classList.remove('cols-1','cols-2','cols-3','cols-4');
+        wrapper.classList.add(`cols-${cols}`);
+        document.querySelectorAll('.layout-btn')
+          .forEach(b => b.setAttribute('aria-pressed','false'));
+        btn.setAttribute('aria-pressed','true');
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

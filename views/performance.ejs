@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  
+  <title>Sales Performance Insights</title>
+
+  <!-- Font Awesome for icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  
+  <!-- Google Fonts - Inter -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/inter-ui/3.19.3/inter.min.css" rel="stylesheet">
+
+  <!-- Main dashboard styles -->
+  <link rel="stylesheet" href="/css/index.css?v=<%= v %>">
+  
+  <!-- Performance page specific styles -->
+  <link rel="stylesheet" href="/css/performance.css?v=<%= v %>">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
+</head>
+<body>
+
+  <!-- Main navigation -->
+  <nav>
+    <div class="nav-brand">
+      <i class="fas fa-chart-line"></i>
+      <span>DashInsight</span>
+    </div>
+    <div class="nav-links">
+      <a href="/"><i class="fas fa-home"></i> Home</a>
+      <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
+      <a href="/expense"><i class="fas fa-money-bill-wave"></i> Expenses</a>
+      <a href="/profit"><i class="fas fa-file-invoice-dollar"></i> Profit</a>
+      <a href="/performance" class="active"><i class="fas fa-chart-column"></i> Performance</a>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <!-- Filter Panel -->
+    <section class="filter-panel">
+      <h2><i class="fas fa-filter"></i> Filter Performance Data</h2>
+
+      <form action="/performance" method="GET" class="filter-form">
+        <div class="form-row">
+          <!-- Single month -->
+          <div class="form-field">
+            <label for="month">Month (YYYY-MM)</label>
+            <input type="month" id="month" name="month" value="<%= month || '' %>">
+          </div>
+
+          <!-- Range -->
+          <div class="form-field">
+            <label for="from">From (YYYY-MM)</label>
+            <input type="month" id="from" name="from" value="<%= from || '' %>">
+          </div>
+          
+          <div class="form-field">
+            <label for="to">To (YYYY-MM)</label>
+            <input type="month" id="to" name="to" value="<%= to || '' %>">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Full year -->
+          <div class="form-field">
+            <label for="year">Year</label>
+            <input type="number" id="year" name="year" min="2000" max="3000" step="1" value="<%= year || '' %>">
+          </div>
+
+          <!-- Top N -->
+          <div class="form-field">
+            <label for="top">Top Results</label>
+            <input type="number" id="top" name="top" min="1" step="1" value="<%= topN %>">
+          </div>
+
+          <!-- Submit -->
+          <div class="form-field" style="flex: 0 0 auto;">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-search"></i> Apply Filters
+            </button>
+          </div>
+
+          <!-- Period label -->
+          <div class="period-label">
+            <i class="fas fa-calendar-alt"></i> <%= periodLabel %>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- Stats Cards -->
+    <section class="stats-wrapper">
+      <!-- Top-Selling Products -->
+      <div class="stat-card">
+        <h2><i class="fas fa-cubes"></i> Top-Selling Products</h2>
+        <div class="stat-card-body">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 3rem;">Rank</th>
+                <th>Product</th>
+                <th style="text-align: right;">Units Sold</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% topSelling.forEach((row, idx) => { %>
+                <tr>
+                  <td>
+                    <div class="rank <%= idx < 3 ? 'rank-' + (idx + 1) : '' %>"><%= idx + 1 %></div>
+                  </td>
+                  <td class="product-name"><%= row.productName %></td>
+                  <td class="value value-units"><%= row.unitsSold.toFixed(2) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Top Revenue Products -->
+      <div class="stat-card">
+        <h2><i class="fas fa-hand-holding-dollar"></i> Top Revenue Products</h2>
+        <div class="stat-card-body">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 3rem;">Rank</th>
+                <th>Product</th>
+                <th style="text-align: right;">Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% topRevenue.forEach((row, idx) => { %>
+                <tr>
+                  <td>
+                    <div class="rank <%= idx < 3 ? 'rank-' + (idx + 1) : '' %>"><%= idx + 1 %></div>
+                  </td>
+                  <td class="product-name"><%= row.productName %></td>
+                  <td class="value value-revenue">₹<%= row.revenue.toFixed(2) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Top Profit Products -->
+      <div class="stat-card">
+        <h2><i class="fas fa-sack-dollar"></i> Top Profit Products</h2>
+        <div class="stat-card-body">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 3rem;">Rank</th>
+                <th>Product</th>
+                <th style="text-align: right;">Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% topProfit.forEach((row, idx) => { %>
+                <tr>
+                  <td>
+                    <div class="rank <%= idx < 3 ? 'rank-' + (idx + 1) : '' %>"><%= idx + 1 %></div>
+                  </td>
+                  <td class="product-name"><%= row.productName %></td>
+                  <td class="value value-profit">₹<%= row.profit.toFixed(2) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+  <!-- <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script> -->
+</body>
+</html>

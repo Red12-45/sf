@@ -2270,6 +2270,272 @@ app.get('/privacy', (req, res) => {
   res.render('privacy');
 });
 
+/* ─────────── PERFORMANCE INSIGHTS ─────────── */
+// GET /performance
+app.get('/performance',
+  isAuthenticated,
+  
+  async (req, res) => {
+    try {
+      const accountId = req.session.user.accountId;
+
+      /* ───── 1. Determine date window ───── */
+      const pad = n => String(n).padStart(2,'0');
+      const today  = new Date();
+      const curYM  = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
+      const {
+        month   = '',
+        from    = '',
+        to      = '',
+        year    = '',
+        top: topParam = ''
+      } = req.query;
+
+      let startDate, endDate, periodLabel;
+
+      if (month) {                                          // single month
+        startDate   = `${month}-01`;
+        const [y,m] = month.split('-');
+        let nextM = parseInt(m,10)+1, nextY=parseInt(y,10);
+        if (nextM>12){ nextM=1; nextY++; }
+        endDate     = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = new Date(`${month}-01`).toLocaleString('default',{ month:'long', year:'numeric' });
+
+      } else if (from && to) {                              // month‑range
+        startDate   = `${from}-01`;
+        const [ty,tm] = to.split('-');
+        let nextM = parseInt(tm,10)+1, nextY=parseInt(ty,10);
+        if (nextM>12){ nextM=1; nextY++; }
+        endDate     = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = `${from} → ${to}`;
+
+      } else if (year) {                                    // whole year
+        startDate   = `${year}-01-01`;
+        endDate     = `${parseInt(year,10)+1}-01-01`;
+        periodLabel = `Year ${year}`;
+
+      } else {                                             // default = current month
+        startDate   = `${curYM}-01`;
+        let nextM = today.getMonth()+2, nextY=today.getFullYear();
+        if (nextM>12){ nextM=1; nextY++; }
+        endDate     = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = new Date(startDate).toLocaleString('default',{ month:'long', year:'numeric' });
+      }
+
+      /* Top‑N (default 10) */
+      const topN = Math.max(parseInt(topParam,10)||10, 1);
+
+      /* ───── 2. Fetch sales in window ───── */
+      let q = db.collection('sales')
+                .where('accountId','==',accountId)
+                .where('saleDate','>=',startDate)
+                .where('saleDate','<', endDate);
+      const snap  = await q.get();
+      const sales = snap.docs.map(d => d.data());
+
+      /* ───── 3. Aggregate by product ───── */
+      const map = {};
+      sales.forEach(s=>{
+        const pid = s.productId;
+        if (!map[pid]) map[pid] = {
+          productName : s.productName,
+          unitsSold   : 0,
+          revenue     : 0,
+          profit      : 0
+        };
+        const row = map[pid];
+        const qty = +s.saleQuantity;
+        row.unitsSold += qty;
+        row.revenue   += (s.totalSale !== undefined
+                          ? +parseFloat(s.totalSale)
+                          : s.retailPrice * qty);
+        row.profit    += +s.profit;
+      });
+
+      const arr = Object.values(map);
+
+      const topSelling = [...arr]
+        .sort((a,b)=>b.unitsSold - a.unitsSold)
+        .slice(0,topN);
+
+      const topRevenue = [...arr]
+        .sort((a,b)=>b.revenue - a.revenue)
+        .slice(0,topN);
+
+      const topProfit  = [...arr]
+        .sort((a,b)=>b.profit - a.profit)
+        .slice(0,topN);
+
+      /* ───── 4. Render ───── */
+      res.render('performance', {
+        topSelling,
+        topRevenue,
+        topProfit,
+        periodLabel,
+        month, from, to, year,
+        topN
+      });
+
+    } catch (err) {
+      console.error('/performance error:', err);
+      res.status(500).send(err.toString());
+    }
+  }
+);
+
+
+/* ─────────── STATS DASHBOARD ─────────── */
+// GET /stats
+app.get(
+  '/stats',
+  isAuthenticated,
+  restrictRoute('/stats'),          // keep if you use route‑locking
+  async (req, res) => {
+    try {
+      const accountId = req.session.user.accountId;
+
+      /* 1️⃣  Resolve date window → default = whole current year */
+      const pad = n => String(n).padStart(2, '0');
+      const today       = new Date();
+      const currentYear = today.getFullYear();
+
+      const {
+        month = '',
+        from  = '',
+        to    = '',
+        year  = '',
+        top: topParam = ''
+      } = req.query;
+
+      let startDate, endDate, periodLabel;
+      let uiMonth   = month;               // pre‑fill pickers
+      let uiFrom    = from;
+      let uiTo      = to;
+      let uiYear    = year;
+
+      if (month) {                                          // single month
+        startDate   = `${month}-01`;
+        const [y, m] = month.split('-');
+        let nextM = parseInt(m, 10) + 1, nextY = parseInt(y, 10);
+        if (nextM > 12) { nextM = 1; nextY++; }
+        endDate     = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = new Date(`${month}-01`)
+                        .toLocaleString('default', { month: 'long', year: 'numeric' });
+
+      } else if (from && to) {                              // month range
+        startDate   = `${from}-01`;
+        const [ty, tm] = to.split('-');
+        let nextM = parseInt(tm, 10) + 1, nextY = parseInt(ty, 10);
+        if (nextM > 12) { nextM = 1; nextY++; }
+        endDate     = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = `${from} → ${to}`;
+
+      } else if (year) {                                    // explicit year
+        startDate   = `${year}-01-01`;
+        endDate     = `${parseInt(year, 10) + 1}-01-01`;
+        periodLabel = `Year ${year}`;
+
+      } else {                                             // DEFAULT = current year
+        startDate   = `${currentYear}-01-01`;
+        endDate     = `${currentYear + 1}-01-01`;
+        periodLabel = `Year ${currentYear}`;
+        uiYear      = currentYear;      // pre‑fill the “Year” input
+      }
+
+      const topN = Math.max(parseInt(topParam, 10) || 10, 1);
+
+      /* 2️⃣  Fetch sales + expenses in the window (parallel) */
+      const [salesSnap, expSnap] = await Promise.all([
+        db.collection('sales')
+          .where('accountId', '==', accountId)
+          .where('saleDate',  '>=', startDate)
+          .where('saleDate',  '<',  endDate)
+          .get(),
+        db.collection('expenses')
+          .where('accountId', '==', accountId)
+          .where('saleDate',  '>=', startDate)
+          .where('saleDate',  '<',  endDate)
+          .get()
+      ]);
+
+      const sales    = salesSnap.docs.map(d => d.data());
+      const expenses = expSnap .docs.map(d => d.data());
+
+      /* 3️⃣  Top‑N product aggregation */
+      const prodMap = {};
+      sales.forEach(s => {
+        const id = s.productId;
+        if (!prodMap[id]) prodMap[id] = {
+          productName: s.productName,
+          unitsSold  : 0,
+          revenue    : 0,
+          profit     : 0
+        };
+        const qty = +s.saleQuantity;
+        prodMap[id].unitsSold += qty;
+        prodMap[id].revenue   += (s.totalSale !== undefined
+                                   ? +parseFloat(s.totalSale)
+                                   : s.retailPrice * qty);
+        prodMap[id].profit    += +s.profit;
+      });
+
+      const prodArr = Object.values(prodMap);
+
+      const topSelling = [...prodArr]
+        .sort((a, b) => b.unitsSold - a.unitsSold)
+        .slice(0, topN);
+
+      const topRevenue = [...prodArr]
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, topN);
+
+      const topProfit = [...prodArr]
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, topN);
+
+      /* 4️⃣  Monthly Profit & Expense totals */
+      const monthlyProfit  = {};
+      const monthlyExpense = {};
+
+      sales.forEach(s => {
+        const ym = s.saleDate.substring(0, 7);             // "YYYY‑MM"
+        monthlyProfit[ym] = (monthlyProfit[ym] || 0) + +s.profit;
+      });
+
+      expenses.forEach(e => {
+        const ym = e.saleDate.substring(0, 7);
+        monthlyExpense[ym] = (monthlyExpense[ym] || 0) + +e.expenseCost;
+      });
+
+      /* 5️⃣  Render */
+      res.render('stats', {
+        /* Top‑N */
+        topSelling,
+        topRevenue,
+        topProfit,
+
+        /* Month‑level totals */
+        monthlyProfit,
+        monthlyExpense,
+
+        /* UI helpers / form values */
+        periodLabel,
+        month : uiMonth,
+        from  : uiFrom,
+        to    : uiTo,
+        year  : uiYear,
+        topN
+      });
+
+    } catch (err) {
+      console.error('/stats error:', err);
+      res.status(500).send(err.toString());
+    }
+  }
+);
+
+
+
 /* ─────────── START THE SERVER ─────────── */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
