@@ -53,6 +53,7 @@
 
     <section class="form-container">
       <form action="/edit-stock-batch/<%= batch.id %>" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
         <!-- ── Product name (if stored on batch) ────────────────────────── -->
         <div class="form-row">
@@ -87,11 +88,12 @@
           <div class="form-group">
             <label for="newCategory">Or Create Category</label>
             <input
-              type="text"
-              id="newCategory"
-              name="newCategory"
-              placeholder="New category"
-            >
+  type="text"
+  id="newCategory"
+  name="newCategory"
+  placeholder="New category"
+  maxlength="40"
+/>
           </div>
         </div>
 
@@ -114,11 +116,12 @@
           <div class="form-group">
             <label for="newUnit">Or Create Unit</label>
             <input
-              type="text"
-              id="newUnit"
-              name="newUnit"
-              placeholder="e.g. kg, pcs"
-            >
+  type="text"
+  id="newUnit"
+  name="newUnit"
+  placeholder="e.g. kg, pcs"
+  maxlength="20"
+/>
           </div>
         </div>
 

@@ -616,3 +616,11 @@ body {
     color: white;
     transform: scale(1.1);
 }
+/* hide batch rows by default */
+.batches-container {
+    display: none;
+  }
+  /* when .show is present, reveal that row */
+  .batches-container.show {
+    display: table-row;
+  }

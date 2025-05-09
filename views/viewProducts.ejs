@@ -80,7 +80,9 @@
 
       <!-- Filters -->
       <div class="filter-container">
-        <form method="GET" action="/view-products">
+        <form id="filter-form" method="GET" action="/view-products">
+
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <div class="filter-controls">
             <div class="filter-group">
               <label for="filterCategory">Filter by Category:</label>
@@ -230,8 +232,10 @@
                   <% if (product.quantity===0 && (!product.batches || !product.batches.length)) { %>
                     <form action="/delete-product/<%= product.id %>" method="POST"
                           class="delete-product-form" data-product-id="<%= product.id %>">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
                     </form>
+                    
                   <% } else { %>
                     <span>-</span>
                   <% } %>
@@ -321,6 +325,7 @@
                                   <form action="/delete-stock-batch/<%= batch.id %>" method="POST"
                                         class="delete-batch-form" data-product-id="<%= product.id %>"
                                         style="display:inline;">
+                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                     <button type="submit" class="delete-button">
                                       <i class="fas fa-trash"></i>
                                     </button>
@@ -348,6 +353,11 @@
 
   <!--  Make product/batch data available for totals  -->
   <script>
+    
+   const csrfToken = document
+  .querySelector('#filter-form input[name="_csrf"]')
+  .value;
+
     const PRODUCTS = <%- JSON.stringify(products) %>;
   </script>
 
@@ -405,7 +415,7 @@
       e.preventDefault();
       if(!confirm('Are you sure?')) return;
 
-      const res=await fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}});
+      const res=await fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest','X-CSRF-Token': csrfToken}});
       if(!res.ok){ alert(await res.text()); return; }
 
       const isProduct=form.matches('.delete-product-form');
@@ -451,6 +461,7 @@
           actionsCell.innerHTML=
             `<form action="/delete-product/${p.id}" method="POST"
                     class="delete-product-form" data-product-id="${p.id}">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
              </form>`;
         }else{
@@ -486,7 +497,7 @@
         if(newVal===original) return cancel();
 
         const res=await fetch(`/api/edit-stock-batch-field/${batchId}`,{
-          method:'POST',headers:{'Content-Type':'application/json'},
+          method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token': csrfToken},
           body:JSON.stringify({field,value:newVal})
         });
         const data=await res.json();

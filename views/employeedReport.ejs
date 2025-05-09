@@ -616,6 +616,8 @@
     
     <!-- Filter Form -->
     <form method="GET" action="/employeeReport">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
       <div>
         <label for="month">Select Month:</label>
         <input type="month" id="month" name="month" value="<%= month %>">

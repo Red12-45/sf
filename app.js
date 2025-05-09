@@ -8,6 +8,11 @@ const session = require('express-session');
 const { createClient } = require('redis');       // using Node Redis client
 const { RedisStore } = require('connect-redis'); // import RedisStore from connect-redis
 
+// ─────────── security deps (NEW) ───────────
+const helmet        = require('helmet');              // 🔒
+const rateLimit     = require('express-rate-limit');  // 🔒
+const csrf          = require('csurf');               // 🔒
+const { body, validationResult } = require('express-validator'); // 🔒
 
 
 const favicon             = require('serve-favicon');
@@ -34,6 +39,32 @@ const db = admin.firestore();
 
 // ─────────── Express base ───────────
 const app = express();
+
+
+const redisClient = createClient({
+  url: process.env.REDIS_URL
+});
+redisClient.connect().catch(console.error);  // connect to Redis (for node-redis v4)
+
+// 2. Create RedisStore instance for sessions
+const redisStore = new RedisStore({
+  client: redisClient,
+  prefix: 'sess:'  // optional key prefix in Redis, defaults to "sess:"
+});
+
+app.use(session({
+  store: redisStore,
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 86400000,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  }
+}));
+
 app.use(compression());
 const buildId = process.env.RENDER_GIT_COMMIT || Date.now().toString();
 
@@ -52,12 +83,70 @@ app.use((req, res, next) => {
   next();
 });
 
+/* ─────────── Security middleware stack (NEW) ─────────── */
+app.use(helmet({
+  hidePoweredBy: true,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc : ["'self'"],
+      scriptSrc  : ["'self'", "'unsafe-inline'",
+                    "https://cdnjs.cloudflare.com",
+                    "https://www.gstatic.com",
+                    "https://checkout.razorpay.com"],
+      styleSrc   : ["'self'", "'unsafe-inline'",
+                    "https://cdnjs.cloudflare.com",
+                    "https://fonts.googleapis.com"],
+      connectSrc : ["'self'", "https://*.firebaseio.com",
+                    "https://firestore.googleapis.com",
+                    "https://*.razorpay.com"],
+      imgSrc     : ["'self'", "data:"],
+      fontSrc    : ["'self'", "https://cdnjs.cloudflare.com",
+                    "https://fonts.gstatic.com"]
+    }
+  }
+}));
+app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
+
+// Global rate-limit – hits every sensitive endpoint
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,   // 15 min
+  max: 300,                   // per IP
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use(['/api', '/login', '/register'], apiLimiter);
+
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// CSRF protection (MUST come _after_ session middleware)
+app.use(csrf());
+app.use((req, res, next) => {
+  // make the token available to all your EJS templates
+  res.locals.csrfToken = req.csrfToken();
+  next();
+});
+// Redis safety-net
+redisClient.on('error', err => console.error('Redis error:', err));
+
+/* CSRF & generic error shields (keep these LAST) */
+app.use((err, req, res, next) => {        // CSRF failure handler
+  if (err.code === 'EBADCSRFTOKEN')
+    return res.status(403).send('Invalid CSRF token');
+  next(err);
+});
+app.use((err, req, res, next) => {        // generic 500
+  console.error(err);
+  res.status(500).send('Internal Server Error');
+});
+
+
+
 // serve static assets with a long maxAge—but they'll be re-requested whenever `v` changes
 app.use(express.static('public', { maxAge: '365d' }));
 
 app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+
 
 
 app.locals.formatIST = date => {
@@ -68,25 +157,6 @@ app.locals.formatIST = date => {
 };
 
 
-
-const redisClient = createClient({
-  url: process.env.REDIS_URL
-});
-redisClient.connect().catch(console.error);  // connect to Redis (for node-redis v4)
-
-// 2. Create RedisStore instance for sessions
-const redisStore = new RedisStore({
-  client: redisClient,
-  prefix: 'sess:'  // optional key prefix in Redis, defaults to "sess:"
-});
-
-app.use(session({
-  store: redisStore,              // use Redis store for session storage
-  secret: 'your_session_secret',  // replace with your own secret
-  resave: false,                  // don't save session if unmodified
-  saveUninitialized: false,       // don't create session until something stored
-  cookie: { maxAge: 86400000 }    // e.g. cookie expiration in ms (optional)
-}));
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -388,33 +458,101 @@ app.get('/register', (req, res) => {
   res.render('register', { errorMessage: null, oldInput: {} });
 });
 // POST /register
-app.post('/register', async (req, res) => {
-  const { name, email, phone, address, location, password, confirmPassword } = req.body;
-  const oldInput = { name, email, phone, address, location };
-  try {
-    if (password !== confirmPassword)
-      return res.status(400).render('register', { errorMessage: 'Passwords do not match', oldInput });
+// POST /register  (🔒 hardened)
+app.post(
+  '/register',
+  [
+    body('name')
+      .isLength({ min: 2, max: 60 })
+      .withMessage('Name must be at least 2 characters.')
+      .trim().escape(),
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const userQuery = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
-    if (!userQuery.empty)
-      return res.status(400).render('register', { errorMessage: 'User already exists', oldInput });
+    body('email')
+      .isEmail()
+      .withMessage('Invalid email address.')
+      .normalizeEmail(),
 
-    const hashed = await bcrypt.hash(password, 10);
-    const newUserRef = await db.collection('users').add({
-      name, email: normalizedEmail, phone, address, location,
-      password: hashed, isMaster: true, createdAt: new Date()
-    });
-    await newUserRef.update({ accountId: newUserRef.id });
-    res.redirect('/login');
-  } catch (err) {
-    console.error(err);
-    res.status(500).render('register', {
-      errorMessage: 'Something went wrong. Please try again.',
-      oldInput
-    });
+    body('phone')
+      .optional({ checkFalsy: true })
+      .isMobilePhone('en-IN')
+      .withMessage('Invalid Indian phone number.')
+      .trim().escape(),
+
+    body('address')
+      .isLength({ max: 200 })
+      .withMessage('Address too long.')
+      .trim().escape(),
+
+    body('location')
+      .optional({ checkFalsy: true })
+      .trim().escape(),
+
+    body('password')
+      .isStrongPassword({
+        minLength: 8, minLowercase: 1,
+        minUppercase: 1, minNumbers: 1, minSymbols: 1
+      })
+      .withMessage('Password must be 8 chars incl. upper, lower, number & symbol.'),
+
+    body('confirmPassword')
+      .custom((val, { req }) => {
+        if (val !== req.body.password)
+          throw new Error('Passwords do not match');
+        return true;
+      })
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    const {
+      name, email, phone, address,
+      location, password
+    } = req.body;
+
+    const oldInput = { name, email, phone, address, location };
+
+    if (!errors.isEmpty()) {
+      return res.status(400).render('register', {
+        errorMessage: errors.array().map(e => e.msg).join('<br>'),
+        oldInput
+      });
+    }
+
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const exists = await db.collection('users')
+        .where('email', '==', normalizedEmail)
+        .limit(1).get();
+      if (!exists.empty) {
+        return res.status(400).render('register', {
+          errorMessage: 'User already exists',
+          oldInput
+        });
+      }
+
+      const hashed = await bcrypt.hash(password, 10);
+      const userRef = await db.collection('users').add({
+        name,
+        email: normalizedEmail,
+        phone,
+        address,
+        location,
+        password: hashed,
+        isMaster: true,
+        createdAt: new Date()
+      });
+      await userRef.update({ accountId: userRef.id });
+      res.redirect('/login');
+
+    } catch (err) {
+      console.error(err);
+      res.status(500).render('register', {
+        errorMessage: 'Something went wrong. Please try again.',
+        oldInput
+      });
+    }
   }
-});
+);
+
 
 
 
@@ -445,101 +583,143 @@ const clearFailures = async key => redisClient.del(key);
 
 // GET /login
 app.get('/login', (req, res) => {
-  if (req.session && req.session.user) return res.redirect('/');
-  res.render('login');
-});
-// POST /login
-// POST /login  (brute‑force protected)
-app.post('/login', async (req, res) => {
-  try {
-    let { identifier, password } = req.body;
-
-    // normalise identifier early (same logic as before)
-    if (identifier.includes('@')) identifier = identifier.trim().toLowerCase();
-    const bruteKey = identifier ? `bf:${identifier}` : `bfip:${req.ip}`;
-
-    /* ─── 1️⃣  Lock‑out check ─── */
-    const currentAttempts = await getAttempts(bruteKey);
-    if (currentAttempts >= MAX_LOGIN_ATTEMPTS) {
-      return res.status(429).send(
-        `Too many failed attempts. Please try again after ${
-          Math.ceil(await redisClient.ttl(bruteKey) / 60)
-        } minutes.`
-      );
-    }
-
-    /* ─── 2️⃣  Existing user lookup (unchanged) ─── */
-    const [emailQ, subUserQ, phoneQ] = await Promise.all([
-      db.collection('users').where('email',    '==', identifier).get(),
-      db.collection('users').where('subUserId','==', identifier).get(),
-      db.collection('users').where('phone',    '==', identifier).get()
-    ]);
-    const userDoc = !emailQ.empty ? emailQ.docs[0]
-                    : !subUserQ.empty ? subUserQ.docs[0]
-                    : !phoneQ.empty   ? phoneQ.docs[0]
-                    : null;
-    if (!userDoc) {
-      await recordFailure(bruteKey);
-      return res.status(400).send('User not found');
-    }
-
-    const userData = userDoc.data();
-
-    /* ─── 3️⃣  Password check ─── */
-    const validPassword = await bcrypt.compare(password, userData.password);
-    if (!validPassword) {
-      const tries = await recordFailure(bruteKey);
-      const left  = MAX_LOGIN_ATTEMPTS - tries;
-      return res.status(400).send(
-        left > 0
-          ? `Invalid password – ${left} attempt${left === 1 ? '' : 's'} remaining`
-          : 'Too many failed attempts. Please try again later.'
-      );
-    }
-
-    /* ─── 4️⃣  Success → clear failures ─── */
-    await clearFailures(bruteKey);
-
-    /* ─── 5️⃣  Subscription logic (same as before) ─── */
-    let subscriptionExpiry = userData.subscriptionExpiry
-      ? (typeof userData.subscriptionExpiry.toDate === 'function'
-         ? userData.subscriptionExpiry.toDate()
-         : new Date(userData.subscriptionExpiry))
-      : null;
-
-    if (!userData.isMaster) {
-      const masterDoc = await db.collection('users').doc(userData.accountId).get();
-      if (masterDoc.exists && masterDoc.data().subscriptionExpiry) {
-        subscriptionExpiry = (typeof masterDoc.data().subscriptionExpiry.toDate === 'function')
-          ? masterDoc.data().subscriptionExpiry.toDate()
-          : new Date(masterDoc.data().subscriptionExpiry);
-      }
-    }
-
-    /* ─── 6️⃣  Session payload (unchanged) ─── */
-    req.session.user = {
-      id: userDoc.id,
-      name: userData.name,
-      email: userData.email,
-      isMaster: userData.isMaster || false,
-      accountId: userData.accountId || userDoc.id,
-      subscriptionExpiry
-    };
-
-    if (!req.session.user.isMaster) {
-      const permDoc = await db.collection('permissions')
-                              .doc(req.session.user.accountId).get();
-      req.session.lockedRoutes = permDoc.exists
-        ? (permDoc.data().lockedRoutes || [])
-        : [];
-    }
-
-    res.redirect('/');
-  } catch (error) {
-    console.error(error);
-    res.status(500).send(error.toString());
+  if (req.session && req.session.user) {
+    return res.redirect('/');
   }
+  // first time or after failure: no error, blank identifier
+  res.render('login', {
+    loginError: null,
+    identifier: ''
+  });
 });
+
+// POST /login  (brute-force protected)
+// POST /login  (brute-force + 🔒 validation)
+app.post(
+  '/login',
+  [
+    body('identifier')
+      .notEmpty()
+      .withMessage('Email / sub-user ID / phone is required.')
+      .trim().escape(),
+    body('password')
+      .notEmpty()
+      .withMessage('Password is required.')
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).render('login', {
+        loginError: errors.array()[0].msg,
+        identifier: req.body.identifier || ''
+      });
+    }
+
+    try {
+      let { identifier, password } = req.body;
+
+      // normalize identifier
+      if (identifier.includes('@')) identifier = identifier.trim().toLowerCase();
+
+      // pick key for brute-force table
+      const bruteKey = identifier ? `bf:${identifier}` : `bfip:${req.ip}`;
+
+      /* 1️⃣  Lock-out check (unchanged) */
+      const currentAttempts = await getAttempts(bruteKey);
+      if (currentAttempts >= MAX_LOGIN_ATTEMPTS) {
+        const retryAfter = Math.ceil(await redisClient.ttl(bruteKey) / 60);
+        return res.status(429).render('login', {
+          loginError: `Too many failed attempts. Try again in ${retryAfter} minute${retryAfter === 1 ? '' : 's'}.`,
+          identifier
+        });
+      }
+
+      /* 2️⃣  Lookup user (unchanged) */
+      const [emailQ, subUserQ, phoneQ] = await Promise.all([
+        db.collection('users').where('email', '==', identifier).get(),
+        db.collection('users').where('subUserId', '==', identifier).get(),
+        db.collection('users').where('phone', '==', identifier).get()
+      ]);
+      const userDoc = !emailQ.empty
+        ? emailQ.docs[0]
+        : !subUserQ.empty
+          ? subUserQ.docs[0]
+          : !phoneQ.empty
+            ? phoneQ.docs[0]
+            : null;
+
+      if (!userDoc) {
+        await recordFailure(bruteKey);
+        const triesLeft = MAX_LOGIN_ATTEMPTS - (await getAttempts(bruteKey));
+        return res.status(400).render('login', {
+          loginError: triesLeft > 0
+            ? `User not found. ${triesLeft} attempt${triesLeft === 1 ? '' : 's'} remaining.`
+            : 'Too many failed attempts. Please try again later.',
+          identifier
+        });
+      }
+
+      /* 3️⃣  Password check (unchanged) */
+      const userData = userDoc.data();
+      const validPw = await bcrypt.compare(password, userData.password);
+      if (!validPw) {
+        const tries = await recordFailure(bruteKey);
+        const left = MAX_LOGIN_ATTEMPTS - tries;
+        return res.status(400).render('login', {
+          loginError: left > 0
+            ? `Invalid password – ${left} attempt${left === 1 ? '' : 's'} remaining.`
+            : 'Too many failed attempts. Please try again later.',
+          identifier
+        });
+      }
+
+      /* 4️⃣  Success – wipe failures */
+      await clearFailures(bruteKey);
+
+      /* 5️⃣  Subscription logic (unchanged) */
+      let subscriptionExpiry = userData.subscriptionExpiry
+        ? (typeof userData.subscriptionExpiry.toDate === 'function'
+            ? userData.subscriptionExpiry.toDate()
+            : new Date(userData.subscriptionExpiry))
+        : null;
+
+      if (!userData.isMaster) {
+        const masterDoc = await db.collection('users')
+                                  .doc(userData.accountId).get();
+        if (masterDoc.exists && masterDoc.data().subscriptionExpiry) {
+          const d = masterDoc.data().subscriptionExpiry;
+          subscriptionExpiry = typeof d.toDate === 'function' ? d.toDate() : new Date(d);
+        }
+      }
+
+      /* 6️⃣  Attach to session & redirect (unchanged) */
+      req.session.user = {
+        id        : userDoc.id,
+        name      : userData.name,
+        email     : userData.email,
+        isMaster  : userData.isMaster || false,
+        accountId : userData.accountId || userDoc.id,
+        subscriptionExpiry
+      };
+      if (!req.session.user.isMaster) {
+        const permDoc = await db.collection('permissions')
+                                .doc(req.session.user.accountId).get();
+        req.session.lockedRoutes = permDoc.exists
+          ? (permDoc.data().lockedRoutes || [])
+          : [];
+      }
+      res.redirect('/');
+
+    } catch (error) {
+      console.error(error);
+      res.status(500).render('login', {
+        loginError: 'Something went wrong—please try again.',
+        identifier: req.body.identifier || ''
+      });
+    }
+  }
+);
+
 
 
 // GET /logout

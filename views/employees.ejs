@@ -686,6 +686,8 @@
           <h2>Check-In</h2>
         </div>
         <form action="/employee/checkin" method="POST" class="time-form">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
           <div class="form-group">
             <label for="checkinEmployeeId">Employee:</label>
             <div class="select-wrapper">
@@ -727,6 +729,8 @@
           <h2>Check-Out</h2>
         </div>
         <form action="/employee/checkout" method="POST" class="time-form">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
           <div class="form-group">
             <label for="checkoutEmployeeId">Employee:</label>
             <div class="select-wrapper">

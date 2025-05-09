@@ -82,6 +82,8 @@
       <!-- Filter Form Card -->
       <div class="formBox">
         <form action="/expense" method="GET" id="filterForm">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
           <div>
             <label for="month">Select Month:</label>
             <input type="month" name="month" id="month" value="<%= month %>" required>
@@ -93,6 +95,8 @@
       <!-- Expense Submission Form Card -->
       <div class="formBox">
         <form action="/expense" method="POST" id="expenseForm">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
           <input type="hidden" name="saleDate" value="<%= month %>-01">
           <input type="hidden" name="redirectTo" value="expense">
           <div class="expense-row-inline">

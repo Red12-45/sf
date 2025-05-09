@@ -12,6 +12,7 @@
   <% if (order) { %>
     <!-- Hidden form to handle payment success callback -->
     <form id="paymentForm" action="/payment-success" method="POST" style="display:none;">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <!-- Pass the subscription plan (Monthly, Half-Yearly, Yearly) -->
       <input type="hidden" name="plan" value="<%= plan %>">
     </form>

@@ -132,6 +132,7 @@
       <div class="formBox filter-form">
         <h2><i class="fas fa-filter"></i> Filter Profit Data</h2>
         <form action="/profit" method="GET" class="form-inline">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <div class="form-field">
             <label for="month">Filter by Month (YYYY-MM):</label>
             <input type="month" id="month" name="month" value="<%= monthFilter %>">

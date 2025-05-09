@@ -24,6 +24,12 @@
         <p>Enter your credentials to access your account</p>
       </div>
       <form action="/login" method="POST" class="auth-form" id="login-form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <% if (loginError) { %>
+          <div class="form-error"><%= loginError %></div>
+        <% } %>
+        
         <div class="form-group">
           <label for="identifier">
             <i class="fas fa-user"></i> Email or Username

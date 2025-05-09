@@ -666,13 +666,15 @@
       </div>
       <div class="card-body">
         <form action="/create-user" method="POST">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <div class="form-grid">
             <!-- Full Name -->
             <div class="form-group">
               <label for="name">Full Name</label>
               <div class="input-icon-wrapper">
                 <i class="fas fa-user input-icon"></i>
-                <input type="text" id="name" name="name" class="form-control" placeholder="Enter full name" required>
+                <input type="text" id="name" name="name" class="form-control" placeholder="Enter full name" required maxlength="30">
+
               </div>
             </div>
             <!-- Sub-User ID -->
@@ -688,7 +690,7 @@
               <label for="password">Password</label>
               <div class="input-icon-wrapper">
                 <i class="fas fa-lock input-icon"></i>
-                <input type="password" id="password" name="password" class="form-control" placeholder="Set a password" required>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Set a password" required maxlength="20">
               </div>
             </div>
             <!-- Confirm Password -->
@@ -696,7 +698,7 @@
               <label for="confirmPassword">Confirm Password</label>
               <div class="input-icon-wrapper">
                 <i class="fas fa-lock input-icon"></i>
-                <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" placeholder="Confirm password" required>
+                <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" placeholder="Confirm password" required maxlength="20">
               </div>
             </div>
             <!-- Submit Button -->
@@ -750,6 +752,7 @@
                       </button>
                       <% if (!user.isMaster) { %>
                         <form action="/delete-user" method="POST" onsubmit="return confirm('Are you sure you want to delete this user?');" style="margin:0;">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                           <input type="hidden" name="userId" value="<%= user.id %>">
                           <button type="submit" class="btn-icon btn-delete" title="Delete User">
                             <i class="fas fa-trash-alt"></i>
@@ -764,6 +767,7 @@
                     <div class="edit-form">
                       <h3 class="edit-form-title">Edit User: <%= user.name %></h3>
                       <form action="/edit-user" method="POST">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <input type="hidden" name="userId" value="<%= user.id %>">
                         <div class="form-grid">
                           <!-- Name Field -->
@@ -771,7 +775,8 @@
                             <label for="name-<%= user.id %>">Full Name</label>
                             <div class="input-icon-wrapper">
                               <i class="fas fa-user input-icon"></i>
-                              <input type="text" id="name-<%= user.id %>" name="name" class="form-control" value="<%= user.name %>" placeholder="Enter full name" required>
+                              <input type="text" id="name-<%= user.id %>" name="name" class="form-control" value="<%= user.name %>" placeholder="Enter full name" required maxlength="30">
+
                             </div>
                           </div>
                           <!-- New Password -->
@@ -779,7 +784,7 @@
                             <label for="password-<%= user.id %>">New Password</label>
                             <div class="input-icon-wrapper">
                               <i class="fas fa-lock input-icon"></i>
-                              <input type="password" id="password-<%= user.id %>" name="password" class="form-control" placeholder="Enter new password (leave blank to keep current)">
+                              <input type="password" id="password-<%= user.id %>" name="password" class="form-control" placeholder="Enter new password (leave blank to keep current)" maxlength="20">
                             </div>
                           </div>
                           <!-- Confirm New Password -->
@@ -787,7 +792,7 @@
                             <label for="confirmPassword-<%= user.id %>">Confirm New Password</label>
                             <div class="input-icon-wrapper">
                               <i class="fas fa-lock input-icon"></i>
-                              <input type="password" id="confirmPassword-<%= user.id %>" name="confirmPassword" class="form-control" placeholder="Confirm new password">
+                              <input type="password" id="confirmPassword-<%= user.id %>" name="confirmPassword" class="form-control" placeholder="Confirm new password" maxlength="20">
                             </div>
                           </div>
                           <div class="form-group full-width buttons-group">
