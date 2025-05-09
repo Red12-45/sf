@@ -88,23 +88,35 @@ app.use(helmet({
   hidePoweredBy: true,
   contentSecurityPolicy: {
     directives: {
-      defaultSrc : ["'self'"],
-      scriptSrc  : ["'self'", "'unsafe-inline'",
-                    "https://cdnjs.cloudflare.com",
-                    "https://www.gstatic.com",
-                    "https://checkout.razorpay.com"],
-      styleSrc   : ["'self'", "'unsafe-inline'",
-                    "https://cdnjs.cloudflare.com",
-                    "https://fonts.googleapis.com"],
-      connectSrc : ["'self'", "https://*.firebaseio.com",
-                    "https://firestore.googleapis.com",
-                    "https://*.razorpay.com"],
+      defaultSrc    : ["'self'"],
+      scriptSrc     : [
+        "'self'",
+        "'unsafe-inline'",            // your inline <script> blocks
+        "https://cdnjs.cloudflare.com",  // ChartDataLabels plugin
+        "https://cdn.jsdelivr.net",       // ← add this
+        "https://www.gstatic.com",
+        "https://checkout.razorpay.com"
+      ],
+      scriptSrcAttr : ["'self'", "'unsafe-inline'"],  // your inline onclick=""
+      styleSrc      : [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdnjs.cloudflare.com",
+        "https://fonts.googleapis.com"
+      ],
+      connectSrc    : [
+        "'self'",
+        "https://*.firebaseio.com",
+        "https://firestore.googleapis.com",
+        "https://*.razorpay.com"
+      ],
       imgSrc     : ["'self'", "data:"],
-      fontSrc    : ["'self'", "https://cdnjs.cloudflare.com",
-                    "https://fonts.gstatic.com"]
+      fontSrc    : ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"]
     }
   }
 }));
+
+
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
 
 // Global rate-limit – hits every sensitive endpoint
