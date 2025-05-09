@@ -205,11 +205,9 @@
       const input = document.getElementById('productName');
       if (!input) return;
       const words = input.value.trim().split(/\s+/).map(word => {
-        // only transform if the first character is a lowercase letter
         if (/^[a-z]/.test(word)) {
           return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
         }
-        // leave acronyms (e.g. CC), alphanumerics (e.g. ASD123), etc. untouched
         return word;
       });
       input.value = words.join(' ');
@@ -247,5 +245,6 @@
   </script>
 
   <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
+  <script type="module" src="/js/firebase-appcheck.js?v=<%= v %>"></script>
 </body>
 </html>

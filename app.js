@@ -95,12 +95,13 @@ if (process.env.NODE_ENV === 'production') app.set('view cache', true);
 // ─────────── helpers ───────────
 const pad = n => String(n).padStart(2, '0');
 
-/* NEW ➜ case-insensitive, space-insensitive key */
+/* NEW ➜ case-insensitive, space-insensitive key
+   — now *never* crashes if s is empty/undefined — */
 const normalizeName = s =>
-  s
+  (s || '')                 // ⬅️  guarantees a string
     .toLowerCase()          // ignore case
     .replace(/\s+/g, ' ')   // collapse whitespace runs
-    .trim(); 
+    .trim();
 
 const getCategories = async accountId => {
   const key = `categories_${accountId}`;
@@ -891,6 +892,7 @@ app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (r
 });
 
 /* ─────────── POST /add-product – create or update ─────────── */
+/* ─────────── POST /add-product – create or update ─────────── */
 app.post(
   '/add-product',
   isAuthenticated,
@@ -900,7 +902,7 @@ app.post(
       const accountId = req.session.user.accountId;
       const {
         existingProduct,
-        productName,
+        productName    = '',        // default to empty string
         wholesalePrice,
         retailPrice,
         quantity,
@@ -922,21 +924,31 @@ app.post(
       const unit    = unitRaw.toLowerCase();
 
       /* --------------------------------------------------------------
-         Duplicate detection (case-insensitive, space-insensitive)
+         0. Validation
       -------------------------------------------------------------- */
-      const nameKey = normalizeName(productName);
-      let productRef = null;
+      if (existingProduct === 'new' && !productName.trim())
+        return res.status(400).send('Product name is required');
+
+      /* --------------------------------------------------------------
+         1. Duplicate-detection helpers
+      -------------------------------------------------------------- */
+      const nameKey = normalizeName(productName);  // now 100 % safe
+      let productRef  = null;
       let productSnap = null;
 
       if (existingProduct && existingProduct !== 'new') {
-        // explicit update path
+        /* --------------------------------------------------------------
+           1A.  UPDATE path — explicit product selected
+        -------------------------------------------------------------- */
         productRef  = db.collection('products').doc(existingProduct);
         productSnap = await productRef.get();
         if (!productSnap.exists)
           return res.status(404).send('Selected product not found');
 
       } else {
-        // fast path – does another product already have this nameKey?
+        /* --------------------------------------------------------------
+           1B.  CREATE / implicit-update path — need dup-check
+        -------------------------------------------------------------- */
         const fastDup = await db.collection('products')
           .where('accountId', '==', accountId)
           .where('nameKey',   '==', nameKey)
@@ -967,7 +979,7 @@ app.post(
       }
 
       /* --------------------------------------------------------------
-         1. UPDATE flow
+         2. UPDATE flow
       -------------------------------------------------------------- */
       if (productRef && productSnap) {
         const d    = productSnap.data();
@@ -988,12 +1000,12 @@ app.post(
         });
 
       /* --------------------------------------------------------------
-         2. CREATE flow
+         3. CREATE flow
       -------------------------------------------------------------- */
       } else {
         const data = {
           productName : productName.trim(),
-          nameKey,                               // ⬅️  NEW / ALWAYS
+          nameKey,
           wholesalePrice: wp,
           retailPrice   : rp,
           quantity      : qty,
@@ -1014,7 +1026,7 @@ app.post(
       }
 
       /* --------------------------------------------------------------
-         3. Always create a NEW stock batch
+         4. Always create a NEW stock batch
       -------------------------------------------------------------- */
       await db.collection('stockBatches').add({
         productId        : productRef.id,
@@ -1037,6 +1049,7 @@ app.post(
     }
   }
 );
+
 
 
 
