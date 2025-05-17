@@ -24,8 +24,8 @@
             <li><a href="/expense"><span class="nav-icon">📜</span>Expenses</a></li>
             <li><a href="/view-products"><span class="nav-icon">📋</span>View Products</a></li>
             <li><a href="/sales"><span class="nav-icon">🏷️</span>Sales</a></li>
-            <li class="sidebar-item"><a href="/performance" class="sidebar-link"><i class="fas fa-rocket"></i> Performance</a></li>
-            <li class="sidebar-item"><a href="/stats" class="sidebar-link"><i class="fas fa-chart-pie"></i> Stats</a></li>
+            <li ><a href="/performance"> <span class="nav-icon">🚀</span>Performance</a></li>
+            <li ><a href="/stats" > <span class="nav-icon">📈</span>Stats</a></li>
           </ul>
         </div>
         <div class="sidebar-section">
@@ -53,6 +53,8 @@
       <!-- Filters -->
       <section class="filter-section">
         <form method="GET" action="/add-product">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
           <label for="categoryFilter">Filter by Category:</label>
           <select name="category" id="categoryFilter">
             <option value="" <%= selectedCategory===''?'selected':'' %>>All Categories</option>

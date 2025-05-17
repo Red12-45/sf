@@ -36,6 +36,13 @@
 </head>
 
 <body>
+  <%
+/* ——————————————————————————————————————————————
+   Permissions for this view
+   —————————————————————————————————————————————— */
+const canEdit   = !(blockedActions['/view-products'] || []).includes('edit');
+const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
+%>
   <!-- ──────────  SIDEBAR  ────────── -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-logo">
@@ -231,17 +238,17 @@
                 </td>
 
                 <td class="actions-cell">
-                  <% if (product.quantity===0 && (!product.batches || !product.batches.length)) { %>
-                    <form action="/delete-product/<%= product.id %>" method="POST"
-                          class="delete-product-form" data-product-id="<%= product.id %>">
-                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                      <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
-                    </form>
-                    
-                  <% } else { %>
-                    <span>-</span>
-                  <% } %>
-                </td>
+  <% if (canDelete && product.quantity===0 && (!product.batches || !product.batches.length)) { %>
+    <form action="/delete-product/<%= product.id %>" method="POST"
+          class="delete-product-form" data-product-id="<%= product.id %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
+    </form>
+  <% } else { %>
+    <span>-</span>
+  <% } %>
+</td>
+
               </tr>
 
               <!--  Collapsible batch rows  -->
@@ -281,20 +288,22 @@
                                 <td><%= d.toLocaleDateString() %></td>
                                 <td><%= d.toLocaleTimeString() %></td>
 
-                                <td class="price-cell editable"
+                                <td  class="<%= canEdit ? 'editable' : '' %>"
+
                                     data-batch-id="<%= batch.id %>" data-field="purchasePrice">
                                   <span class="value">
                                     <span class="currency">₹</span><%= Number(batch.purchasePrice).toFixed(2) %>
                                   </span>
-                                  <i class="fas fa-edit edit-icon"></i>
+                                   <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
                                 </td>
 
-                                <td class="price-cell editable"
+                                <td  class="<%= canEdit ? 'editable' : '' %>"
+
                                     data-batch-id="<%= batch.id %>" data-field="salePrice">
                                   <span class="value">
                                     <span class="currency">₹</span><%= Number(batch.salePrice).toFixed(2) %>
                                   </span>
-                                  <i class="fas fa-edit edit-icon"></i>
+                                  <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
                                 </td>
 
                                 <td class="price-cell profit-margin-cell">
@@ -302,9 +311,10 @@
                                   <%= Number(batch.profitMargin).toFixed(2) %>
                                 </td>
 
-                                <td class="editable" data-batch-id="<%= batch.id %>" data-field="quantity">
+                                <td  class="<%= canEdit ? 'editable' : '' %>" data-batch-id="<%= batch.id %>" 
+                                  data-field="quantity">
                                   <span class="value"><%= Number(batch.quantity).toFixed(2) %></span>
-                                  <i class="fas fa-edit edit-icon"></i>
+                                   <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
                                 </td>
 
                                 <td><%= batch.unit ? batch.unit : (product.unit || '-') %></td>
@@ -321,18 +331,20 @@
                                 </td>
 
                                 <td>
-                                  <a href="/edit-stock-batch/<%= batch.id %>" class="edit-button"
-                                     title="Edit this stock batch"><i class="fas fa-edit"></i></a>
+  <% if (canEdit) { %>
+    <a href="/edit-stock-batch/<%= batch.id %>" class="edit-button"
+       title="Edit this stock batch"><i class="fas fa-edit"></i></a>
+  <% } %>
 
-                                  <form action="/delete-stock-batch/<%= batch.id %>" method="POST"
-                                        class="delete-batch-form" data-product-id="<%= product.id %>"
-                                        style="display:inline;">
-                                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                    <button type="submit" class="delete-button">
-                                      <i class="fas fa-trash"></i>
-                                    </button>
-                                  </form>
-                                </td>
+  <% if (canDelete) { %>
+    <form action="/delete-stock-batch/<%= batch.id %>" method="POST"
+          class="delete-batch-form" data-product-id="<%= product.id %>" style="display:inline;">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
+    </form>
+  <% } %>
+</td>
+
                               </tr>
                             <% }) %>
                           </tbody>
@@ -355,13 +367,15 @@
 
   <!--  Make product/batch data available for totals  -->
   <script>
-    
-   const csrfToken = document
-  .querySelector('#filter-form input[name="_csrf"]')
-  .value;
+  const csrfToken  = document
+        .querySelector('#filter-form input[name="_csrf"]').value;
 
-    const PRODUCTS = <%- JSON.stringify(products) %>;
-  </script>
+  /* >>> add these two lines <<< */
+  const CAN_EDIT   = <%= canEdit   ? 'true' : 'false' %>;
+  const CAN_DELETE = <%= canDelete ? 'true' : 'false' %>;
+
+  const PRODUCTS   = <%- JSON.stringify(products) %>;
+</script>
 
   <!--  NEW  total-calculator  -->
   <script>
@@ -459,7 +473,7 @@
 
         const remaining=batchesContainer.querySelectorAll('.batch-row').length;
         const actionsCell=prodRow.querySelector('.actions-cell');
-        if(p.quantity===0 && remaining===0){
+        if (CAN_DELETE && p.quantity===0 && remaining===0){
           actionsCell.innerHTML=
             `<form action="/delete-product/${p.id}" method="POST"
                     class="delete-product-form" data-product-id="${p.id}">
@@ -474,7 +488,8 @@
 
     /*  Inline-edit handler --------------------------------------- */
     document.addEventListener('click',e=>{
-      if(!e.target.classList.contains('edit-icon')) return;
+      if (!CAN_EDIT || !e.target.classList.contains('edit-icon')) return;
+
 
       const cell=e.target.closest('.editable');
       const batchId=cell.dataset.batchId;

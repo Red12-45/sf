@@ -43,7 +43,8 @@
       <h2><i class="fas fa-filter"></i> Filter Performance Data</h2>
 
       <form action="/performance" method="GET" class="filter-form">
-       
+       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
         <div class="form-row">
           <!-- Single month -->
           <div class="form-field">

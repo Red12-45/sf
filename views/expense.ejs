@@ -11,6 +11,12 @@
   <link rel="stylesheet" href="/css/expenses.css?v=<%= v %>">
 </head>
 <body>
+<%
+const canDelete = !(blockedActions['/expense'] || []).includes('delete');
+%>
+
+
+
   <!-- Sidebar -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-logo">
@@ -148,9 +154,13 @@
                       <td><%= expense.expenseDetail1 || '-' %></td>
                       <td><%= expense.expenseDetail2 || '-' %></td>
                       <td><%= timeStr %></td>
-                      <td style="text-align:center;">
-                        <i class="fas fa-trash-alt delete-expense-btn" data-id="<%= expense.id %>"></i>
-                      </td>
+
+<td style="text-align:center;">
+  <% if (canDelete) { %>
+    <i class="fas fa-trash-alt delete-expense-btn"
+       data-id="<%= expense.id %>"></i>
+  <% } %>
+</td>
                     </tr>
                   <% }); %>
                 </tbody>
@@ -257,14 +267,22 @@
         const tbody = group.querySelector('tbody');
         const timeStr = createdAtDate.toLocaleTimeString();
         const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${ex.expenseReason}</td>
-          <td>${Number(ex.expenseCost).toFixed(2)}</td>
-          <td>${ex.expenseStatus}</td>
-          <td>${ex.expenseDetail1 || '-'}</td>
-          <td>${ex.expenseDetail2 || '-'}</td>
-          <td>${timeStr}</td>
-          <td style="text-align:center;"><i class="fas fa-trash-alt delete-expense-btn" data-id="${ex.id}"></i></td>`;
+        const row = document.createElement('tr');
+const row = document.createElement('tr');
+row.innerHTML = `
+  <td>${ex.expenseReason}</td>
+  <td>${Number(ex.expenseCost).toFixed(2)}</td>
+  <td>${ex.expenseStatus}</td>
+  <td>${ex.expenseDetail1 || '-'}</td>
+  <td>${ex.expenseDetail2 || '-'}</td>
+  <td>${timeStr}</td>
+  <td style="text-align:center;">
+    ${CAN_DELETE
+        ? `<i class="fas fa-trash-alt delete-expense-btn"
+             data-id="${ex.id}"></i>`
+        : ''}
+  </td>`;
+
         tbody.prepend(row);
         total += parseFloat(ex.expenseCost);
         document.getElementById('totalExpense').textContent = total.toFixed(2);

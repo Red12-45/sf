@@ -65,6 +65,31 @@ app.use(session({
   }
 }));
 
+
+/* ─────────── keep sub-user session in sync ─────────── */
+app.use(async (req, res, next) => {
+  if (req.session?.user && !req.session.user.isMaster) {
+    try {
+      const doc = await db.collection('permissions')
+                          .doc(req.session.user.accountId)
+                          .get();
+      const data = doc.exists ? doc.data() : {};
+      req.session.lockedRoutes   = data.lockedRoutes   || [];
+      req.session.blockedActions = data.blockedActions || {};
+    } catch (err) {
+      console.error('perm-sync error:', err);
+    }
+  }
+  next();
+});
+
+
+app.use((req, res, next) => {
+  // make the logged-in user (if any) available to every EJS view
+  res.locals.user = req.session?.user || null;
+  next();
+});
+
 app.use(compression());
 const buildId = process.env.RENDER_GIT_COMMIT || Date.now().toString();
 
@@ -434,12 +459,29 @@ app.use((req, res, next) => {
   next();
 });
 
-/* ─────────── subscription / auth middle‑ware ─────────── */
-const requireMaster    = (req, res, next) => req.session.user && req.session.user.isMaster ? next() : res.status(403).send('Access denied');
-const isAuthenticated  = (req, res, next) => req.session && req.session.user ? next() : res.redirect('/login');
-const restrictRoute    = routeId => async (req, res, next) => {
+/* ─────────── PERMISSION HELPERS ─────────── */
+const requireMaster   = (req,res,next)=>
+  req.session.user && req.session.user.isMaster
+    ? next() : res.status(403).send('Access denied');
+
+const isAuthenticated = (req,res,next)=>
+  req.session && req.session.user ? next() : res.redirect('/login');
+
+const restrictRoute   = routeId => (req,res,next)=>{
+  if(req.session.user.isMaster) return next();
+  if(req.session.lockedRoutes?.includes(routeId))
+    return res.status(403).send('Access denied');
+  next();
+};
+
+/* ────────────────────────────────────────────────────────────────
+   ★ ACTION-LEVEL PERMISSION HELPER (NEW)
+   ──────────────────────────────────────────────────────────────── */
+const restrictAction = (routeId, action) => (req, res, next) => {
   if (req.session.user.isMaster) return next();
-  if (req.session.lockedRoutes?.includes(routeId)) return res.status(403).send('Access denied');
+  const ba = req.session.blockedActions || {};
+  if (Array.isArray(ba[routeId]) && ba[routeId].includes(action))
+    return res.status(403).send('Access denied');
   next();
 };
 
@@ -714,12 +756,12 @@ app.post(
         subscriptionExpiry
       };
       if (!req.session.user.isMaster) {
-        const permDoc = await db.collection('permissions')
-                                .doc(req.session.user.accountId).get();
-        req.session.lockedRoutes = permDoc.exists
-          ? (permDoc.data().lockedRoutes || [])
-          : [];
-      }
+  const permDoc = await db.collection('permissions')
+                          .doc(req.session.user.accountId).get();
+  const data = permDoc.exists ? permDoc.data() : {};
+  req.session.lockedRoutes    = data.lockedRoutes    || [];
+  req.session.blockedActions  = data.blockedActions  || {};   // ← NEW
+}
       res.redirect('/');
 
     } catch (error) {
@@ -837,37 +879,87 @@ app.post('/delete-user', isAuthenticated, async (req, res) => {
 
 
 /* ─────────── PERMISSION MANAGEMENT (Master Only) ─────────── */
+// ─────────── PERMISSION MANAGEMENT (Master Only) ───────────
+
 // GET /permission
-app.get('/permission', isAuthenticated, restrictRoute('/permission'), async (req, res) => {
-  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
-  try {
-    const lockedRoutes = await getPermissions(req.session.user.accountId);
-    const availableRoutes = [
-      { path: '/profit', label: 'Profit Report' },
-      { path: '/sales', label: 'Sales Report' },
-      { path: '/expense', label: 'Expense Report' },
-      { path: '/add-product', label: 'Add Product' },
-      { path: '/view-products', label: 'View Products' }
-    ];
-    res.render('permission', { lockedRoutes, availableRoutes, success: req.query.success });
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
+// GET /permission
+app.get('/permission',
+  isAuthenticated,
+  restrictRoute('/permission'),
+  async (req, res) => {
+    if (!req.session.user.isMaster) return res.status(403).send('Access denied');
+    try {
+      const doc = await db.collection('permissions')
+                          .doc(req.session.user.accountId)
+                          .get();
+      const lockedRoutes   = doc.exists ? (doc.data().lockedRoutes   || []) : [];
+      const blockedActions = doc.exists ? (doc.data().blockedActions || {}) : [];
+
+      const availableRoutes = [
+        { path:'/profit',        label:'Profit Report' },
+        { path:'/sales',         label:'Sales Report',   canLockActions:true },
+        { path:'/expense',       label:'Expense Report', canLockActions:true },
+        { path:'/add-product',   label:'Add Product' },
+        { path:'/view-products', label:'View Products',  canLockActions:true }
+      ];
+
+      res.render('permission', {
+        lockedRoutes,
+        blockedActions,
+        availableRoutes,
+        success : req.query.success,
+        user    : req.session.user          // <- ✅  add this line
+      });
+    } catch (e) {
+      res.status(500).send(e.toString());
+    }
 });
 
-// POST /permission
-app.post('/permission', isAuthenticated, restrictRoute('/permission'), async (req, res) => {
-  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
-  try {
-    let lockedRoutes = req.body.lockedRoutes || [];
-    if (!Array.isArray(lockedRoutes)) lockedRoutes = [lockedRoutes];
-    await db.collection('permissions').doc(req.session.user.accountId).set({ lockedRoutes }, { merge: true });
-    cache.del(`permissions_${req.session.user.accountId}`);
-    res.redirect('/permission?success=1');
-  } catch (error) {
-    res.status(500).send(error.toString());
+
+/* ─────────── PERMISSION SAVE ─────────── */
+app.post(
+  '/permission',
+  isAuthenticated,
+  restrictRoute('/permission'),
+  async (req, res) => {
+    if (!req.session.user.isMaster)
+      return res.status(403).send('Access denied');
+
+    try {
+      /* 1️⃣  Whole-route locks --------------------------------------- */
+      let lockedRoutes = req.body.lockedRoutes || [];
+      if (!Array.isArray(lockedRoutes))
+        lockedRoutes = [lockedRoutes];
+
+      /* 2️⃣  Fine-grained locks  e.g.  "edit@@/sales" ----------------- */
+      const raw = Array.isArray(req.body.actionLocks)
+                    ? req.body.actionLocks
+                    : (req.body.actionLocks ? [req.body.actionLocks] : []);
+
+      const blockedActions = {};          // { '/sales': ['edit'], … }
+      raw.forEach(tok => {
+        const [action, route] = tok.split('@@');
+        if (!blockedActions[route]) blockedActions[route] = [];
+        blockedActions[route].push(action);
+      });
+
+      /* 3️⃣  Write — **NO merge**  (old routes disappear) ------------- */
+      await db.collection('permissions')
+              .doc(req.session.user.accountId)
+              .set({ lockedRoutes, blockedActions });   // ← important change
+
+      cache.del(`permissions_${req.session.user.accountId}`);
+      return res.redirect('/permission?success=1');
+
+    } catch (e) {
+      console.error('Save-permission error:', e);
+      return res.status(500).send(e.toString());
+    }
   }
-});
+);
+
+
+
 
 
 /* ─────────── PROTECTED APP ROUTES ─────────── */
@@ -1043,7 +1135,7 @@ app.get('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res)
       groupedExpenses[dateStr].push(exp);
     });
 
-    res.render('expense', { month: monthParam, groupedExpenses, totalExpense });
+    res.render('expense', { month: monthParam, groupedExpenses, totalExpense,blockedActions : req.session.blockedActions || {}});
   } catch (err) {
     res.status(500).send(err.toString());
   }
@@ -1283,7 +1375,7 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
     products.forEach(p => p.batches = batchesMap[p.id] || []);
 
     const categories = await getCategories(accountId);
-    res.render('viewProducts', { products, categories, filterCategory, stockThreshold, sortOrder });
+    res.render('viewProducts', { products, categories, filterCategory, stockThreshold, sortOrder, blockedActions : req.session.blockedActions || {}  });
   } catch (err) {
     res.status(500).send(err.toString());
   }
@@ -1390,7 +1482,7 @@ app.get('/download-products', isAuthenticated, restrictRoute('/view-products'), 
 /* ─────────── STOCK BATCH MANAGEMENT ─────────── */
 // POST /delete-stock-batch/:batchId
 // POST /delete-stock-batch/:batchId
-app.post('/delete-stock-batch/:batchId', isAuthenticated, async (req, res) => {
+app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-products','delete'), async (req, res) => {
   try {
     const { batchId } = req.params;
     const batchRef    = db.collection('stockBatches').doc(batchId);
@@ -1498,7 +1590,7 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 
 
 // POST /api/edit-stock-batch-field/:batchId
-app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated, async (req, res) => {
+app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated,restrictAction('/view-products','edit'), async (req, res) => {
   try {
     const { batchId } = req.params;
     const { field, value } = req.body;
@@ -1728,7 +1820,8 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
       profitAfterExpenses,
       totalRevenueAmount,        // ➜ NEW
       openingTimes,
-      openingBalances
+      openingBalances,
+      blockedActions : req.session.blockedActions || {}
     });
   } catch (err) {
     res.status(500).send(err.toString());
@@ -1810,7 +1903,7 @@ app.get('/download-sales', isAuthenticated, restrictRoute('/sales'), async (req,
 
 
 /* ─────────── AJAX inline edit   /api/edit-sale ─────────── */
-app.post('/api/edit-sale', isAuthenticated, async (req, res) => {
+app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    async (req, res) => {
   try {
     const { saleId, field, value, paymentDetail1, paymentDetail2 } = req.body;
     const saleRef  = db.collection('sales').doc(saleId);
@@ -1945,7 +2038,7 @@ app.post('/api/edit-sale', isAuthenticated, async (req, res) => {
 });
 
 
-app.post('/delete-product/:productId', isAuthenticated, async (req, res) => {
+app.post('/delete-product/:productId', isAuthenticated, restrictAction('/view-products','delete'), async (req, res) => {
   try {
     const { productId } = req.params;
     const prodRef  = db.collection('products').doc(productId);
@@ -2348,7 +2441,7 @@ app.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res
 });
 
 
-app.post('/api/delete-expense', isAuthenticated, async (req, res) => {
+app.post('/api/delete-expense', isAuthenticated, restrictAction('/expense','delete'), async (req, res) => {
   const { expenseId } = req.body;
   try {
     const expRef = db.collection('expenses').doc(expenseId);
@@ -2433,7 +2526,7 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
 /* ─────────── AJAX:  DELETE SALE  ─────────── */
 // ─────────── AJAX: DELETE SALE ───────────
 // ─────────── AJAX:  DELETE SALE  ───────────
-app.post('/api/delete-sale', isAuthenticated, async (req, res) => {
+app.post('/api/delete-sale', isAuthenticated, restrictAction('/sales','delete'), async (req, res) => {
   const { saleId } = req.body;
   try {
     const saleRef = db.collection('sales').doc(saleId);

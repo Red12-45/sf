@@ -75,6 +75,13 @@
   </style>
 </head>
 <body>
+  <%
+/* ---------------------------------------------------------
+   Permission flags for this page
+   --------------------------------------------------------- */
+const canEdit   = !(blockedActions['/sales'] || []).includes('edit');
+const canDelete = !(blockedActions['/sales'] || []).includes('delete');
+%>
   <!-- Sidebar -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-logo">
@@ -221,20 +228,30 @@
                   </td>
 
                   <!-- Quantity inline edit -->
-                  <td class="editable" data-id="<%= sale.id %>" data-field="saleQuantity" data-date="<%= date %>">
-                    <span class="value"><%= sale.saleQuantity %></span>
-                    <i class="fas fa-edit edit-icon"></i>
-                  </td>
+                 <td class="<%= canEdit ? 'editable' : '' %>"
+    data-id="<%= sale.id %>"
+    data-field="saleQuantity"
+    data-date="<%= date %>">
+  <span class="value"><%= sale.saleQuantity %></span>
+  <% if (canEdit) { %>
+    <i class="fas fa-edit edit-icon"></i>
+  <% } %>
+</td>
+
+
 
                   <td><%= sale.unit||'-' %></td>
                   <!-- ▼ NEW: Total-Sale cell is now inline-editable ▼ -->
-                  <td class="editable"
-                  data-id   ="<%= sale.id %>"
-                  data-field="totalSale"
-                  data-date ="<%= date %>">
-                  <span class="value"><%= tot.toFixed(2) %></span>
-                  <i class="fas fa-edit edit-icon"></i>
-                  </td>
+                <td class="<%= canEdit ? 'editable' : '' %>"
+    data-id="<%= sale.id %>"
+    data-field="totalSale"
+    data-date="<%= date %>">
+  <span class="value"><%= tot.toFixed(2) %></span>
+  <% if (canEdit) { %>
+    <i class="fas fa-edit edit-icon"></i>
+  <% } %>
+</td>
+
 
                   <td data-field="profitPerUnit"><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
                   <td data-field="profit"><%= parseFloat(sale.profit).toFixed(2) %></td>
@@ -262,8 +279,12 @@
                   <td><%= sale.extraInfo||'-' %></td>
                   <td><%= (sale.createdAt?.toDate ? sale.createdAt.toDate() : new Date(sale.createdAt)).toLocaleTimeString() %></td>
                   <td style="text-align:center;">
-                    <i class="fas fa-trash-alt delete-sale-btn" data-id="<%= sale.id %>" data-date="<%= date %>"></i>
-                  </td>
+  <% if (canDelete) { %>
+    <i class="fas fa-trash-alt delete-sale-btn"
+       data-id="<%= sale.id %>" data-date="<%= date %>"></i>
+  <% } %>
+</td>
+
                 </tr>
                 <% }); %>
               </tbody>
@@ -300,9 +321,13 @@
                   <td><%= exp.expenseDetail1||'-' %></td>
                   <td><%= exp.expenseDetail2||'-' %></td>
                   <td><%= (exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt)).toLocaleTimeString() %></td>
-                  <td style="text-align:center;">
-                    <i class="fas fa-trash-alt delete-expense-btn" data-id="<%= exp.id %>" data-date="<%= date %>"></i>
-                  </td>
+                 <td style="text-align:center;">
+  <% if (canDelete) { %>
+    <i class="fas fa-trash-alt delete-expense-btn"
+       data-id="<%= exp.id %>" data-date="<%= date %>"></i>
+  <% } %>
+</td>
+
                 </tr>
                 <% }); %>
               </tbody>
