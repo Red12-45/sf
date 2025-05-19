@@ -2718,14 +2718,14 @@ app.get('/performance',
 app.get(
   '/stats',
   isAuthenticated,
-  restrictRoute('/stats'),          // keep if you use route‑locking
+  restrictRoute('/stats'),                // keep if you use route-locking
   async (req, res) => {
     try {
       const accountId = req.session.user.accountId;
 
       /* 1️⃣  Resolve date window → default = whole current year */
-      const pad = n => String(n).padStart(2, '0');
-      const today       = new Date();
+      const pad   = n => String(n).padStart(2, '0');
+      const today = new Date();
       const currentYear = today.getFullYear();
 
       const {
@@ -2737,13 +2737,10 @@ app.get(
       } = req.query;
 
       let startDate, endDate, periodLabel;
-      let uiMonth   = month;               // pre‑fill pickers
-      let uiFrom    = from;
-      let uiTo      = to;
-      let uiYear    = year;
+      let uiMonth = month, uiFrom = from, uiTo = to, uiYear = year;
 
       if (month) {                                          // single month
-        startDate   = `${month}-01`;
+        startDate = `${month}-01`;
         const [y, m] = month.split('-');
         let nextM = parseInt(m, 10) + 1, nextY = parseInt(y, 10);
         if (nextM > 12) { nextM = 1; nextY++; }
@@ -2751,8 +2748,8 @@ app.get(
         periodLabel = new Date(`${month}-01`)
                         .toLocaleString('default', { month: 'long', year: 'numeric' });
 
-      } else if (from && to) {                              // month range
-        startDate   = `${from}-01`;
+      } else if (from && to) {                              // month-range
+        startDate = `${from}-01`;
         const [ty, tm] = to.split('-');
         let nextM = parseInt(tm, 10) + 1, nextY = parseInt(ty, 10);
         if (nextM > 12) { nextM = 1; nextY++; }
@@ -2762,18 +2759,18 @@ app.get(
       } else if (year) {                                    // explicit year
         startDate   = `${year}-01-01`;
         endDate     = `${parseInt(year, 10) + 1}-01-01`;
-        periodLabel = `Year ${year}`;
+        periodLabel = `Year ${year}`;
 
       } else {                                             // DEFAULT = current year
         startDate   = `${currentYear}-01-01`;
         endDate     = `${currentYear + 1}-01-01`;
-        periodLabel = `Year ${currentYear}`;
-        uiYear      = currentYear;      // pre‑fill the “Year” input
+        periodLabel = `Year ${currentYear}`;
+        uiYear      = currentYear;
       }
 
       const topN = Math.max(parseInt(topParam, 10) || 10, 1);
 
-      /* 2️⃣  Fetch sales + expenses in the window (parallel) */
+      /* 2️⃣  Fetch sales + expenses in the window */
       const [salesSnap, expSnap] = await Promise.all([
         db.collection('sales')
           .where('accountId', '==', accountId)
@@ -2790,7 +2787,7 @@ app.get(
       const sales    = salesSnap.docs.map(d => d.data());
       const expenses = expSnap .docs.map(d => d.data());
 
-      /* 3️⃣  Top‑N product aggregation */
+      /* 3️⃣  Top-N product aggregation */
       const prodMap = {};
       sales.forEach(s => {
         const id = s.productId;
@@ -2822,12 +2819,17 @@ app.get(
         .sort((a, b) => b.profit - a.profit)
         .slice(0, topN);
 
-      /* 4️⃣  Monthly Profit & Expense totals */
+      /* 4️⃣  Period-level totals */
+      const totalRevenue = sales.reduce((sum, s) =>
+        sum + (s.totalSale !== undefined
+                 ? +parseFloat(s.totalSale)
+                 : s.retailPrice * s.saleQuantity), 0);
+
       const monthlyProfit  = {};
       const monthlyExpense = {};
 
       sales.forEach(s => {
-        const ym = s.saleDate.substring(0, 7);             // "YYYY‑MM"
+        const ym = s.saleDate.substring(0, 7);
         monthlyProfit[ym] = (monthlyProfit[ym] || 0) + +s.profit;
       });
 
@@ -2838,16 +2840,12 @@ app.get(
 
       /* 5️⃣  Render */
       res.render('stats', {
-        /* Top‑N */
         topSelling,
         topRevenue,
         topProfit,
-
-        /* Month‑level totals */
         monthlyProfit,
         monthlyExpense,
-
-        /* UI helpers / form values */
+        totalRevenue,            // <<──────── NEW
         periodLabel,
         month : uiMonth,
         from  : uiFrom,
@@ -2862,6 +2860,7 @@ app.get(
     }
   }
 );
+
 
 /* ─────────── PASSWORD RESET ROUTES (MASTER-ONLY) ─────────── */
 

@@ -158,7 +158,7 @@
 
   <!-- ────────── Data Payload ────────── -->
   <script>
-    /* PRODUCT-level "Top-N" */
+    /* PRODUCT-level “Top-N” */
     window.STATS_DATA = {
       topSelling : <%- JSON.stringify(topSelling)  %>,
       topRevenue : <%- JSON.stringify(topRevenue)  %>,
@@ -170,6 +170,9 @@
       profit  : <%- JSON.stringify(monthlyProfit  || {}) %>,
       expense : <%- JSON.stringify(monthlyExpense || {}) %>
     };
+
+    /* exact revenue for the selected period */
+    window.TOTAL_REVENUE = <%- totalRevenue.toFixed(2) %>;
   </script>
 
   <!-- Chart.js & plugin -->
@@ -178,7 +181,7 @@
 
   <!-- ────────── Page Script ────────── -->
   <script>
-  /* global Chart, ChartDataLabels, STATS_DATA, MONTHLY_DATA */
+  /* global Chart, ChartDataLabels, STATS_DATA, MONTHLY_DATA, TOTAL_REVENUE */
   (() => {
 
     /* ⇢⇢ Register plugin & high-DPI defaults */
@@ -212,10 +215,10 @@
 
     /* ⇢⇢ KPI Calculation (Net Profit = Profit − Expense) */
     const calcKPIs = () => {
-      let totalRevenue = 0, grossProfit = 0, totalExpense = 0;
+      const totalRevenue = TOTAL_REVENUE;    // exact figure
+      let grossProfit = 0, totalExpense = 0;
 
-      STATS_DATA.topRevenue.forEach(i => totalRevenue += i.revenue); // Top-N revenue
-      Object.values(MONTHLY_DATA.profit ).forEach(v => grossProfit  += v); // full gross profit
+      Object.values(MONTHLY_DATA.profit ).forEach(v => grossProfit  += v);
       Object.values(MONTHLY_DATA.expense).forEach(v => totalExpense += v);
 
       const netProfit    = grossProfit - totalExpense;
@@ -254,9 +257,7 @@
       },
       options : {
         devicePixelRatio : 2,
-        layout : {                       // extra head-room so the top label isn’t clipped
-  padding : { top : 30 }         // ← was 10
-},
+        layout : { padding : { top : 30 } },
         plugins : {
           datalabels : {
             anchor:'end', align:'end', offset:6, clamp:true,
@@ -279,11 +280,7 @@
         },
         scales : {
           x : { grid:{ display:false }, ticks:{ maxRotation:45, minRotation:45 } },
-          y : {
-  beginAtZero : true,
-  grace       : '10%',          // ← NEW: 10 % extra height
-  grid        : { color:'rgba(0,0,0,.05)' }
-}
+          y : { beginAtZero:true, grace:'10%', grid:{ color:'rgba(0,0,0,.05)' } }
         },
         animation : { duration:1200, easing:'easeOutQuart' },
         responsive : true,
