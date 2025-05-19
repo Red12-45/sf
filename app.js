@@ -65,21 +65,6 @@ app.use(session({
   }
 }));
 
-/* ─────────── expose Firebase client cfg + site-key to EJS ─────────── */
-app.use((req, res, next) => {
-  res.locals.firebaseClient = {
-    apiKey:             process.env.FIREBASE_API_KEY,
-    authDomain:         process.env.FIREBASE_AUTH_DOMAIN,
-    projectId:          process.env.FIREBASE_PROJECT_ID,
-    storageBucket:      process.env.FIREBASE_STORAGE_BUCKET,
-    messagingSenderId:  process.env.FIREBASE_MESSAGING_SENDER_ID,
-    appId:              process.env.FIREBASE_APP_ID,
-    measurementId:      process.env.FIREBASE_MEASUREMENT_ID,
-    recaptchaKey:       process.env.RECAPTCHA_SITE_KEY
-  };
-  next();
-});
-
 
 /* ─────────── keep sub-user session in sync ─────────── */
 app.use(async (req, res, next) => {
@@ -122,33 +107,6 @@ app.use((req, res, next) => {
 
   next();
 });
-
-
-
-/* ─────────── verify App Check tokens on API routes ─────────── */
-const verifyAppCheck = async (req, res, next) => {
-  /* Skip in development until you’re confident everything works: */
-  if (process.env.NODE_ENV !== 'production') return next();
-
-  const token = req.header('X-Firebase-AppCheck');
-  if (!token) return res.status(401).send('Missing App Check token');
-
-  try {
-    await admin.appCheck().verifyToken(token);    // ⬅ verifies & caches
-    next();
-  } catch (err) {
-    console.error('App Check fail:', err);
-    res.status(401).send('Invalid App Check token');
-  }
-};
-
-/* Protect ONLY the endpoints that the browser hits directly: */
-app.use([
-  '/api',               // all AJAX helpers
-  '/sale',
-  '/expense',
-  '/update-opening-balance'
-], verifyAppCheck);
 
 /* ─────────── Security middleware stack (NEW) ─────────── */
 app.use(helmet({

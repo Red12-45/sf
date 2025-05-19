@@ -635,21 +635,17 @@
     }
 
     const cash = n => Number(n).toFixed(2);
-    import { secureFetch } from "/js/firebaseClient.js?v=<%= v %>";
-
-const postJSON = async (url, obj = {}) => {
-  const r = await secureFetch(url, {
-    method : "POST",
-    headers: {
-      "Content-Type"   : "application/json",
-      "X-CSRF-Token"   : "<%= csrfToken %>"
-    },
-    body   : JSON.stringify(obj)
-  });
-  const j = await r.json();
-  if (!j.success) throw new Error(j.error || "Unknown error");
-  return j;
-};
+    const postJSON = async (url, obj) => {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json','X-CSRF-Token': '<%= csrfToken %>'
+ },
+        body: JSON.stringify(obj)
+      });
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || 'Unknown error');
+      return j;
+    };
     const refreshSummary = s => {
       for (const [k, v] of Object.entries(s)) {
         const el = document.querySelector(`#summaryContent [data-key="${k}"]`);
@@ -793,11 +789,6 @@ const postJSON = async (url, obj = {}) => {
       setTimeout(() => location.href = '/pricing', nav.type === "back_forward" ? 10000 : 5000);
     }
   </script>
-  <!-- Firebase client + App Check (full code in /public/js/firebaseClient.js) -->
-<script>
-  /* make the config available BEFORE the module runs */
-  window.__FIREBASE_CFG__ = <%- JSON.stringify(firebaseClient) %>;
-</script>
   <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
 </body>
 </html>
