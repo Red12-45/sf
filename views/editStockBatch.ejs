@@ -52,7 +52,9 @@
     </header>
 
     <section class="form-container">
-      <form action="/edit-stock-batch/<%= batch.id %>" method="POST">
+      <form action="/edit-stock-batch/<%= batch.id %>"
+      method="POST"
+      onsubmit="return preventDuplicate(this)">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
         <!-- ── Product name (if stored on batch) ────────────────────────── -->
@@ -198,6 +200,24 @@
       editForm.addEventListener('submit', titleCaseProductName);
     }
   });
+</script>
+<!-- Prevent double-click / duplicate submit -->
+<script>
+  /**
+   * Locks the submit button after the first click.
+   * Returns false on any subsequent click so the browser ignores it.
+   */
+  function preventDuplicate(form) {
+    const btn = form.querySelector('button[type="submit"]');
+    if (!btn) return true;                  // safety-net
+    if (btn.dataset.submitted === 'yes') {  // already pressed once
+      return false;                         // block duplicate submit
+    }
+    btn.dataset.submitted = 'yes';          // mark as used
+    btn.disabled = true;                    // grey it out
+    btn.textContent = 'Updating…';          // optional: user feedback
+    return true;                            // allow the *first* submit
+  }
 </script>
 
 <script src="/js/firebasePersistence.js" type="module"></script>

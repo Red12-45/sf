@@ -77,7 +77,9 @@
       <section class="form-container">
         <div class="form-section-header">Product Information</div>
 
-        <form action="/add-product" method="POST" onsubmit="return validateForm()">
+        <form action="/add-product"
+      method="POST"
+      onsubmit="return validateForm() && preventDuplicate(this)">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <!-- Existing Product Dropdown -->
           <div class="form-row">
@@ -191,6 +193,8 @@
 
   <!-- Format integers to two decimals on blur -->
   <script>
+
+
     ['wholesalePrice','retailPrice','quantity'].forEach(id => {
       const el = document.getElementById(id);
       el.addEventListener('blur', function() {
@@ -229,6 +233,17 @@
 
   <!-- Validation for Category & Unit -->
   <script>
+    function preventDuplicate(form) {
+    const btn = form.querySelector('button[type="submit"]');
+    if (!btn) return true;                 // safety-net
+    if (btn.dataset.submitted === 'yes') { // already pressed once
+      return false;                        // block duplicate submit
+    }
+    btn.dataset.submitted = 'yes';         // mark as used
+    btn.disabled = true;                   // grey it out
+    btn.textContent = 'Submitting…';       // optional: user feedback
+    return true;                           // allow the *first* submit
+  }
     function validateForm() {
       const existing = document.getElementById('existingProduct').value;
       if (existing === 'new') {
