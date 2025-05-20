@@ -213,6 +213,7 @@
           </div>
           <div>
             <label for="expenseStatus">Payment Method:</label>
+            
             <select id="expenseStatus" name="expenseStatus" required>
               <option>Paid Cash</option>
               <option>Paid Online</option>
@@ -222,7 +223,7 @@
               <option>Half Online + Not Paid</option>
             </select>
           </div>
-          <div id="expenseExtraFields">
+          <div id="expenseExtraFields" style="display:none;">
             <div>
               <label id="expenseLabel1" for="expenseDetail1">Detail 1:</label>
               <input type="number" step="0.01" id="expenseDetail1" name="expenseDetail1" placeholder="Amount">
@@ -274,7 +275,7 @@
       <!-- Sales Table -->
       <div>
         <h2>
-          <span>Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)</span>
+          <span id="salesHeader">Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)</span>
           <span class="date-info">
             <% if (openingTime) { %>
               <i class="far fa-clock"></i> Open: <%= openingTime %>
@@ -476,7 +477,7 @@
       option.setAttribute('data-quantity', newQty);
 
       // rebuild its label to show the new stock
-      const label = option.textContent.split(' (Stock:')[0];
+       const label = option.dataset.originalName || option.textContent.split(' (Stock:')[0];
       option.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
     }
   } catch (err) {
@@ -510,6 +511,42 @@
     const combinedPaymentFields = document.getElementById('combinedPaymentFields');
     const paymentLabel1 = document.getElementById('paymentLabel1');
     const paymentLabel2 = document.getElementById('paymentLabel2');
+    /* ——— Expense-status DOM handles ——— */
+const expenseStatusSelect = document.getElementById('expenseStatus');
+const expenseExtraFields  = document.getElementById('expenseExtraFields');
+const expenseLabel1       = document.getElementById('expenseLabel1');
+const expenseLabel2       = document.getElementById('expenseLabel2');
+
+/* Preserve pristine product names for later label rebuilds */
+productSelect.querySelectorAll('option[data-category]').forEach(opt => {
+  opt.dataset.originalName = opt.textContent.split(' (Stock:')[0];
+});
+
+
+/* Collapse/expand the two optional amount fields */
+expenseStatusSelect.addEventListener('change', () => {
+  const val = expenseStatusSelect.value;
+  if (val === 'Half Cash + Half Online') {
+    expenseExtraFields.style.display = 'block';
+    expenseLabel1.textContent = 'Cash Amount:';
+    expenseLabel2.textContent = 'Online Amount:';
+  } else if (val === 'Half Cash + Not Paid') {
+    expenseExtraFields.style.display = 'block';
+    expenseLabel1.textContent = 'Cash Amount:';
+    expenseLabel2.textContent = 'Not Paid Amount:';
+  } else if (val === 'Half Online + Not Paid') {
+    expenseExtraFields.style.display = 'block';
+    expenseLabel1.textContent = 'Online Amount:';
+    expenseLabel2.textContent = 'Not Paid Amount:';
+  } else {
+    expenseExtraFields.style.display = 'none';
+    document.getElementById('expenseDetail1').value = '';
+    document.getElementById('expenseDetail2').value = '';
+  }
+});
+/* Fire once so the form starts collapsed */
+expenseStatusSelect.dispatchEvent(new Event('change'));
+
 
     categorySelect.addEventListener('change', function() {
       const selectedCategory = categorySelect.value;
@@ -520,10 +557,14 @@
       }
       productSelect.selectedIndex = 0;
       updateSaleCalculations();
+/* hide the extra payment fields the moment we reset the form */
+statusSelect.dispatchEvent(new Event('change'));
     });
 
     productSelect.addEventListener('change', function() {
       updateSaleCalculations();
+/* hide the extra payment fields the moment we reset the form */
+statusSelect.dispatchEvent(new Event('change'));
     });
 
     statusSelect.addEventListener('change', function() {
@@ -655,120 +696,170 @@
       document.getElementById('toggleSummary').textContent = 'Hide Summary';
     };
 
-    document.getElementById('saleForm').addEventListener('submit', async e => {
-      if (e.submitter?.classList.contains('noAjax')) return;
-      e.preventDefault();
-      try {
-        const obj = Object.fromEntries(new FormData(e.target).entries());
-        const res = await postJSON('/api/sale', obj);
-        const s = res.sale;
+     const setLoading = (btn, loading = true) => {
+    if (!btn) return;
+    if (loading) {
+      btn.disabled = true;
+      btn.dataset.origHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Please wait…';
+    } else {
+      btn.disabled = false;
+      if (btn.dataset.origHtml) btn.innerHTML = btn.dataset.origHtml;
+    }
+  };
 
-        const opt = productSelect.querySelector(`option[value="${s.productId}"]`);
+ /* ——— SALE FORM ——— */
+document.getElementById('saleForm').addEventListener('submit', async e => {
+  if (e.submitter?.classList.contains('noAjax')) return;   // normal post
+  e.preventDefault();
+
+  const submitBtn = e.submitter || e.target.querySelector('button[type="submit"]');
+  setLoading(submitBtn, true);   // 🔒 lock while request is in-flight
+
+  try {
+    const obj = Object.fromEntries(new FormData(e.target).entries());
+    const res = await postJSON('/api/sale', obj);
+    const s   = res.sale;
+
+    /* update stock figure in the <select> option */
+    const opt = productSelect.querySelector(`option[value="${s.productId}"]`);
     if (opt) {
       const oldQty  = parseFloat(opt.getAttribute('data-quantity')) || 0;
-      const soldQty = parseFloat(s.saleQuantity)   || 0;
+      const soldQty = parseFloat(s.saleQuantity) || 0;
       const newQty  = oldQty - soldQty;
-
       opt.setAttribute('data-quantity', newQty);
-
-      const label = opt.textContent.split(' (Stock:')[0];
+      const label = opt.dataset.originalName || opt.textContent.split(' (Stock:')[0];
       opt.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
     }
 
-        const row = document.createElement('tr');
-        const pillClass = {
-          'Paid Cash': 'status-cash',
-          'Paid Online': 'status-online',
-          'Not Paid': 'status-notpaid'
-        }[s.status] || 'status-mixed';
+    /* build a new row and prepend it */
+    const row = document.createElement('tr');
+    const pillClass = {
+      'Paid Cash'  : 'status-cash',
+      'Paid Online': 'status-online',
+      'Not Paid'   : 'status-notpaid'
+    }[s.status] || 'status-mixed';
 
-        row.innerHTML = `
-          <td>${s.productName}</td>
-          <td>${cash(s.wholesalePrice)}</td>
-          <td>${cash(s.retailPrice)}</td>
-          <td>${s.saleQuantity}</td>
-          <td>${s.unit || '-'}</td>
-          <td>${cash(s.totalSale)}</td>
-          <td>${cash(s.profitPerUnit)}</td>
-          <td>${cash(s.profit)}</td>
-          <td>
-            <span class="status-pill ${pillClass}">${s.status}</span>
-            ${(s.paymentDetail1 || s.paymentDetail2)
-              ? `<br><small>${s.paymentDetail1 ? 'Detail1: ' + s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: ' + s.paymentDetail2 : ''}</small>`
-              : ''} 
-          </td>
-          <td>${s.extraInfo || '-'}</td>
-          <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
-          <td style="text-align:center;">
-            <i class="fas fa-trash-alt delete-sale-btn" data-id="${s.id}"></i>
-          </td>`;
+    row.innerHTML = `
+      <td>${s.productName}</td>
+      <td>${cash(s.wholesalePrice)}</td>
+      <td>${cash(s.retailPrice)}</td>
+      <td>${s.saleQuantity}</td>
+      <td>${s.unit || '-'}</td>
+      <td>${cash(s.totalSale)}</td>
+      <td>${cash(s.profitPerUnit)}</td>
+      <td>${cash(s.profit)}</td>
+      <td>
+        <span class="status-pill ${pillClass}">${s.status}</span>
+        ${(s.paymentDetail1 || s.paymentDetail2)
+          ? `<br><small>${s.paymentDetail1 ? 'Detail1: ' + s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: ' + s.paymentDetail2 : ''}</small>`
+          : ''} 
+      </td>
+      <td>${s.extraInfo || '-'}</td>
+      <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
+      <td style="text-align:center;">
+        <i class="fas fa-trash-alt delete-sale-btn" data-id="${s.id}"></i>
+      </td>`;
 
-        ensureTableExists(
-          '.tables-content div:first-child',
-          '#salesTable',
-          `<thead>
-             <tr>
-               <th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
-               <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
-               <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
-               <th>Action</th>
-             </tr>
-           </thead>`
-        );
+    /* ensure table exists, then prepend */
+    ensureTableExists(
+      '.tables-content div:first-child',
+      '#salesTable',
+      `<thead>
+         <tr>
+           <th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
+           <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
+           <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
+           <th>Action</th>
+         </tr>
+       </thead>`
+    );
+    document.querySelector('#salesTable tbody').prepend(row);
 
-        document.querySelector('#salesTable tbody').prepend(row);
-        refreshSummary(res.summary);
-        e.target.reset();
-        updateSaleCalculations();
-      } catch (err) { alert(err.message); }
-    });
+    /* refresh UI */
+    refreshSummary(res.summary);
+    e.target.reset();
+    updateSaleCalculations();
+    statusSelect.dispatchEvent(new Event('change'));
 
-    document.getElementById('expenseForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      try {
-        const obj = Object.fromEntries(new FormData(e.target).entries());
-        const res = await postJSON('/api/expense', obj);
-        const ex = res.expense;
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setLoading(submitBtn, false);   // 🔓 unlock on success *or* error
+  }
+});
 
-        ensureTableExists(
-          '.tables-content div:nth-child(2)',
-          '#expenseTable',
-          `<thead>
-            <tr>
-              <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
-              <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-            </tr>
-          </thead>`
-        );
 
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${ex.expenseReason}</td>
-          <td>${cash(ex.expenseCost)}</td>
-          <td>${ex.expenseStatus}</td>
-          <td>${ex.expenseDetail1 || '-'}</td>
-          <td>${ex.expenseDetail2 || '-'}</td>
-          <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
-          <td style="text-align:center;">
-            <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="${ex.id}"></i>
-          </td>`;
+/* ——— EXPENSE FORM ——— */
+document.getElementById('expenseForm').addEventListener('submit', async e => {
+  e.preventDefault();
 
-        document.querySelector('#expenseTable tbody').prepend(row);
-        refreshSummary(res.summary);
-        e.target.reset();
-      } catch (err) { alert(err.message); }
-    });
+  const submitBtn = e.submitter || e.target.querySelector('button[type="submit"]');
+  setLoading(submitBtn, true);
 
-    document.getElementById('openingForm').addEventListener('submit', async e => {
-      e.preventDefault();
-      try {
-        const obj = Object.fromEntries(new FormData(e.target).entries());
-        const res = await postJSON('/api/opening-balance', obj);
-        document.querySelector('h2 span').innerHTML =
-          `Sales for ${obj.saleDate} (Opening Balance: ₹${cash(res.openingBalance)})`;
-        refreshSummary(res.summary);
-      } catch (err) { alert(err.message); }
-    });
+  try {
+    const obj = Object.fromEntries(new FormData(e.target).entries());
+    const res = await postJSON('/api/expense', obj);
+    const ex  = res.expense;
+
+    /* make sure the expense table exists */
+    ensureTableExists(
+      '.tables-content div:nth-child(2)',
+      '#expenseTable',
+      `<thead>
+        <tr>
+          <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
+          <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
+        </tr>
+      </thead>`
+    );
+
+    /* build row and prepend */
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${ex.expenseReason}</td>
+      <td>${cash(ex.expenseCost)}</td>
+      <td>${ex.expenseStatus}</td>
+      <td>${ex.expenseDetail1 || '-'}</td>
+      <td>${ex.expenseDetail2 || '-'}</td>
+      <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
+      <td style="text-align:center;">
+        <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="${ex.id}"></i>
+      </td>`;
+    document.querySelector('#expenseTable tbody').prepend(row);
+
+    /* refresh summary and clean up */
+    refreshSummary(res.summary);
+    e.target.reset();
+
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setLoading(submitBtn, false);
+  }
+});
+
+
+      /* ——— OPENING BALANCE FORM ——— */
+  document.getElementById('openingForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    const submitBtn = e.submitter || e.target.querySelector('button[type="submit"]');
+    setLoading(submitBtn, true);
+
+    try {
+      const obj = Object.fromEntries(new FormData(e.target).entries());
+      const res = await postJSON('/api/opening-balance', obj);
+      document.getElementById('salesHeader').innerHTML =
+        `Sales for ${obj.saleDate} (Opening Balance: ₹${cash(res.openingBalance)})`;
+      refreshSummary(res.summary);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(submitBtn, false);
+    }
+  });
+
   </script>
   <!-- convenience fill‑time buttons -->
   <script>

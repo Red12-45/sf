@@ -113,33 +113,22 @@ app.use(helmet({
   hidePoweredBy: true,
   contentSecurityPolicy: {
     directives: {
-      defaultSrc    : ["'self'"],
-      scriptSrc     : [
+      defaultSrc: ["'self'"],
+      scriptSrc: [
         "'self'",
-        "'unsafe-inline'",            // your inline <script> blocks
-        "https://cdnjs.cloudflare.com",  // ChartDataLabels plugin
-        "https://cdn.jsdelivr.net",       // ← add this
+        "'unsafe-inline'",
+        "'unsafe-eval'",       // ← NEW
+        "'wasm-unsafe-eval'",  // ← add only if you have WebAssembly code
+        "https://cdnjs.cloudflare.com",
+        "https://cdn.jsdelivr.net",
         "https://www.gstatic.com",
         "https://checkout.razorpay.com"
       ],
-      scriptSrcAttr : ["'self'", "'unsafe-inline'"],  // your inline onclick=""
-      styleSrc      : [
-        "'self'",
-        "'unsafe-inline'",
-        "https://cdnjs.cloudflare.com",
-        "https://fonts.googleapis.com"
-      ],
-      connectSrc    : [
-        "'self'",
-        "https://*.firebaseio.com",
-        "https://firestore.googleapis.com",
-        "https://*.razorpay.com"
-      ],
-      imgSrc     : ["'self'", "data:"],
-      fontSrc    : ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"]
+      // …everything else stays the same…
     }
   }
 }));
+
 
 
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
@@ -1765,8 +1754,12 @@ app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => 
     }
 
     if (status && status.trim() && status !== 'All') {
-      salesQ = salesQ.where('status','==',status);
-    }
+  salesQ   = salesQ.where('status', '==', status);
+
+  /* ★ NEW – apply the same status filter to the expenses query */
+  expenseQ = expenseQ.where('expenseStatus', '==', status);
+}
+
 
     // 2. Run them in parallel
     const [salesSnap, expSnap] = await Promise.all([ salesQ.get(), expenseQ.get() ]);
@@ -2467,6 +2460,55 @@ app.post('/api/delete-expense', isAuthenticated, restrictAction('/expense','dele
     res.json({ success: false, error: e.toString() });
   }
 });
+
+/* ─────────── AJAX: EDIT EXPENSE ─────────── */
+app.post(
+  '/api/edit-expense',
+  isAuthenticated,
+  restrictAction('/expense', 'edit'),
+  async (req, res) => {
+    try {
+      const { expenseId, field, value,
+              paymentDetail1, paymentDetail2 } = req.body;
+
+      if (field !== 'expenseStatus')
+        return res.json({ success: false, error: 'Invalid field' });
+
+      const expRef  = db.collection('expenses').doc(expenseId);
+      const expSnap = await expRef.get();
+      if (!expSnap.exists)
+        return res.json({ success: false, error: 'Expense not found' });
+
+      const exp = expSnap.data();
+      if (exp.accountId !== req.session.user.accountId)
+        return res.json({ success: false, error: 'Access denied' });
+
+      const update = { expenseStatus: value };
+      if (paymentDetail1 !== undefined)
+        update.expenseDetail1 = +parseFloat(paymentDetail1 || 0);
+      if (paymentDetail2 !== undefined)
+        update.expenseDetail2 = +parseFloat(paymentDetail2 || 0);
+      update.updatedAt = new Date();
+
+      await expRef.update(update);
+
+      const { summary } = await computeDailySummary(
+        req.session.user.accountId,
+        exp.saleDate
+      );
+
+      return res.json({
+        success: true,
+        updatedRow: update,
+        summary
+      });
+    } catch (err) {
+      console.error('edit-expense error:', err);
+      return res.json({ success: false, error: err.toString() });
+    }
+  }
+);
+
 
 
 

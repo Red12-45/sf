@@ -707,3 +707,4 @@ table tr:hover {
   gap: 1rem;
   flex-wrap: wrap;
 }
+button[disabled] { opacity: .6; cursor: not-allowed; }

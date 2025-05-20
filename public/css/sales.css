@@ -631,4 +631,61 @@ table tr:hover {
     background:#2d8f2d;color:#fff;border-radius:4px;text-decoration:none;
   }
   .btn-download:hover{background:#227522;}
-  
+  /* keep the card look but left-align everything */
+.filter-header {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  font-size: 1rem;
+}
+
+/* group “Filter” + badges together */
+.filter-title-with-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  color: #333;
+}
+
+/* badges container gets no extra margin, already in the flex gap */
+.summary-inline {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* same badge styling as before */
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-size: 0.9em;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.summary-item.revenue {
+  background: rgba(46, 204, 113, 0.15);
+  color: #27ae60;
+}
+.summary-item.profit {
+  background: rgba(52, 152, 219, 0.15);
+  color: #2980b9;
+}
+.summary-item.expense {
+  background: rgba(231, 76, 60, 0.15);
+  color: #c0392b;
+}
+.summary-item.gross {
+  background: rgba(52, 152, 219, 0.15);
+  color: #2980b9;
+}
+.summary-item.net {
+  background: rgba(155, 89, 182, 0.15);
+  color: #8e44ad;
+}
