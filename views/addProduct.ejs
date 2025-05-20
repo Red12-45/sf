@@ -40,15 +40,16 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="content">
+    <main class="content"> 
       <header class="page-header"><h1>Add New Product / Stock Batch</h1></header>
 
       <% if (success) { %>
-        <div class="success-message">Product added/updated successfully!</div>
-      <% } %>
-      <% if (errorMessage) { %>
-        <div class="error-message"><%= errorMessage %></div>
-      <% } %>
+  <div class="success-message">Product added/updated successfully!</div>
+<% } %>
+<% if (errorMessage) { %>
+  <div class="error-message"><%= errorMessage %></div>
+<% } %>
+
 
       <!-- Filters -->
       <section class="filter-section">
@@ -95,7 +96,7 @@
           </div>
 
           <!-- New Product Fields -->
-          <div id="newProductFields">
+          <div id="newProductFields" class="hidden">
             <div class="form-row">
               <div class="form-group">
                 <label for="productName">Product Name</label>
@@ -144,14 +145,14 @@
               <label for="wholesalePrice" class="required">Purchase Price</label>
               <div class="input-group">
                 <span class="input-group-prefix">₹</span>
-                <input type="number" step="0.01" id="wholesalePrice" name="wholesalePrice" required placeholder="0.00" class="input-with-prefix">
+                <input type="number" step="0.01" min="0.01" id="wholesalePrice" name="wholesalePrice" required placeholder="0.00" class="input-with-prefix">
               </div>
             </div>
             <div class="form-group">
               <label for="retailPrice" class="required">Retail Price</label>
               <div class="input-group">
                 <span class="input-group-prefix">₹</span>
-                <input type="number" step="0.01" id="retailPrice" name="retailPrice" required placeholder="0.00" class="input-with-prefix">
+                <input type="number" step="0.01"  min="0.01" id="retailPrice" name="retailPrice" required placeholder="0.00" class="input-with-prefix">
               </div>
             </div>
           </div>
@@ -159,7 +160,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="quantity" class="required">Quantity Received</label>
-              <input type="number" step="0.01" id="quantity" name="quantity" required placeholder="0">
+              <input type="number" step="0.01" min="0.01" id="quantity" name="quantity" required placeholder="0">
             </div>
           </div>
 
@@ -171,24 +172,27 @@
 
   <script>
     function toggleNewProductFields() {
-      const sel = document.getElementById('existingProduct');
-      const wrapper = document.getElementById('newProductFields');
-      const inputs = wrapper.querySelectorAll('input, select');
-      if (sel.value === 'new') {
-        wrapper.style.display = 'block';
-        inputs.forEach(i => {
-          i.disabled = false;
-          if (i.id === 'productName') i.required = true;
-        });
-      } else {
-        wrapper.style.display = 'none';
-        inputs.forEach(i => {
-          i.disabled = true;
-          if (i.id === 'productName') i.required = false;
-        });
-      }
-    }
-    document.addEventListener('DOMContentLoaded', toggleNewProductFields);
+  const sel     = document.getElementById('existingProduct');
+  const wrapper = document.getElementById('newProductFields');
+  const inputs  = wrapper.querySelectorAll('input, select');
+  if (sel.value === 'new') {
+    wrapper.classList.remove('hidden');
+    inputs.forEach(i => {
+      i.disabled = false;
+      if (i.id === 'productName') i.required = true;
+    });
+  } else {
+    wrapper.classList.add('hidden');
+    inputs.forEach(i => {
+      i.disabled = true;
+      if (i.id === 'productName') i.required = false;
+    });
+  }
+}
+document.addEventListener('DOMContentLoaded', toggleNewProductFields);
+window.addEventListener('pageshow',           toggleNewProductFields);
+
+
   </script>
 
   <!-- Format integers to two decimals on blur -->
@@ -196,16 +200,16 @@
 
 
     ['wholesalePrice','retailPrice','quantity'].forEach(id => {
-      const el = document.getElementById(id);
-      el.addEventListener('blur', function() {
-        const v = this.value.trim();
-        if (!v) return;
-        const num = parseFloat(v);
-        if (Number.isFinite(num) && Number.isInteger(num)) {
-          this.value = num.toFixed(2);
-        }
-      });
-    });
+  const el = document.getElementById(id);
+  el.addEventListener('blur', function () {
+    const val = this.value.trim();
+    if (!val) return;                    // ← ignore empty
+    const num = parseFloat(val);
+    if (Number.isFinite(num)) this.value = num.toFixed(2);
+  });
+});
+
+
   </script>
 
   <!-- Title-case Product Name (only words starting with lowercase get transformed) -->
@@ -222,13 +226,17 @@
       input.value = words.join(' ');
     }
     document.addEventListener('DOMContentLoaded', () => {
-      const prodInput = document.getElementById('productName');
-      if (prodInput) prodInput.addEventListener('blur', titleCaseProductName);
-      const addProductForm = document.querySelector('form[action="/add-product"][method="POST"]');
-      if (addProductForm) {
-        addProductForm.addEventListener('submit', titleCaseProductName);
-      }
-    });
+  const prodInput = document.getElementById('productName');
+  if (!prodInput) return;
+  prodInput.addEventListener('blur',  titleCaseProductName);
+  prodInput.addEventListener('paste', () => {
+    setTimeout(titleCaseProductName, 0);
+  });
+   prodInput.addEventListener('input', () => {
+    titleCaseProductName();
+  });
+});
+
   </script>
 
   <!-- Validation for Category & Unit -->
@@ -244,6 +252,17 @@
     btn.textContent = 'Submitting…';       // optional: user feedback
     return true;                           // allow the *first* submit
   }
+
+  // Re-enable submit on any client-side exception
+window.addEventListener('error', () => {
+  const btn = document.querySelector('button[type="submit"][disabled]');
+  if (btn) {
+    btn.disabled = false;
+    btn.dataset.submitted = 'no';
+    btn.textContent = 'Add Product / Stock';
+  }
+});
+
     function validateForm() {
       const existing = document.getElementById('existingProduct').value;
       if (existing === 'new') {
@@ -259,9 +278,18 @@
           alert('Please select an existing unit or create a new one.');
           return false;
         }
-      }
-      return true;
-    }
+     }
+const wp  = +parseFloat(document.getElementById('wholesalePrice').value);
+const rp  = +parseFloat(document.getElementById('retailPrice').value);
+const qty = +parseFloat(document.getElementById('quantity').value);
+if (!Number.isFinite(wp) || wp <= 0 ||
+    !Number.isFinite(rp) || rp <= 0 ||
+    !Number.isFinite(qty) || qty <= 0) {
+  alert('Prices and quantity must all be greater than 0.');
+  return false;
+}
+return true;   // everything OK ─ let the form submit
+}
   </script>
 
   <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>

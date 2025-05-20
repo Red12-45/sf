@@ -1200,16 +1200,30 @@ app.post(
         newUnit
       } = req.body;
 
+
+const wpNum  = +parseFloat(wholesalePrice);
+const rpNum  = +parseFloat(retailPrice);
+const qtyNum = +parseFloat(quantity);
+
+if (!Number.isFinite(wpNum) || wpNum <= 0 ||
+    !Number.isFinite(rpNum) || rpNum <= 0 ||
+    !Number.isFinite(qtyNum) || qtyNum <= 0)
+  return res.status(400).send('Prices and quantity must be > 0');
+
       const wp  = +parseFloat(wholesalePrice);
       const rp  = +parseFloat(retailPrice);
       const qty = +parseFloat(quantity);
 
-      const category = newCategory?.trim()
-        ? newCategory.trim()
-        : (selectedCategory || '');
+      let category = newCategory?.trim()
+  ? newCategory.trim()
+  : (selectedCategory || '');
+category = category.replace(/\s+/g,' ').trim();
+if (category)
+  category = category[0].toUpperCase() + category.slice(1).toLowerCase();
 
       const unitRaw = newUnit?.trim() || selectedUnit || '';
-      const unit    = unitRaw.toLowerCase();
+      const unit = unitRaw.trim().toLowerCase();   // one canonical form
+
 
       /* --------------------------------------------------------------
          0. Validation
@@ -1274,8 +1288,13 @@ app.post(
         const curQ = d.quantity || 0;
         const newQ = curQ + qty;
 
-        const newWholesale = ((curQ * d.wholesalePrice) + (qty * wp)) / newQ;
-        const newRetail    = ((curQ * d.retailPrice ) + (qty * rp)) / newQ;
+        const newWholesale = +(
+  ((curQ * d.wholesalePrice) + (qty * wp)) / newQ
+).toFixed(2);
+const newRetail = +(
+  ((curQ * d.retailPrice) + (qty * rp)) / newQ
+).toFixed(2);
+
 
         await productRef.update({
           quantity      : newQ,
