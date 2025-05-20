@@ -71,6 +71,13 @@
               <% }); %>
             </select>
           </div>
+
+          <div>
+  <label for="productSearch">Search Product:</label>
+  <input type="text"
+         id="productSearch"
+         placeholder="Type to search products">
+</div>
       
           <!-- Product -->
           <div>
@@ -282,8 +289,8 @@
 
 <!-- live-updating time chips -->
 <span id="dateInfo" class="date-info">
-  <span id="openTimeWrap"
-        <%= openingTime ? '' : 'style="display:none;"' %>>
+  <span id="openTimeWrap" <%= openingTime ? '' : 'style="display:none;"' %>>
+
     <i class="far fa-clock"></i>
     Open: <span id="openTimeDisplay"><%= openingTime || '-' %></span>
   </span>
@@ -508,7 +515,8 @@
           expenseId: btn.dataset.id
         });
         btn.closest('tr').remove();
-        refreshSummary(res.summary);
+refreshSummary(res.summary);
+refreshExpenseHeader();  
       } catch (err) {
         alert(err.message);
       }
@@ -527,6 +535,84 @@ const expenseStatusSelect = document.getElementById('expenseStatus');
 const expenseExtraFields  = document.getElementById('expenseExtraFields');
 const expenseLabel1       = document.getElementById('expenseLabel1');
 const expenseLabel2       = document.getElementById('expenseLabel2');
+const productSearchInput  = document.getElementById('productSearch');
+
+/* ——— helpers to filter + auto-open the product dropdown ——— */
+/* ——— helpers to filter + auto-open the product dropdown ——— */
+function openProductDropdown(visible) {
+  if (visible === 0) {                     // nothing found → collapse
+    productSelect.removeAttribute('size');
+    productSelect.style.minWidth = '';     // 🆕 reset width
+    return;
+  }
+
+  /* keep the list open even when only ONE match remains           *
+   * (size=1 would snap shut again, hiding the option)             */
+  const rows = Math.max(visible, 2);       // at least two rows tall
+  productSelect.setAttribute('size', Math.min(8, rows));
+
+  resizeProductDropdown();                 // 🆕 auto-fit width
+}
+/* ── helper: widen the <select> so every visible option shows fully ── */
+function resizeProductDropdown() {
+  /* mirror span for accurate text-width measurement */
+  const probe = document.createElement('span');
+  probe.style.cssText = `
+    position:absolute; visibility:hidden; white-space:nowrap;
+    font:${window.getComputedStyle(productSelect).font};
+  `;
+  document.body.appendChild(probe);
+
+  let max = 0;
+  for (const opt of productSelect.options) {
+    if (opt.style.display === 'none') continue;     // skip hidden ones
+    probe.textContent = opt.textContent;
+    max = Math.max(max, probe.offsetWidth);
+  }
+  document.body.removeChild(probe);
+
+  /* +40px = native paddings + scrollbar fudge factor */
+  productSelect.style.minWidth = (max + 40) + 'px';
+}
+
+
+
+
+/* ——— filter list; only open if caller says so ——— */
+function filterProductOptions(shouldOpen = false) {
+  const cat    = (categorySelect.value || '').toLowerCase().trim();
+  const raw    = productSearchInput.value.toLowerCase();
+  const tokens = raw.split(/\s+/).filter(Boolean);
+
+  /* ❌ Hide everything only when:
+       – no category is chosen **and**
+       – no search keywords are typed                                */
+  const hideAll = tokens.length === 0 && cat === '';
+
+  let visible = 0;
+  for (const opt of productSelect.options) {
+    if (!opt.value) { opt.style.display = ''; continue; }   // keep placeholder
+
+    const name    = (opt.dataset.originalName || opt.textContent).toLowerCase();
+    const prodCat = (opt.getAttribute('data-category') || '').toLowerCase();
+
+    const inCat   = !cat || prodCat === cat;                // match category
+    const inText  = tokens.length === 0                     // match keywords
+                  ? true                                    // (none ➜ always ok)
+                  : tokens.every(tk => name.includes(tk));
+
+    opt.style.display = (!hideAll && inCat && inText) ? '' : 'none';
+    if (opt.style.display === '') visible++;
+  }
+
+  productSelect.selectedIndex = 0;                          // reset selection
+  if (shouldOpen) openProductDropdown(visible);             // open on demand
+  else            openProductDropdown(0);                   // otherwise collapse
+}
+
+
+
+
 
 /* Preserve pristine product names for later label rebuilds */
 productSelect.querySelectorAll('option[data-category]').forEach(opt => {
@@ -557,26 +643,36 @@ expenseStatusSelect.addEventListener('change', () => {
 });
 /* Fire once so the form starts collapsed */
 expenseStatusSelect.dispatchEvent(new Event('change'));
+refreshExpenseHeader();            // keep “Expense Amount: ₹…” correct on load
 
 
-    categorySelect.addEventListener('change', function() {
-      const selectedCategory = categorySelect.value;
-      for (let i = 0; i < productSelect.options.length; i++) {
-        const option = productSelect.options[i];
-        if (option.value === "") continue;
-        option.style.display = (!selectedCategory || option.getAttribute('data-category') === selectedCategory) ? "" : "none";
-      }
-      productSelect.selectedIndex = 0;
-      updateSaleCalculations();
-/* hide the extra payment fields the moment we reset the form */
-statusSelect.dispatchEvent(new Event('change'));
-    });
 
-    productSelect.addEventListener('change', function() {
-      updateSaleCalculations();
-/* hide the extra payment fields the moment we reset the form */
-statusSelect.dispatchEvent(new Event('change'));
-    });
+categorySelect.addEventListener('change', () => {
+  filterProductOptions(false);            // just filter, DON’T open
+  updateSaleCalculations();
+  statusSelect.dispatchEvent(new Event('change'));
+  collapseDropdown();
+});
+
+
+productSearchInput.addEventListener('input', () => {
+  filterProductOptions(true);                       // refresh + auto-open
+  statusSelect.dispatchEvent(new Event('change'));  // keep extra fields hidden
+});
+
+/* collapse helper → also restore original width */
+const collapseDropdown = () => {
+  productSelect.removeAttribute('size');
+  productSelect.style.minWidth = '';       // 🆕 shrink back to normal
+};
+
+productSelect.addEventListener('click', collapseDropdown); // auto-collapse on click
+productSelect.addEventListener('blur',  collapseDropdown); // …and when focus leaves
+
+filterProductOptions(false);   // initialise list, keep collapsed
+
+
+    
 
     statusSelect.addEventListener('change', function() {
       const status = statusSelect.value;
@@ -621,14 +717,17 @@ statusSelect.dispatchEvent(new Event('change'));
 
     function computeFIFO(batches, qty) {
       let rem = qty, totalWh = 0, totalRt = 0, used = 0;
-      for (let b of batches) {
-        if (rem <= 0) break;
-        const take = Math.min(b.qty, rem);
-        totalWh += b.wholesale * take;
-        totalRt += b.retail * take;
-        used += take;
-        rem -= take;
-      }
+      for (const b of batches) {
+  const available = +b.qty || 0;                 // force number, default 0
+  if (rem <= 0 || available <= 0) break;
+
+  const take = Math.min(available, rem);
+  totalWh += (+b.wholesale || 0) * take;         // coerce to number
+  totalRt += (+b.retail    || 0) * take;
+  used    += take;
+  rem     -= take;
+}
+
       return used ? { wholesale: totalWh/used, retail: totalRt/used } : { wholesale:0, retail:0 };
     }
 
@@ -706,6 +805,24 @@ statusSelect.dispatchEvent(new Event('change'));
       document.getElementById('summaryContent').style.display = 'block';
       document.getElementById('toggleSummary').textContent = 'Hide Summary';
     };
+
+    /* ── helper: recompute total expense and patch header ── */
+function refreshExpenseHeader () {
+  const rows  = document.querySelectorAll(
+                  '#expenseTable tbody tr td:nth-child(2)'
+                );               // column 2 = cost
+  const total = Array.from(rows)
+                      .reduce((sum, td) => sum + (+td.textContent || 0), 0)
+                      .toFixed(2);
+
+  const h2 = document.querySelector('#expenseTable')?.previousElementSibling;
+  if (h2)
+    h2.innerHTML =
+      `Expenses for <%= saleDate %>${rows.length
+        ? ` (Expense Amount: ₹${total})`
+        : ''}`;
+}
+
 
      const setLoading = (btn, loading = true) => {
     if (!btn) return;
@@ -842,6 +959,8 @@ document.getElementById('expenseForm').addEventListener('submit', async e => {
     /* refresh summary and clean up */
     refreshSummary(res.summary);
     e.target.reset();
+    expenseStatusSelect.dispatchEvent(new Event('change'));  // collapse extras
+refreshExpenseHeader(); 
 
   } catch (err) {
     alert(err.message);
