@@ -584,37 +584,43 @@ function resizeProductDropdown() {
 
 
 
-/* ——— filter list; only open if caller says so ——— */
 function filterProductOptions(shouldOpen = false) {
   const cat    = (categorySelect.value || '').toLowerCase().trim();
   const raw    = productSearchInput.value.toLowerCase();
   const tokens = raw.split(/\s+/).filter(Boolean);
 
-  /* ❌ Hide everything only when:
-       – no category is chosen **and**
-       – no search keywords are typed                                */
-  const hideAll = tokens.length === 0 && cat === '';
-
   let visible = 0;
   for (const opt of productSelect.options) {
-    if (!opt.value) { opt.style.display = ''; continue; }   // keep placeholder
+    if (!opt.value) { 
+      opt.style.display = ''; 
+      continue;   // keep the “-- Select a product --” placeholder
+    }
 
     const name    = (opt.dataset.originalName || opt.textContent).toLowerCase();
     const prodCat = (opt.getAttribute('data-category') || '').toLowerCase();
 
-    const inCat   = !cat || prodCat === cat;                // match category
-    const inText  = tokens.length === 0                     // match keywords
-                  ? true                                    // (none ➜ always ok)
+    // If no category is selected, inCat is always true; tokens empty ⇒ inText true
+    const inCat  = !cat || prodCat === cat;
+    const inText = tokens.length === 0 
+                  ? true 
                   : tokens.every(tk => name.includes(tk));
 
-    opt.style.display = (!hideAll && inCat && inText) ? '' : 'none';
+    // Show whenever it matches category AND text; no special “hideAll”
+    opt.style.display = (inCat && inText) ? '' : 'none';
+
     if (opt.style.display === '') visible++;
   }
 
-  productSelect.selectedIndex = 0;                          // reset selection
-  if (shouldOpen) openProductDropdown(visible);             // open on demand
-  else            openProductDropdown(0);                   // otherwise collapse
+  productSelect.selectedIndex = 0;          
+    // only auto-open when caller asked *and* there’s at least one search token
+  if (shouldOpen && tokens.length > 0) {
+    openProductDropdown(visible);
+  } else {
+    openProductDropdown(0);
+  }
+
 }
+
 
 
 

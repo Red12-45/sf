@@ -685,12 +685,15 @@ app.post(
       /* 1️⃣  Lock-out check (unchanged) */
       const currentAttempts = await getAttempts(bruteKey);
       if (currentAttempts >= MAX_LOGIN_ATTEMPTS) {
-        const retryAfter = Math.ceil(await redisClient.ttl(bruteKey) / 60);
-        return res.status(429).render('login', {
-          loginError: `Too many failed attempts. Try again in ${retryAfter} minute${retryAfter === 1 ? '' : 's'}.`,
-          identifier
-        });
-      }
+  const ttlSecs = await redisClient.ttl(bruteKey);        // −1 or −2 ⇒ no TTL
+  const retryAfter = ttlSecs > 0
+      ? Math.ceil(ttlSecs / 60)                           // real time left
+      : Math.ceil(BLOCK_TIME_SECONDS / 60);               // default 15 min
+  return res.status(429).render('login', {
+    loginError: `Too many failed attempts. Try again in ${retryAfter} minute${retryAfter === 1 ? '' : 's'}.`,
+    identifier
+  });
+}
 
       /* 2️⃣  Lookup user (unchanged) */
       const [emailQ, subUserQ, phoneQ] = await Promise.all([
@@ -1201,18 +1204,15 @@ app.post(
       } = req.body;
 
 
-const wpNum  = +parseFloat(wholesalePrice);
-const rpNum  = +parseFloat(retailPrice);
-const qtyNum = +parseFloat(quantity);
+const wp = +parseFloat(wholesalePrice);
+const rp = +parseFloat(retailPrice);
+const qty = +parseFloat(quantity);
 
-if (!Number.isFinite(wpNum) || wpNum <= 0 ||
-    !Number.isFinite(rpNum) || rpNum <= 0 ||
-    !Number.isFinite(qtyNum) || qtyNum <= 0)
+if (!Number.isFinite(wp) || wp <= 0 ||
+    !Number.isFinite(rp) || rp <= 0 ||
+    !Number.isFinite(qty) || qty <= 0)
   return res.status(400).send('Prices and quantity must be > 0');
 
-      const wp  = +parseFloat(wholesalePrice);
-      const rp  = +parseFloat(retailPrice);
-      const qty = +parseFloat(quantity);
 
       let category = newCategory?.trim()
   ? newCategory.trim()
@@ -1695,20 +1695,35 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
     const sp  = +parseFloat(salePrice);
     const qty = +parseFloat(quantity);
 
+    // 🚨 VALIDATION — all numbers must be positive
+if (!Number.isFinite(pp)  || pp  <= 0 ||
+    !Number.isFinite(sp)  || sp  <= 0 ||
+    !Number.isFinite(qty) || qty <= 0) {
+  return res.status(400).send('Prices and quantity must be greater than zero');
+}
+
+
     const unitRaw = newUnit?.trim() || selectedUnit || '';
     const catRaw  = newCategory?.trim() || selectedCategory || '';
 
-    await batchRef.update({
-      productName : newName,
-      purchasePrice: pp,
-      salePrice   : sp,
-      quantity    : qty,
-      remainingQuantity: qty,
-      profitMargin: +(sp - pp).toFixed(2),
-      ...(unitRaw && { unit: unitRaw.toLowerCase() }),
-      ...(catRaw  && { category: catRaw }),
-      updatedAt: new Date()
-    });
+/* ----- keep previously-sold units intact ----- */
+const oldQty     = batchSnap.data().quantity          || 0;
+const oldRemain  = batchSnap.data().remainingQuantity ?? oldQty;
+const newRemain  = Math.max(0,
+                    +(oldRemain + (qty - oldQty)).toFixed(3)); // round to 3 dp
+
+await batchRef.update({
+  productName      : newName,
+  purchasePrice    : pp,
+  salePrice        : sp,
+  quantity         : qty,
+  remainingQuantity: newRemain,
+  profitMargin     : +(sp - pp).toFixed(2),
+  ...(unitRaw && { unit: unitRaw.toLowerCase() }),
+  ...(catRaw  && { category: catRaw }),
+  updatedAt        : new Date()
+});
+
 
     /* 2. 🆕 merge-duplicates if another product already has newNameKey -- */
     const dupSnap = await db.collection('products')
@@ -2700,7 +2715,10 @@ app.post('/api/delete-sale', isAuthenticated, restrictAction('/sales','delete'),
         }
       }
     }
-    if (batchOps._ops.length) await batchOps.commit();
+    const hasWrites = batchOps._mutations?.length || 0;   // safest available
+if (hasWrites) {
+  await batchOps.commit();
+}
 
     /* recreate missing batches with correct numbers --------------------- */
     for (const bu of missing) {

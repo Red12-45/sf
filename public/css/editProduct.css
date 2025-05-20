@@ -21,6 +21,8 @@
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+     --sidebar-bg: #1e293b;
+    --sidebar-width: 250px;
   }
   
   body {
@@ -37,92 +39,115 @@
     min-height: 100vh;
   }
   
-  /* Enhanced Sidebar Styling */
-  .sidebar {
-    width: 280px;
-    background: linear-gradient(165deg, var(--primary-dark), var(--primary-color));
-    color: #fff;
-    padding: 0;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-    position: relative;
-    z-index: 10;
+  /* SIDEBAR STYLING */
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: var(--sidebar-width);
+    background-color: var(--sidebar-bg);
+    padding: 1.5rem 0;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
     display: flex;
     flex-direction: column;
-  }
-  
-  .sidebar-header {
-    padding: 2rem 1.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    text-align: center;
-  }
-  
-  .logo {
-    font-size: 1.5rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    color: white;
-    margin-bottom: 0.5rem;
-  }
-  
-  .sidebar-tagline {
-    font-size: 0.75rem;
-    opacity: 0.8;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-  
-  .sidebar nav {
-    padding: 1.5rem 0;
-    flex: 1;
-  }
-  
-  .sidebar nav ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  
-  .sidebar-section {
-    margin-bottom: 2rem;
-  }
-  
-  .section-title {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 0 1.5rem;
-    margin-bottom: 0.75rem;
-    color: rgba(255, 255, 255, 0.6);
-  }
-  
-  .sidebar nav ul li {
-    margin-bottom: 0.5rem;
-    position: relative;
-  }
-  
-  .sidebar nav ul li a {
-    color: #fff;
-    text-decoration: none;
-    font-weight: 500;
-    padding: 0.85rem 1.5rem;
+}
+
+.sidebar-logo {
     display: flex;
     align-items: center;
-    transition: var(--transition);
-    font-size: 0.95rem;
-    position: relative;
-    border-left: 4px solid transparent;
-  }
-  
-  .sidebar nav ul li a:hover {
-    background-color: rgba(255, 255, 255, 0.12);
-    border-left: 4px solid var(--secondary-color);
-  }
-  
-  .sidebar nav ul li a.active {
-    background-color: rgba(255, 255, 255, 0.15);
-    border-left: 4px solid var(--secondary-color);
+    justify-content: center;
+    padding: 0 1.5rem 1.5rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-logo i {
+    font-size: 1.5rem;
+    color: var(--secondary-color);
+    margin-right: 0.75rem;
+}
+
+.sidebar-logo span {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-white);
+    /* Removed white-space: nowrap to allow text wrapping */
+}
+
+.sidebar-nav {
+    flex: 1;
+}
+
+.sidebar-section {
+    margin-bottom: 1rem;
+}
+
+.sidebar-heading {
+    font-size: 0.75rem;
     font-weight: 600;
-  }
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-light);
+    padding: 0.5rem 1.5rem;
+}
+
+.sidebar-menu {
+    list-style: none;
+}
+
+.sidebar-item {
+    margin-bottom: 0.25rem;
+}
+
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: var(--text-light);
+    padding: 0.75rem 1.5rem;
+    transition: var(--transition);
+    border-left: 3px solid transparent;
+}
+
+.sidebar-link:hover, .sidebar-link.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-white);
+    border-left-color: var(--secondary-color);
+}
+
+.sidebar-link i {
+    font-size: 1rem;
+    margin-right: 0.75rem;
+    width: 20px;
+    text-align: center;
+}
+
+.sidebar-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: auto;
+}
+
+.sidebar-footer a {
+    display: flex;
+    align-items: center;
+    color: var(--danger-color);
+    text-decoration: none;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+.sidebar-footer a:hover {
+    color: var(--text-white);
+}
+
+.sidebar-footer i {
+    margin-right: 0.5rem;
+}
+
   
   .nav-icon {
     margin-right: 0.75rem;
