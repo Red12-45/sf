@@ -207,7 +207,7 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
                   <% } %>
                 </td>
 
-                <td class="serial-number"><%= (index+1).toFixed(2) %></td>
+                <td class="serial-number"><%= index+1 %></td>
                 <td class="product-name"><%= product.productName %></td>
 
                 <td class="price-cell wholesale-cell">
@@ -400,6 +400,23 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
       return total.toFixed(2);
     }
 
+
+    function updateLowStockVisuals(prodRow, quantity) {
+  const qtyCell = prodRow.querySelector('.product-quantity-cell');
+  const badge = qtyCell.querySelector('.stock-badge');
+
+  if (quantity <= 10) {
+    qtyCell.classList.add('low-quantity');
+    if (!badge) {
+      qtyCell.insertAdjacentHTML('beforeend',
+        ' <span class="stock-badge">Low</span>');
+    }
+  } else {
+    qtyCell.classList.remove('low-quantity');
+    badge?.remove();
+  }
+}
+
     /*  attach to the “+” buttons  */
     document.addEventListener('DOMContentLoaded',()=>{
       document.querySelectorAll('.sum-btn').forEach(btn=>{
@@ -424,67 +441,101 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
       icon.classList.toggle('fa-chevron-down');
     }
 
-    /*  Deletion handler (products & batches) ---------------------- */
-    document.addEventListener('submit',async e=>{
-      const form=e.target;
-      if(!form.matches('.delete-product-form,.delete-batch-form')) return;
-      e.preventDefault();
-      if(!confirm('Are you sure?')) return;
+/*  Deletion handler (products & batches) ---------------------- */
+document.addEventListener('submit', async e => {
+  const form = e.target;
+  if (!form.matches('.delete-product-form,.delete-batch-form')) return;
 
-      const res=await fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest','X-CSRF-Token': csrfToken}});
-      if(!res.ok){ alert(await res.text()); return; }
+  e.preventDefault();
+  if (!confirm('Are you sure?')) return;
 
-      const isProduct=form.matches('.delete-product-form');
+  const res = await fetch(form.action, {
+    method : 'POST',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRF-Token'    : csrfToken
+    }
+  });
+  if (!res.ok) { alert(await res.text()); return; }
 
-      if(isProduct){
-        const pid=form.dataset.productId;
-        document.getElementById('product-row-'+pid)?.remove();
-        document.getElementById('batches-'+pid)?.remove();
-        return;
-      }
+  /* ---------- product-level delete ---------- */
+  if (form.matches('.delete-product-form')) {
+    const pid = form.dataset.productId;
+    document.getElementById(`product-row-${pid}`   )?.remove();
+    document.getElementById(`batches-${pid}`       )?.remove();
+    return;
+  }
 
-      const data=await res.json();
-      if(!data.success){ alert(data.error); return; }
+  /* ---------- batch-level delete ---------- */
+  const data = await res.json();
+  if (!data.success) { alert(data.error); return; }
 
-      const batchRow=form.closest('tr');
-      const batchesContainer=batchRow.closest('.batches-container');
-      batchRow.remove();
+  const batchRow        = form.closest('tr');
+  const batchesContainer= batchRow.closest('.batches-container');
+  batchRow.remove();
 
-      const p=data.product;
-      const prodRow=document.getElementById(`product-row-${p.id}`);
-      if(prodRow){
-        prodRow.querySelector('.wholesale-cell').innerHTML=`<span class="currency">₹</span>${p.wholesalePrice.toFixed(2)}`;
-        prodRow.querySelector('.retail-cell').innerHTML   =`<span class="currency">₹</span>${p.retailPrice .toFixed(2)}`;
-        prodRow.querySelector('.product-quantity-cell').innerText   =p.quantity.toFixed(2);
-        prodRow.querySelector('.product-profit-cell').innerHTML     =`<span class="currency">₹</span>${p.profitMargin.toFixed(2)}`;
+  /* fast double-click? container already gone → nothing else to do */
+  if (!batchesContainer) return;
 
-        /* recalc avg profit */
-        let avg=0, tQty=0, tProf=0;
-        (p.batches||[]).forEach(b=>{
-          tQty  += +b.quantity;
-          tProf += (+b.salePrice-+b.purchasePrice)*(+b.quantity);
-        });
-        if(!p.batches||!p.batches.length){
-          tQty  = +p.quantity;
-          tProf = (+p.retailPrice-+p.wholesalePrice)*(+p.quantity);
-        }
-        avg = tQty? tProf/tQty : 0;
-        prodRow.querySelector('.product-avg-profit-cell').innerHTML=`<span class="currency">₹</span>${avg.toFixed(2)}`;
+  /* number of batch rows left **before** we maybe remove the container */
+  const remaining = batchesContainer.querySelectorAll('.batch-row').length;
 
-        const remaining=batchesContainer.querySelectorAll('.batch-row').length;
-        const actionsCell=prodRow.querySelector('.actions-cell');
-        if (CAN_DELETE && p.quantity===0 && remaining===0){
-          actionsCell.innerHTML=
-            `<form action="/delete-product/${p.id}" method="POST"
-                    class="delete-product-form" data-product-id="${p.id}">
-                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-               <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
-             </form>`;
-        }else{
-          actionsCell.innerHTML='<span>-</span>';
-        }
-      }
+  const p       = data.product;
+  const prodRow = document.getElementById(`product-row-${p.id}`);
+
+  if (prodRow) {
+    /* update summary row cells --------------------------------------- */
+    prodRow.querySelector('.wholesale-cell').innerHTML =
+      `<span class="currency">₹</span>${p.wholesalePrice.toFixed(2)}`;
+    prodRow.querySelector('.retail-cell').innerHTML =
+      `<span class="currency">₹</span>${p.retailPrice.toFixed(2)}`;
+
+    prodRow.querySelector('.product-quantity-cell').innerText =
+      p.quantity.toFixed(2);
+    updateLowStockVisuals(prodRow, p.quantity);
+
+    prodRow.querySelector('.product-profit-cell').innerHTML =
+      `<span class="currency">₹</span>${p.profitMargin.toFixed(2)}`;
+
+    /* recalc avg profit */
+    let avg = 0, tQty = 0, tProf = 0;
+    (p.batches || []).forEach(b => {
+      tQty  += +b.quantity;
+      tProf += (+b.salePrice - +b.purchasePrice) * +b.quantity;
     });
+    if (!p.batches || !p.batches.length) {
+      tQty  = +p.quantity;
+      tProf = (+p.retailPrice - +p.wholesalePrice) * +p.quantity;
+    }
+    avg = tQty ? tProf / tQty : 0;
+    prodRow.querySelector('.product-avg-profit-cell').innerHTML =
+      `<span class="currency">₹</span>${avg.toFixed(2)}`;
+
+    /* delete-product button logic + chevron removal ------------------ */
+    const actionsCell = prodRow.querySelector('.actions-cell');
+
+    if (remaining === 0) {
+      /* 1️⃣  remove empty container + chevron */
+      batchesContainer.remove();
+      prodRow.querySelector('.expand-cell').innerHTML = '';
+
+      /* 2️⃣  switch “-” to a live trash button if allowed */
+      if (CAN_DELETE && p.quantity === 0) {
+        actionsCell.innerHTML = `
+          <form action="/delete-product/${p.id}" method="POST"
+                class="delete-product-form" data-product-id="${p.id}">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="delete-button">
+              <i class="fas fa-trash"></i>
+            </button>
+          </form>`;
+      } else {
+        actionsCell.innerHTML = '<span>-</span>';
+      }
+    }
+  }
+});
+
 
     /*  Inline-edit handler --------------------------------------- */
     document.addEventListener('click',e=>{
@@ -538,6 +589,7 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
           if(remCell){
             remCell.innerHTML=`${b.remainingQuantity.toFixed(2)}${
               b.remainingQuantity===0?'<span class="stock-badge empty">Empty</span>':''}`;
+              batchRow.classList.toggle('empty-batch', b.remainingQuantity === 0);
           }
         }
 
@@ -555,6 +607,8 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
           prodRow.querySelector('.wholesale-cell').innerHTML =`<span class="currency">₹</span>${p.wholesalePrice.toFixed(2)}`;
           prodRow.querySelector('.retail-cell'   ).innerHTML =`<span class="currency">₹</span>${p.retailPrice .toFixed(2)}`;
           prodRow.querySelector('.product-quantity-cell').innerText=p.quantity.toFixed(2);
+          updateLowStockVisuals(prodRow, p.quantity);
+
           prodRow.querySelector('.product-profit-cell').innerHTML  =`<span class="currency">₹</span>${p.profitMargin.toFixed(2)}`;
 
           let avg=0, tQty=0, tProf=0;

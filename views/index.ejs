@@ -272,108 +272,118 @@
 
     <!-- RIGHT CONTENT AREA (Tables and Summary) -->
     <div class="tables-content">
-      <!-- Sales Table -->
-      <div>
-        <h2>
-          <span id="salesHeader">Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)</span>
-          <span class="date-info">
-            <% if (openingTime) { %>
-              <i class="far fa-clock"></i> Open: <%= openingTime %>
-            <% } %>
-            <% if (closingTime) { %>
-              <i class="fas fa-clock"></i> Close: <%= closingTime %>
-            <% } %>
-          </span>
-        </h2>
-        <% if (sales.length === 0) { %>
-          <div class="no-data">
-            <i class="far fa-chart-bar"></i>
-            <p>No sales recorded for this date.</p>
-          </div>
-        <% } else { %>
-          <table id="salesTable">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th>FIFO Avg. Wholesale</th>
-                <th>Sale Price</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Total Sale</th>
-                <th>Profit/Unit</th>
-                <th>Total Profit</th>
-                <th>Status</th>
-                <th>Info</th>
-                <th>Time</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% sales.forEach(function(sale){ %>
-                <tr>
-                  <td><%= sale.productName %></td>
-                  <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
-                  <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
-                  <td><%= parseFloat(sale.saleQuantity).toFixed(2) %></td>
-                  <td><%= sale.unit %></td>
-                  <td><%= parseFloat(sale.totalSale).toFixed(2) %></td>
-                  <td><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
-                  <td><%= parseFloat(sale.profit).toFixed(2) %></td>
-                  <td>
-                    <% 
-                      let statusClass = "";
-                      if (sale.status === "Paid Cash") statusClass = "status-cash";
-                      else if (sale.status === "Paid Online") statusClass = "status-online";
-                      else if (sale.status === "Not Paid") statusClass = "status-notpaid";
-                      else statusClass = "status-mixed";
-                    %>
-                    <div class="status-wrapper">
-                      <span class="status-pill <%= statusClass %>"><%= sale.status %></span>
-                      <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
-                        <div class="status-details-inline">
-                          <% if (sale.paymentDetail1) { %>
-                            <span><strong>Detail1:</strong> ₹<%= parseFloat(sale.paymentDetail1).toFixed(2) %></span>
-                          <% } %>
-                          <% if (sale.paymentDetail2) { %>
-                            <span><strong>Detail2:</strong> ₹<%= parseFloat(sale.paymentDetail2).toFixed(2) %></span>
-                          <% } %>
-                        </div>
+  <!-- Sales Table -->
+  <div>
+    <h2>
+ <span id="salesHeader">
+  Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)
+</span>
+
+<!-- live-updating time chips -->
+<span id="dateInfo" class="date-info">
+  <span id="openTimeWrap"
+        <%= openingTime ? '' : 'style="display:none;"' %>>
+    <i class="far fa-clock"></i>
+    Open: <span id="openTimeDisplay"><%= openingTime || '-' %></span>
+  </span>
+
+  <span id="closeTimeWrap"
+        <%= closingTime ? '' : 'style="display:none;"' %>>
+    &nbsp;<i class="fas fa-clock"></i>
+    Close: <span id="closeTimeDisplay"><%= closingTime || '-' %></span>
+  </span>
+</span>
+
+    </h2>
+
+    <% if (sales.length === 0) { %>
+      <div class="no-data">
+        <i class="far fa-chart-bar"></i>
+        <p>No sales recorded for this date.</p>
+      </div>
+    <% } else { %>
+      <table id="salesTable">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>FIFO Avg. Wholesale</th>
+            <th>Sale Price</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Total Sale</th>
+            <th>Profit/Unit</th>
+            <th>Total Profit</th>
+            <th>Status</th>
+            <th>Info</th>
+            <th>Time</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% sales.forEach(function (sale) { %>
+            <tr>
+              <td><%= sale.productName %></td>
+              <td><%= parseFloat(sale.wholesalePrice).toFixed(2) %></td>
+              <td><%= parseFloat(sale.retailPrice).toFixed(2) %></td>
+              <td><%= parseFloat(sale.saleQuantity).toFixed(2) %></td>
+              <td><%= sale.unit %></td>
+              <td><%= parseFloat(sale.totalSale).toFixed(2) %></td>
+              <td><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
+              <td><%= parseFloat(sale.profit).toFixed(2) %></td>
+              <td>
+                <%
+                  let statusClass = "";
+                  if (sale.status === "Paid Cash") statusClass = "status-cash";
+                  else if (sale.status === "Paid Online") statusClass = "status-online";
+                  else if (sale.status === "Not Paid") statusClass = "status-notpaid";
+                  else statusClass = "status-mixed";
+                %>
+                <div class="status-wrapper">
+                  <span class="status-pill <%= statusClass %>"><%= sale.status %></span>
+                  <% if (sale.paymentDetail1 || sale.paymentDetail2) { %>
+                    <div class="status-details-inline">
+                      <% if (sale.paymentDetail1) { %>
+                        <span><strong>Detail1:</strong> ₹<%= parseFloat(sale.paymentDetail1).toFixed(2) %></span>
+                      <% } %>
+                      <% if (sale.paymentDetail2) { %>
+                        <span><strong>Detail2:</strong> ₹<%= parseFloat(sale.paymentDetail2).toFixed(2) %></span>
                       <% } %>
                     </div>
-                  </td>
-                  
-                  <td><%= sale.extraInfo ? sale.extraInfo : "-" %></td>
-                  <!-- NEW: force IST formatting -->
-                    <td>
-                      <% 
-                        // get a JS Date from Firestore Timestamp or raw date
-                        const createdDate = (sale.createdAt && sale.createdAt.toDate)
-                          ? sale.createdAt.toDate()
-                          : new Date(sale.createdAt);
-                        // explicitly format in IST, 24-hour clock
-                        const saleTime = createdDate.toLocaleTimeString('en-IN', {
-                          hour12: false,
-                          timeZone: 'Asia/Kolkata'
-                        });
-                      %>
-                      <%= saleTime %>
-                    </td>
+                  <% } %>
+                </div>
+              </td>
 
-                    <td style="text-align:center;">
-                      <i
-                        class="fas fa-trash-alt delete-sale-btn"
-                        data-id="<%= sale.id %>"
-                        data-product-id="<%= sale.productId %>"
-                        data-quantity="<%= sale.saleQuantity %>"
-                      ></i>
-                    </td>
-                </tr>
-              <% }); %>
-            </tbody>
-            
-          </table>
-        <% } %>
-      </div>
+              <td><%= sale.extraInfo ? sale.extraInfo : "-" %></td>
+
+              <!-- Time (IST) -->
+              <td>
+                <%
+                  const createdDate = (sale.createdAt && sale.createdAt.toDate)
+                    ? sale.createdAt.toDate()
+                    : new Date(sale.createdAt);
+                  const saleTime = createdDate.toLocaleTimeString('en-IN', {
+                    hour12: false,
+                    timeZone: 'Asia/Kolkata',
+                  });
+                %>
+                <%= saleTime %>
+              </td>
+
+              <td style="text-align:center;">
+                <i
+                  class="fas fa-trash-alt delete-sale-btn"
+                  data-id="<%= sale.id %>"
+                  data-product-id="<%= sale.productId %>"
+                  data-quantity="<%= sale.saleQuantity %>"
+                ></i>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
 
       <!-- Expenses Table -->
       <div>
@@ -840,25 +850,36 @@ document.getElementById('expenseForm').addEventListener('submit', async e => {
 });
 
 
-      /* ——— OPENING BALANCE FORM ——— */
-  document.getElementById('openingForm').addEventListener('submit', async e => {
-    e.preventDefault();
+  /* ——— OPENING BALANCE FORM ——— */
+document.getElementById('openingForm').addEventListener('submit', async e => {
+  e.preventDefault();
 
-    const submitBtn = e.submitter || e.target.querySelector('button[type="submit"]');
-    setLoading(submitBtn, true);
+  const submitBtn = e.submitter || e.target.querySelector('button[type="submit"]');
+  setLoading(submitBtn, true);
 
-    try {
-      const obj = Object.fromEntries(new FormData(e.target).entries());
-      const res = await postJSON('/api/opening-balance', obj);
-      document.getElementById('salesHeader').innerHTML =
-        `Sales for ${obj.saleDate} (Opening Balance: ₹${cash(res.openingBalance)})`;
-      refreshSummary(res.summary);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setLoading(submitBtn, false);
-    }
-  });
+  try {
+    const obj = Object.fromEntries(new FormData(e.target).entries());
+    const res = await postJSON('/api/opening-balance', obj);
+
+    /* update header balance */
+    document.getElementById('salesHeader').innerHTML =
+      `Sales for ${obj.saleDate} (Opening Balance: ₹${cash(res.openingBalance)})`;
+
+    /* NEW ▶ refresh time chips without refresh ◀ */
+    document.getElementById('openTimeDisplay').textContent  = res.openingTime  || '-';
+    document.getElementById('closeTimeDisplay').textContent = res.closingTime || '-';
+    document.getElementById('openTimeWrap').style.display   = res.openingTime  ? '' : 'none';
+    document.getElementById('closeTimeWrap').style.display  = res.closingTime ? '' : 'none';
+
+    refreshSummary(res.summary);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setLoading(submitBtn, false);
+  }
+});
+
+
 
   </script>
   <!-- convenience fill‑time buttons -->

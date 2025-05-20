@@ -108,15 +108,18 @@ app.use((req, res, next) => {
   next();
 });
 
+
+
 /* ─────────── Security middleware stack (NEW) ─────────── */
 app.use(helmet({
   hidePoweredBy: true,
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: [
+      defaultSrc    : ["'self'"],
+      scriptSrc     : [
         "'self'",
-        "'unsafe-inline'",
+        "'unsafe-inline'",            // your inline <script> blocks
+
         "'unsafe-eval'",       // ← NEW
         "'wasm-unsafe-eval'",  // ← add only if you have WebAssembly code
         "https://cdnjs.cloudflare.com",
@@ -124,12 +127,24 @@ app.use(helmet({
         "https://www.gstatic.com",
         "https://checkout.razorpay.com"
       ],
-      // …everything else stays the same…
+      scriptSrcAttr : ["'self'", "'unsafe-inline'"],  // your inline onclick=""
+      styleSrc      : [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdnjs.cloudflare.com",
+        "https://fonts.googleapis.com"
+      ],
+      connectSrc    : [
+        "'self'",
+        "https://*.firebaseio.com",
+        "https://firestore.googleapis.com",
+        "https://*.razorpay.com"
+      ],
+      imgSrc     : ["'self'", "data:"],
+      fontSrc    : ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"]
     }
   }
 }));
-
-
 
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
 
@@ -1727,99 +1742,160 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
 /* ─────────── SALES & PROFIT REPORTING ─────────── */
 // ────────────────────────────────────────────────────────────────
 // GET  /sales  – Sales + Expense report with optional filters
-app.get('/sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    const { saleDate, month, status } = req.query;
+/* ────────────────────────────────────────────────────────────────
+   GET /sales  – Sales & Expense report
+   • Table rows honour *all* filters (saleDate, month, status)
+   • Summary badges are locked to the chosen month
+   ──────────────────────────────────────────────────────────────── */
+app.get(
+  '/sales',
+  isAuthenticated,
+  restrictRoute('/sales'),
+  async (req, res) => {
+    try {
+      const accountId          = req.session.user.accountId;
+      const { saleDate, month, status } = req.query;
 
-    // 1. Build the two Firestore queries
-    let salesQ   = db.collection('sales')
-                     .where('accountId','==',accountId)
-                     .orderBy('createdAt','desc');
-    let expenseQ = db.collection('expenses')
-                     .where('accountId','==',accountId)
-                     .orderBy('createdAt','desc');
+      /* ─── 0. Work out the month window we’ll “lock” the badges to ─── */
+      const pad = n => String(n).padStart(2, '0');
+      let monthStart, monthEnd;
 
-    if (saleDate) {
-      salesQ   = salesQ.where('saleDate','==',saleDate);
-      expenseQ = expenseQ.where('saleDate','==',saleDate);
-    } else if (month) {
-      const [y,m] = month.split('-');
-      const start = `${month}-01`;
-      let nextM   = parseInt(m,10) + 1, nextY = parseInt(y,10);
-      if (nextM > 12) { nextM = 1; nextY++; }
-      const end   = `${nextY}-${String(nextM).padStart(2,'0')}-01`;
-      salesQ   = salesQ.where('saleDate','>=',start).where('saleDate','<',end);
-      expenseQ = expenseQ.where('saleDate','>=',start).where('saleDate','<',end);
-    }
+      if (month) {                                        // user picked a month
+        monthStart = `${month}-01`;
+        const [y, m] = month.split('-');
+        let nextM = parseInt(m, 10) + 1,
+            nextY = parseInt(y, 10);
+        if (nextM > 12) { nextM = 1; nextY++; }
+        monthEnd = `${nextY}-${pad(nextM)}-01`;
 
-    if (status && status.trim() && status !== 'All') {
-  salesQ   = salesQ.where('status', '==', status);
+      } else if (saleDate) {                              // single-day filter
+        const [y, m] = saleDate.split('-');
+        monthStart = `${y}-${m}-01`;
+        let nextM  = parseInt(m, 10) + 1,
+            nextY  = parseInt(y, 10);
+        if (nextM > 12) { nextM = 1; nextY++; }
+        monthEnd = `${nextY}-${pad(nextM)}-01`;
 
-  /* ★ NEW – apply the same status filter to the expenses query */
-  expenseQ = expenseQ.where('expenseStatus', '==', status);
-}
-
-
-    // 2. Run them in parallel
-    const [salesSnap, expSnap] = await Promise.all([ salesQ.get(), expenseQ.get() ]);
-    const sales    = salesSnap.docs.map(d => ({ id:d.id, ...d.data() }));
-    const expenses = expSnap .docs.map(d => ({ id:d.id, ...d.data() }));
-
-    // 3. Totals
-    const profitWithoutExpenses = sales.reduce((sum,s)=>sum+s.profit,0);
-    const totalExpensesAmount   = expenses.reduce((sum,e)=>sum+e.expenseCost,0);
-    const profitAfterExpenses   = profitWithoutExpenses - totalExpensesAmount;
-
-    const totalRevenueAmount = sales.reduce((sum,s)=>
-      sum + (s.totalSale !== undefined
-               ? parseFloat(s.totalSale)
-               : s.retailPrice * s.saleQuantity)
-    ,0);
-
-    // 4. Opening balances / times (unchanged)
-    const dateSet = new Set();
-    sales.forEach(s   => dateSet.add(s.saleDate));
-    expenses.forEach(e=> dateSet.add(e.saleDate));
-    const allDates = Array.from(dateSet);
-
-    const openingTimes    = {};
-    const openingBalances = {};
-    await Promise.all(allDates.map(async date => {
-      const obRef = db.collection('openingBalances').doc(`${accountId}_${date}`);
-      const obDoc = await obRef.get();
-      if (obDoc.exists) {
-        const data = obDoc.data();
-        openingTimes[date]    = {
-          openingTime: data.openingTime || '',
-          closingTime: data.closingTime || ''
-        };
-        openingBalances[date] = parseFloat(data.balance || 0);
-      } else {
-        openingTimes[date]    = { openingTime:'', closingTime:'' };
-        openingBalances[date] = 0;
+      } else {                                           // default = current month
+        const today = new Date();
+        const curYM = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
+        monthStart  = `${curYM}-01`;
+        let nextM   = today.getMonth() + 2,
+            nextY   = today.getFullYear();
+        if (nextM > 12) { nextM = 1; nextY++; }
+        monthEnd    = `${nextY}-${pad(nextM)}-01`;
       }
-    }));
 
-    // 5. Render
-    res.render('sales', {
-      sales,
-      expenses,
-      saleDate,
-      month,
-      status,
-      profitWithoutExpenses,
-      totalExpensesAmount,
-      profitAfterExpenses,
-      totalRevenueAmount,        // ➜ NEW
-      openingTimes,
-      openingBalances,
-      blockedActions : req.session.blockedActions || {}
-    });
-  } catch (err) {
-    res.status(500).send(err.toString());
+      /* ─── 1. Build the MAIN (filtered) queries for the table ─── */
+      let salesQ   = db.collection('sales')
+                       .where('accountId', '==', accountId)
+                       .orderBy('createdAt', 'desc');
+      let expenseQ = db.collection('expenses')
+                       .where('accountId', '==', accountId)
+                       .orderBy('createdAt', 'desc');
+
+      if (saleDate) {
+        salesQ   = salesQ  .where('saleDate', '==', saleDate);
+        expenseQ = expenseQ.where('saleDate', '==', saleDate);
+      } else if (month) {
+        salesQ   = salesQ
+                    .where('saleDate', '>=', monthStart)
+                    .where('saleDate', '<',  monthEnd);
+        expenseQ = expenseQ
+                    .where('saleDate', '>=', monthStart)
+                    .where('saleDate', '<',  monthEnd);
+      }
+
+      if (status && status.trim() && status !== 'All') {
+        salesQ   = salesQ  .where('status',        '==', status);
+        expenseQ = expenseQ.where('expenseStatus', '==', status);
+      }
+
+      /* ─── 2. ***Separate*** queries for MONTH totals (no status filter) ─── */
+      const monthSalesQ = db.collection('sales')
+                            .where('accountId', '==', accountId)
+                            .where('saleDate',  '>=', monthStart)
+                            .where('saleDate',  '<',  monthEnd);
+
+      const monthExpQ   = db.collection('expenses')
+                            .where('accountId', '==', accountId)
+                            .where('saleDate',  '>=', monthStart)
+                            .where('saleDate',  '<',  monthEnd);
+
+      /* ─── 3. Run everything in parallel ─── */
+      const [
+        tableSalesSnap, tableExpSnap,
+        monthSalesSnap, monthExpSnap
+      ] = await Promise.all([
+        salesQ.get(),   expenseQ.get(),
+        monthSalesQ.get(), monthExpQ.get()
+      ]);
+
+      const sales          = tableSalesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const expenses       = tableExpSnap .docs.map(d => ({ id: d.id, ...d.data() }));
+      const monthSales     = monthSalesSnap.docs.map(d => d.data());
+      const monthExpenses  = monthExpSnap .docs.map(d => d.data());
+
+      /* ─── 4. Compute MONTH-locked badge totals ─── */
+      const monthRevenueAmount = monthSales.reduce((sum, s) =>
+        sum + (s.totalSale !== undefined
+                 ? parseFloat(s.totalSale)
+                 : s.retailPrice * s.saleQuantity), 0);
+
+      const monthGrossProfit   = monthSales.reduce((sum, s) => sum + s.profit, 0);
+      const monthExpenseTotal  = monthExpenses.reduce((sum, e) => sum + e.expenseCost, 0);
+      const monthNetProfit     = monthGrossProfit - monthExpenseTotal;
+
+      /* ─── 5. Opening balances & times (unchanged) ─── */
+      const dateSet = new Set();
+      sales.forEach(s   => dateSet.add(s.saleDate));
+      expenses.forEach(e=> dateSet.add(e.saleDate));
+      const allDates = Array.from(dateSet);
+
+      const openingTimes    = {};
+      const openingBalances = {};
+      await Promise.all(allDates.map(async date => {
+        const obRef = db.collection('openingBalances').doc(`${accountId}_${date}`);
+        const obDoc = await obRef.get();
+        if (obDoc.exists) {
+          const d = obDoc.data();
+          openingTimes[date]    = {
+            openingTime: d.openingTime || '',
+            closingTime: d.closingTime || ''
+          };
+          openingBalances[date] = parseFloat(d.balance || 0);
+        } else {
+          openingTimes[date]    = { openingTime: '', closingTime: '' };
+          openingBalances[date] = 0;
+        }
+      }));
+
+      /* ─── 6. Render – pass MONTH totals to the badges ─── */
+      res.render('sales', {
+        sales,
+        expenses,
+
+        saleDate,
+        month,
+        status,
+
+        // *** BADGE figures (month-locked) ***
+        totalRevenueAmount   : monthRevenueAmount,
+        profitWithoutExpenses: monthGrossProfit,
+        totalExpensesAmount  : monthExpenseTotal,
+        profitAfterExpenses  : monthNetProfit,
+
+        openingTimes,
+        openingBalances,
+        blockedActions: req.session.blockedActions || {}
+      });
+
+    } catch (err) {
+      res.status(500).send(err.toString());
+    }
   }
-});
+);
+
 
 
 
@@ -2559,7 +2635,14 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
         accountId: req.session.user.accountId
       }, { merge: true });
     const { summary, openingBalance: bal } = await computeDailySummary(req.session.user.accountId, saleDate);
-    res.json({ success: true, openingBalance: bal, summary });
+    res.json({
+  success      : true,
+  openingBalance: bal,
+  openingTime  : openingTime || '',
+  closingTime  : closingTime || '',
+  summary
+});
+
   } catch (e) {
     res.json({ success: false, error: e.toString() });
   }

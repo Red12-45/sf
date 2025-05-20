@@ -403,3 +403,67 @@ table tr:hover {
     background-color: darkred;
   }
   
+  /* Ensure all expense tables use a fixed layout and span full width */
+#expenseContainer table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Give each of the 7 columns an equal 1/7th width */
+#expenseContainer th,
+#expenseContainer td {
+  width: calc(100% / 7);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.5em;   /* adjust as you like */
+  box-sizing: border-box;
+}
+.expense-form-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+#expenseItems {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.expense-button-group {
+  display: flex;
+  flex-direction: row; /* align buttons side by side */
+  gap: 1rem;
+  align-items: center;
+}
+.month-summary {
+  display: flex;
+  align-items: center;
+  gap: 2rem; /* adjust spacing between the title and total */
+  background: var(--card-bg);
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  margin: 1rem 0;
+}
+
+.month-summary .month-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-summary .month-total {
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: #2e7d32;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

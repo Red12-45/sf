@@ -689,3 +689,48 @@ table tr:hover {
   background: rgba(155, 89, 182, 0.15);
   color: #8e44ad;
 }
+
+
+/* 1️⃣ fixed layout + truncation for all date-group tables */
+.date-group table {
+  table-layout: fixed;
+  width: 100%;
+}
+.date-group th,
+.date-group td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.5em;
+  box-sizing: border-box;
+}
+
+/* 2️⃣ Sales table only (first table in each date-group) */
+/*    – Product Name a bit wider */
+.date-group table:nth-of-type(1) th:nth-child(1),
+.date-group table:nth-of-type(1) td:nth-child(1) {
+  width: 25%;
+}
+
+/*    – Quantity (4th) & Unit (5th) a bit narrower */
+.date-group table:nth-of-type(1) th:nth-child(4),
+.date-group table:nth-of-type(1) td:nth-child(4),
+.date-group table:nth-of-type(1) th:nth-child(5),
+.date-group table:nth-of-type(1) td:nth-child(5) {
+  width: 5%;
+}
+
+
+    
+
+.date-info {
+  font-size: 0.875rem;
+  color: var(--text-light);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.date-info i {
+  color: var(--accent-color);
+}

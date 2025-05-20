@@ -204,14 +204,21 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
                 (Opening Balance: ₹<%= parseFloat(daySales[0].openingBalance).toFixed(2) %>)
               <% } %>
             </h2>
-            <div class="time-info-container">
-              <% if (openingTimes[date]?.openingTime) { %>
-                <span class="time-info"><i class="far fa-clock"></i> Opening: <%= openingTimes[date].openingTime %></span>
-              <% } %>
-              <% if (openingTimes[date]?.closingTime) { %>
-                <span class="time-info"><i class="far fa-clock"></i> Closing: <%= openingTimes[date].closingTime %></span>
-              <% } %>
-            </div>
+            <span class="date-info">
+  <% if (openingTimes[date]?.openingTime) { %>
+    <span id="openTimeWrap">
+      <i class="far fa-clock"></i>
+      Open: <span><%= openingTimes[date].openingTime %></span>
+    </span>
+  <% } %>
+
+  <% if (openingTimes[date]?.closingTime) { %>
+    <span id="closeTimeWrap" style="margin-left: 1rem;">
+      <i class="fas fa-clock"></i>
+      Close: <span><%= openingTimes[date].closingTime %></span>
+    </span>
+  <% } %>
+</span>
 
             <!-- Sales Table -->
             <% if (daySales.length) { %>
@@ -313,67 +320,58 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
             <% } %>
 
             <!-- Expenses Table -->
-            <h2>Expenses for <%= date %>
-              <% if (dayExps.length) {
-                   const sumExp = dayExps.reduce((a,e)=>a+parseFloat(e.expenseCost||0),0);
-              %> (₹<%= sumExp.toFixed(2) %>)<% } %>
-            </h2>
-            <% if (dayExps.length) { %>
-            <table>
-              <thead>
-                <tr>
-                  <th>Reason</th>
-                  <th>Cost</th>
-                  <th>Method</th>
-                  <th>Detail 1</th>
-                  <th>Detail 2</th>
-                  <th>Time</th>
-                  <th style="text-align:center;">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <% dayExps.forEach(exp => { %>
-                <tr>
-                  <td><%= exp.expenseReason %></td>
-                  <td><%= parseFloat(exp.expenseCost).toFixed(2) %></td>
-                  <td class="<%= canEdit ? 'editable-status' : '' %>"
-    data-id="<%= exp.id %>"
-    data-field="expenseStatus"
-    data-date="<%= date %>"
-    data-detail1="<%= exp.expenseDetail1 || '' %>"
-    data-detail2="<%= exp.expenseDetail2 || '' %>">
-  <span class="value"><%= exp.expenseStatus %>
-    <% if (exp.expenseDetail1 || exp.expenseDetail2) { %><br><small>
-      <% if (exp.expenseDetail1) { %>
-        Detail1: <%= parseFloat(exp.expenseDetail1).toFixed(2) %>
-      <% } %>
-      <% if (exp.expenseDetail2) { %>
-        <% if (exp.expenseDetail1) { %>, <% } %>
-        Detail2: <%= parseFloat(exp.expenseDetail2).toFixed(2) %>
-      <% } %>
-    </small><% } %>
-  </span>
-  <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
-</td>
+<% if (dayExps.length) {
+     // only render when there are expenses
+     const sumExp = dayExps.reduce((a,e) => a + parseFloat(e.expenseCost||0), 0);
+%>
+  <h2>Expenses for <%= date %> (₹<%= sumExp.toFixed(2) %>)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Reason</th>
+        <th>Cost</th>
+        <th>Method</th>
+        <th>Detail 1</th>
+        <th>Detail 2</th>
+        <th>Time</th>
+        <th style="text-align:center;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% dayExps.forEach(exp => { %>
+      <tr>
+        <td><%= exp.expenseReason %></td>
+        <td><%= parseFloat(exp.expenseCost).toFixed(2) %></td>
+        <td class="<%= canEdit ? 'editable-status' : '' %>"
+            data-id="<%= exp.id %>" data-field="expenseStatus" data-date="<%= date %>"
+            data-detail1="<%= exp.expenseDetail1||'' %>" data-detail2="<%= exp.expenseDetail2||'' %>">
+          <span class="value"><%= exp.expenseStatus %>
+            <% if (exp.expenseDetail1||exp.expenseDetail2) { %><br><small>
+              <% if (exp.expenseDetail1) { %>Detail1: <%= parseFloat(exp.expenseDetail1).toFixed(2) %><% } %>
+              <% if (exp.expenseDetail2) { %>
+                <% if (exp.expenseDetail1) { %>, <% } %>
+                Detail2: <%= parseFloat(exp.expenseDetail2).toFixed(2) %>
+              <% } %>
+            </small><% } %>
+          </span>
+          <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
+        </td>
+        <td><%= exp.expenseDetail1||'-' %></td>
+        <td><%= exp.expenseDetail2||'-' %></td>
+        <td><%= (exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt)).toLocaleTimeString() %></td>
+        <td style="text-align:center;">
+          <% if (canDelete) { %>
+            <i class="fas fa-trash-alt delete-expense-btn"
+               data-id="<%= exp.id %>" data-date="<%= date %>"></i>
+          <% } %>
+        </td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+<% } %>
 
-
-                  <td><%= exp.expenseDetail1||'-' %></td>
-                  <td><%= exp.expenseDetail2||'-' %></td>
-                  <td><%= (exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt)).toLocaleTimeString() %></td>
-                 <td style="text-align:center;">
-  <% if (canDelete) { %>
-    <i class="fas fa-trash-alt delete-expense-btn"
-       data-id="<%= exp.id %>" data-date="<%= date %>"></i>
-  <% } %>
-</td>
-
-                </tr>
-                <% }); %>
-              </tbody>
-            </table>
-            <% } else { %>
-              <p>No expenses for <%= date %>.</p>
-            <% } %>
+            
 
             <!-- Summary Box -->
             <div class="summaryBox">
