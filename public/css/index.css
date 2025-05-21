@@ -20,7 +20,10 @@
   --text-light: #64748b;
   --text-white: #f8fafc;
   --border-color: #e2e8f0;
-
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   --radius-sm: 0.375rem;
   --radius-md: 0.75rem;
@@ -29,7 +32,7 @@
   --glass-border: rgba(255, 255, 255, 0.18);
 
 
-   --nav-bg: linear-gradient(135deg, #4361ee, #3a0ca3);
+   --nav-bg: #1e3a8a;
   --nav-accent: #4cc9f0;
   --nav-text: #ffffff;
   --nav-hover: rgba(255, 255, 255, 0.15);
@@ -90,7 +93,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .sales-nav {
-  background: var(--nav-bg);
+  /* Solid dark blue navbar instead of gradient */
+  background-color: #1e3a8a;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: var(--nav-text);
@@ -101,11 +105,11 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.75rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
-
 .nav-container {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0 2rem;
+  width: 100%;
+  margin: 0;
+  padding-left: 0;
+  padding-right: 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -132,6 +136,7 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
   position: relative;
   overflow: hidden;
+  margin-left: 20px;
 }
 
 .logo-wrapper:before {
@@ -156,14 +161,18 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 1.25rem;
   position: relative;
   z-index: 2;
+  
 }
 
 .nav-brand span {
-  background: linear-gradient(to right, #fff, #c8d9ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  transition: all var(--animation-speed) ease;
+  /* Force white text for your brand name */
+  color: #ffffff !important;
+  /* Remove any previous background-clip tricks */
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  transition: none !important;
+  
 }
 
 /* Navigation Links */
@@ -209,18 +218,7 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--nav-accent);
 }
 
-.nav-item:after {
-  content: '';
-  position: absolute;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--nav-accent);
-  bottom: 5px;
-  left: 50%;
-  transform: translateX(-50%) scale(0);
-  transition: transform 0.3s ease;
-}
+
 
 .nav-item:hover:after {
   transform: translateX(-50%) scale(1);
