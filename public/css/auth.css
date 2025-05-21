@@ -2,48 +2,53 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
 
 :root {
-    /* Main color scheme */
-    --primary-color: #4f46e5;
-    --primary-light: #818cf8;
-    --primary-dark: #4338ca;
-    --primary-gradient: linear-gradient(135deg, #4f46e5, #6366f1);
-    --secondary-color: #f43f5e;
-    --text-color: #1e293b;
-    --text-light: #64748b;
-    --background: #f8fafc;
-    --input-bg: #ffffff;
-    --card-bg: #ffffff;
-    
-    /* UI Elements */
-    --border-color: #e2e8f0;
-    --border-focus: #cbd5e0;
-    --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.02);
-    --shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
-    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.03);
-    --hover-shadow: 0 20px 40px rgba(79, 70, 229, 0.15);
-    
-    /* Feedback colors */
-    --success-color: #10b981;
-    --warning-color: #f59e0b;
-    --error-color: #ef4444;
-    
-    /* Animation */
-    --transition-fast: 0.15s ease;
-    --transition-normal: 0.3s ease;
-    --transition-slow: 0.5s ease;
-    
-    /* Spacing */
-    --space-xs: 6px;
-    --space-sm: 12px;
-    --space-md: 20px;
-    --space-lg: 32px;
-    --space-xl: 48px;
-    
-    /* Border Radius */
-    --radius-sm: 6px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-full: 9999px;
+  /* Main color scheme */
+  --primary-color: #58a6ff;
+  --primary-light: #818cf8;
+  --primary-dark: #4338ca;
+  --primary-gradient: linear-gradient(135deg, #4f46e5, #6366f1);
+  --secondary-color: #f43f5e;
+
+  --background-color: #0d1117;
+  --card-background: #161b22;
+  --text-color: #e6edf3;
+  --text-light: #8b949e;
+  --subtle-text: #8b949e;
+
+ --input-bg: #0d1117;
+
+  --border-color: #30363d;
+  --overlay-opacity: 0.75;
+
+  /* UI Elements */
+  --border-focus: #cbd5e0;
+  --shadow-sm: 0 4px 6px rgba(0, 0, 0, 0.02);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.03);
+  --hover-shadow: 0 20px 40px rgba(79, 70, 229, 0.15);
+
+  /* Feedback colors */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+
+  /* Animation */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+
+  /* Spacing */
+  --space-xs: 6px;
+  --space-sm: 12px;
+  --space-md: 20px;
+  --space-lg: 32px;
+  --space-xl: 48px;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
 }
 
 /* Base Reset */
@@ -59,7 +64,9 @@ html {
 
 body {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    background-color: var(--background);
+     background-color: var(--background-color);
+  background-image: none !important;
+  background-attachment: fixed !important;
     color: var(--text-color);
     line-height: 1.7;
     min-height: 100vh;
@@ -67,13 +74,38 @@ body {
     align-items: center;
     justify-content: center;
     padding: var(--space-md);
-    background-image: 
-        radial-gradient(circle at 10% 20%, rgba(79, 70, 229, 0.03) 0%, transparent 35%),
-        radial-gradient(circle at 90% 80%, rgba(79, 70, 229, 0.03) 0%, transparent 35%),
-        linear-gradient(180deg, rgba(79, 70, 229, 0.01) 0%, rgba(255, 255, 255, 0) 100%);
-    background-attachment: fixed;
+    /* kill the old radial/linear layering so var(--background) is visible */
+    /* background-image: radial-gradient(...), radial-gradient(...), linear-gradient(...); */
+  
 }
 
+a, p, h1, h2, h3, h4, h5 {
+  color: var(--text-color);
+}
+
+.card, .form-container, .testimonial-card, .navbar, .footer-content, .footer-nav, .cta-banner {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+}
+
+input,
+textarea,
+select {
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+
+.btn.primary {
+  background-color: var(--primary-color);
+  color: #fff;
+  border: none;
+}
+
+.btn.primary:hover {
+  background-color: #1f6feb;
+}
 /* Main Container */
 .container {
     display: flex;
@@ -149,9 +181,10 @@ body {
     right: 0;
     bottom: 0;
     background: var(--primary-gradient);
-    opacity: 0.85;
+    opacity: var(--overlay-opacity); /* now truly uses your custom 0.75 */
     z-index: 1;
 }
+
 
 /* Welcome Text */
 .welcome-text {
@@ -172,9 +205,13 @@ body {
     margin-bottom: var(--space-md);
     font-weight: 700;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    background: linear-gradient(to right, #ffffff, rgba(255, 255, 255, 0.85));
-    -webkit-background-clip: text;
-    color: transparent;
+
+    /* force solid white */
+   background: none !important;
+     color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+ background-clip: initial !important;
+    -webkit-background-clip: initial !important;
     letter-spacing: -0.02em;
     line-height: 1.2;
 }
@@ -201,17 +238,18 @@ body {
     from { opacity: 0; transform: translateY(-15px); }
     to { opacity: 1; transform: translateY(0); }
 }
-
 .form-header h1 {
-    font-size: 2.4rem;
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
-    color: transparent;
-    margin-bottom: var(--space-sm);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
+    /* no background fill behind text */
+    background: none !important;
+    /* use your primary color for the text */
+    color: var(--primary-color) !important;
+    /* reset any text-clip/text-fill hacks */
+    background-clip: initial !important;
+    -webkit-background-clip: initial !important;
+    -webkit-text-fill-color: var(--primary-color) !important;
+    filter: none !important;
 }
+
 
 .form-header p {
     color: var(--text-light);
@@ -244,13 +282,13 @@ body {
 }
 
 .form-group label {
-    font-weight: 500;
-    color: var(--text-color);
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    font-size: 0.92rem;
-    transition: color var(--transition-fast);
+  font-weight: 500;
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.92rem;
+  transition: color var(--transition-fast);
 }
 
 .form-group label i {
@@ -264,31 +302,39 @@ body {
 
 /* Form Inputs */
 .form-group input {
-    padding: 16px 18px;
-    border: 1.5px solid var(--border-color);
-    border-radius: var(--radius-md);
-    font-size: 1rem;
-    transition: all var(--transition-normal);
-    background-color: var(--input-bg);
-    color: var(--text-color);
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  transition: all var(--transition-normal);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  box-shadow: var(--shadow-sm);
 }
 
 .form-group input::placeholder {
-    color: #a0aec0;
-    font-weight: 300;
+  color: var(--text-light);
+  font-weight: 300;
 }
+
+
+input::placeholder {
+  color: var(--text-light); /* or #8b949e */
+  opacity: 1;
+}
+
 
 .form-group input:hover {
     border-color: var(--primary-light);
 }
 
 .form-group input:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.15);
-    outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.25);
+  outline: none;
 }
+
 
 /* Password Container */
 .password-container {
@@ -728,4 +774,26 @@ body {
     .container:hover .image-container::before {
         transform: none;
     }
+}
+
+/* Force autofill fields to match dark theme */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0px 1000px var(--input-bg) inset !important;
+  box-shadow: 0 0 0px 1000px var(--input-bg) inset !important;
+  -webkit-text-fill-color: var(--text-color) !important;
+  caret-color: var(--text-color) !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+}
+
+/* Force permanent white text */
+.permanent-white {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  background: none !important;
+  background-clip: initial !important;
+  -webkit-background-clip: initial !important;
+  filter: none !important;
 }
