@@ -814,3 +814,12 @@ input:-webkit-autofill:active {
 .trial-banner span {
   color: #fcd34d; /* beautiful yellow highlight */
 }
+.global-error {
+  background-color: #ffe5e5;     /* light red background */
+  color: #a30000;                /* dark red text */
+  border: 1px solid #a30000;     /* solid red border */
+  padding: 0.75rem 1rem;         /* space around text */
+  border-radius: 0.25rem;        /* slightly rounded corners */
+  margin-bottom: 1rem;           /* separation from form */
+  font-weight: 600;              /* semi-bold text */
+}

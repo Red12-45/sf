@@ -468,7 +468,7 @@ app.use((req, res, next) => {
   const allowedPaths = [
     '/', '/dashboard', '/login', '/register', '/documentation', '/pricing',
     '/subscribe/monthly', '/subscribe/half-yearly', '/subscribe/yearly',
-    '/payment-success', '/logout', '/tnc', '/privacy', '/customerservice','/billing'
+    '/payment-success', '/logout', '/terms-and-conditions', '/privacy', '/customerservice','/billing'
   ];
   if (allowedPaths.includes(req.path)) return next();
   const subscriptionExpiry = req.session.user.subscriptionExpiry;
@@ -579,8 +579,8 @@ app.post(
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    const { name, email, phone, address, location, password } = req.body;
-    const oldInput = { name, email, phone, address, location };
+    const { name, email, phone, address, location, businessName, password } = req.body;
+    const oldInput = { name, email, phone, address, location, businessName  };
 
     if (!errors.isEmpty()) {
       return res.status(400).render('register', {
@@ -601,7 +601,7 @@ app.post(
         });
       }
 
-      // 1️⃣ Hash password and create user
+          // 1️⃣ Hash password and create user
       const hashed = await bcrypt.hash(password, 10);
       const userRef = await db.collection('users').add({
         name,
@@ -609,10 +609,12 @@ app.post(
         phone,
         address,
         location,
+        businessName,        // ← added
         password: hashed,
         isMaster: true,
         createdAt: new Date()
       });
+
 
       // 2️⃣ Set accountId AND a 30-day trial expiry
       const trialExpiry = new Date();
@@ -778,14 +780,26 @@ app.post(
       }
 
       /* 6️⃣  Attach to session & redirect (unchanged) */
-      req.session.user = {
-        id        : userDoc.id,
-        name      : userData.name,
-        email     : userData.email,
-        isMaster  : userData.isMaster || false,
-        accountId : userData.accountId || userDoc.id,
-        subscriptionExpiry
-      };
+         /* 6️⃣  Attach to session & redirect (with businessName) */
+   req.session.user = {
+     id              : userDoc.id,
+     name            : userData.name,
+     email           : userData.email,
+     businessName    : userData.businessName||'',  // ← added
+     isMaster        : userData.isMaster || false,
+     accountId       : userData.accountId || userDoc.id,
+     subscriptionExpiry
+   };
+
+   // If this is a sub-user, overwrite businessName with the master’s
+   if (!req.session.user.isMaster) {
+     const masterDoc = await db.collection('users')
+                               .doc(req.session.user.accountId).get();
+     if (masterDoc.exists && masterDoc.data().businessName) {
+       req.session.user.businessName = masterDoc.data().businessName;
+     }
+   }
+
       if (!req.session.user.isMaster) {
   const permDoc = await db.collection('permissions')
                           .doc(req.session.user.accountId).get();

@@ -14,38 +14,78 @@
 
 <body>
   
-  <!-- Navigation -->
-  <nav>
+ <!-- Navigation -->
+<nav class="sales-nav">
+  <div class="nav-container">
     <div class="nav-brand">
-      <i class="fas fa-chart-line"></i>
-      <span>Dashboard</span>
+      <div class="logo-wrapper">
+        <i class="fas fa-chart-line"></i>
+      </div>
+      <span>SalesFlow</span>
     </div>
+
     <div class="nav-links">
-      <a href="/add-product"><i class="fas fa-plus-circle"></i> Add Product</a>
-      <a href="/view-products"><i class="fas fa-boxes"></i> View Products</a>
-      <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
-      <a href="/expense"><i class="fas fa-receipt"></i> Expenses</a>
-      <a href="/stats" class="profile"><i class="fas fa-chart-pie"></i> Stats</a>
-      <a href="/pricing"><i class="fas fa-tags"></i> Pricing</a>
+      <a href="/add-product" class="nav-item">
+        <i class="fas fa-plus-circle"></i>
+        <span>Add Product</span>
+      </a>
+      <a href="/view-products" class="nav-item">
+        <i class="fas fa-boxes"></i>
+        <span>View Products</span>
+      </a>
+      <a href="/sales" class="nav-item">
+        <i class="fas fa-shopping-cart"></i>
+        <span>Sales</span>
+      </a>
+      <a href="/expense" class="nav-item">
+        <i class="fas fa-receipt"></i>
+        <span>Expenses</span>
+      </a>
+      <a href="/stats" class="nav-item">
+        <i class="fas fa-chart-pie"></i>
+        <span>Stats</span>
+      </a>
+      <a href="/pricing" class="nav-item">
+        <i class="fas fa-tags"></i>
+        <span>Pricing</span>
+      </a>
       
       <div class="subscription-info">
-        <% if (user.subscriptionExpiry) { %>
-          <span>
-            <%= subscriptionRemaining %> day<%= subscriptionRemaining == 1 ? '' : 's' %> left
-          </span>
-        <% } else { %>
-          <span>No active subscription</span>
-        <% } %>
+        <div class="subscription-badge">
+          <i class="fas fa-clock"></i>
+          <% if (user.subscriptionExpiry) { %>
+            <span>
+              <%= subscriptionRemaining %> day<%= subscriptionRemaining == 1 ? '' : 's' %> left
+            </span>
+          <% } else { %>
+            <span>No active subscription</span>
+          <% } %>
+        </div>
       </div>
-      <% if (user && user.isMaster) { %>
-        <a href="/profile" class="profile"><i class="fas fa-user"></i> Profile</a>
-      <% } %>
-      
-      <a href="/customerservice" class="profile"><i class="fas fa-headset"></i></a>
-      <a href="/logout" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
-    </div>
-  </nav>
 
+      <div class="nav-right">
+        <% if (user && user.isMaster) { %>
+          <a href="/profile" class="nav-icon-btn">
+            <i class="fas fa-user"></i>
+          </a>
+        <% } %>
+        
+        <a href="/customerservice" class="nav-icon-btn">
+          <i class="fas fa-headset"></i>
+        </a>
+        
+        <a href="/logout" class="logout-btn">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>Logout</span>
+        </a>
+      </div>
+    </div>
+    
+    <button class="mobile-menu-btn">
+      <i class="fas fa-bars"></i>
+    </button>
+  </div>
+</nav>
   <!-- Main Container -->
   <div class="page-container">
     <!-- LEFT SIDEBAR (Forms) -->
@@ -1034,7 +1074,7 @@ document.getElementById('openingForm').addEventListener('submit', async e => {
       // after 5 seconds, show the modal
       setTimeout(() => {
         document.getElementById('subscriptionModal').style.display = 'flex';
-      }, 5000);
+      }, 2000);
     }
 
     // when “Go to Pricing” is clicked, navigate there
@@ -1047,6 +1087,42 @@ document.getElementById('openingForm').addEventListener('submit', async e => {
   </script>
 
   <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
+
+  <script>
+    // Mobile menu functionality
+document.addEventListener('DOMContentLoaded', () => {
+  const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
+  const navLinks = document.querySelector('.nav-links');
+  
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener('click', () => {
+      navLinks.classList.toggle('active');
+      
+      // Change icon based on menu state
+      const icon = mobileMenuBtn.querySelector('i');
+      if (navLinks.classList.contains('active')) {
+        icon.classList.remove('fa-bars');
+        icon.classList.add('fa-times');
+      } else {
+        icon.classList.remove('fa-times');
+        icon.classList.add('fa-bars');
+      }
+    });
+  }
+  
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (navLinks && navLinks.classList.contains('active') && 
+        !e.target.closest('.nav-links') && 
+        !e.target.closest('.mobile-menu-btn')) {
+      navLinks.classList.remove('active');
+      const icon = mobileMenuBtn.querySelector('i');
+      icon.classList.remove('fa-times');
+      icon.classList.add('fa-bars');
+    }
+  });
+});
+  </script>
     <!-- subscription expired modal -->
   <div id="subscriptionModal" class="modal-overlay" style="display:none;">
     <div class="modal-content">
@@ -1055,6 +1131,8 @@ document.getElementById('openingForm').addEventListener('submit', async e => {
       <button id="renewBtn">Go to Pricing</button>
     </div>
   </div>
+
+
 </body>
 
 </body>

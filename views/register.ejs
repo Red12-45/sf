@@ -67,11 +67,20 @@
 
         <!-- Location -->
         <div class="form-group">
-          <label for="location"><i class="fas fa-map-marker-alt"></i> Location</label>
+          <label for="location"><i class="fas fa-map-marker-alt"></i> City</label>
           <input
             id="location" name="location" type="text" required
-            placeholder="City, State, Country"
+            placeholder="City"
             value="<%= oldInput?.location || '' %>">
+        </div>
+
+          <!-- Business Name -->
+         <div class="form-group">
+          <label for="businessName"><i class="fas fa-briefcase"></i> Business Name</label>
+          <input
+            id="businessName" name="businessName" type="text" required
+            placeholder="Enter your business name"
+            value="<%= oldInput?.businessName || '' %>">
         </div>
 
         <!-- Password -->
