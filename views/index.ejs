@@ -13,6 +13,7 @@
 </head>
 
 <body>
+  
   <!-- Navigation -->
   <nav>
     <div class="nav-brand">
@@ -1026,13 +1027,35 @@ document.getElementById('openingForm').addEventListener('submit', async e => {
       (document.getElementById('closingTime').value = getCurrentTimeString());
   </script>
   <!-- optional: restore client-side subscription redirect -->
+   <!-- subscription-expired popup trigger -->
   <script>
     const isSubscribed = <%= (user.subscriptionExpiry && subscriptionRemaining > 0) ? 'true' : 'false' %>;
     if (!isSubscribed) {
-      const nav = performance.getEntriesByType("navigation")[0] || {};
-      setTimeout(() => location.href = '/pricing', nav.type === "back_forward" ? 10000 : 5000);
+      // after 5 seconds, show the modal
+      setTimeout(() => {
+        document.getElementById('subscriptionModal').style.display = 'flex';
+      }, 5000);
     }
+
+    // when “Go to Pricing” is clicked, navigate there
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('renewBtn');
+      if (btn) {
+        btn.addEventListener('click', () => window.location.href = '/pricing');
+      }
+    });
   </script>
+
   <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
+    <!-- subscription expired modal -->
+  <div id="subscriptionModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <h2>Subscription Expired</h2>
+      <p>Your free trial or subscription has ended. To continue using SalesFlow, please renew below.</p>
+      <button id="renewBtn">Go to Pricing</button>
+    </div>
+  </div>
+</body>
+
 </body>
 </html>

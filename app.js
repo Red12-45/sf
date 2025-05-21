@@ -111,40 +111,54 @@ app.use((req, res, next) => {
 
 
 /* ─────────── Security middleware stack (NEW) ─────────── */
-app.use(helmet({
-  hidePoweredBy: true,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc    : ["'self'"],
-      scriptSrc     : [
-        "'self'",
-        "'unsafe-inline'",            // your inline <script> blocks
-
-        "'unsafe-eval'",       // ← NEW
-        "'wasm-unsafe-eval'",  // ← add only if you have WebAssembly code
-        "https://cdnjs.cloudflare.com",
-        "https://cdn.jsdelivr.net",
-        "https://www.gstatic.com",
-        "https://checkout.razorpay.com"
-      ],
-      scriptSrcAttr : ["'self'", "'unsafe-inline'"],  // your inline onclick=""
-      styleSrc      : [
-        "'self'",
-        "'unsafe-inline'",
-        "https://cdnjs.cloudflare.com",
-        "https://fonts.googleapis.com"
-      ],
-      connectSrc    : [
-        "'self'",
-        "https://*.firebaseio.com",
-        "https://firestore.googleapis.com",
-        "https://*.razorpay.com"
-      ],
-      imgSrc     : ["'self'", "data:"],
-      fontSrc    : ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"]
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://cdnjs.cloudflare.com",
+          "https://cdn.jsdelivr.net",
+          "https://www.gstatic.com",
+          // razorpay checkout script
+          "https://checkout.razorpay.com",
+        ],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "https://cdnjs.cloudflare.com",
+          "https://fonts.googleapis.com"
+        ],
+        connectSrc: [
+          "'self'",
+          "https://*.firebaseio.com",
+          "https://firestore.googleapis.com",
+          // for XHR/secure calls back to Razorpay
+          "https://*.razorpay.com"
+        ],
+        imgSrc: ["'self'", "data:", "blob:"],
+        fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
+        // **here** add the API domain so the checkout iframe can load
+        frameSrc: [
+          "'self'",
+          "https://checkout.razorpay.com",
+          "https://api.razorpay.com"
+        ],
+        // if you want to be extra-sure for legacy browsers:
+        childSrc: [
+          "'self'",
+          "https://checkout.razorpay.com",
+          "https://api.razorpay.com"
+        ]
+      }
     }
-  }
-}));
+  })
+);
+
+
 
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
 
@@ -448,12 +462,13 @@ async function processExpense(body, user) {
 }
 
 /* ─────────── Global subscription check middleware ─────────── */
+/* ─────────── Global subscription check middleware ─────────── */
 app.use((req, res, next) => {
   if (!req.session || !req.session.user) return next();
   const allowedPaths = [
-    '/', '/login', '/register', '/documentation', '/pricing',
+    '/', '/dashboard', '/login', '/register', '/documentation', '/pricing',
     '/subscribe/monthly', '/subscribe/half-yearly', '/subscribe/yearly',
-    '/payment-success', '/logout','/tnc', '/privacy', '/customerservice'
+    '/payment-success', '/logout', '/tnc', '/privacy', '/customerservice','/billing'
   ];
   if (allowedPaths.includes(req.path)) return next();
   const subscriptionExpiry = req.session.user.subscriptionExpiry;
@@ -462,6 +477,8 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+
 
 /* ─────────── PERMISSION HELPERS ─────────── */
 const requireMaster   = (req,res,next)=>
@@ -515,8 +532,9 @@ app.get('/register', (req, res) => {
   if (req.session && req.session.user) return res.redirect('/');
   res.render('register', { errorMessage: null, oldInput: {} });
 });
+
+
 // POST /register
-// POST /register  (🔒 hardened)
 app.post(
   '/register',
   [
@@ -561,11 +579,7 @@ app.post(
   ],
   async (req, res) => {
     const errors = validationResult(req);
-    const {
-      name, email, phone, address,
-      location, password
-    } = req.body;
-
+    const { name, email, phone, address, location, password } = req.body;
     const oldInput = { name, email, phone, address, location };
 
     if (!errors.isEmpty()) {
@@ -587,6 +601,7 @@ app.post(
         });
       }
 
+      // 1️⃣ Hash password and create user
       const hashed = await bcrypt.hash(password, 10);
       const userRef = await db.collection('users').add({
         name,
@@ -598,12 +613,21 @@ app.post(
         isMaster: true,
         createdAt: new Date()
       });
-      await userRef.update({ accountId: userRef.id });
+
+      // 2️⃣ Set accountId AND a 30-day trial expiry
+      const trialExpiry = new Date();
+      trialExpiry.setDate(trialExpiry.getDate() + 30);
+      await userRef.update({
+        accountId: userRef.id,
+        subscriptionExpiry: trialExpiry
+      });
+
+      // 3️⃣ Done → send them to login
       res.redirect('/login');
 
     } catch (err) {
       console.error(err);
-      res.status(500).render('register', {
+      return res.status(500).render('register', {
         errorMessage: 'Something went wrong. Please try again.',
         oldInput
       });
