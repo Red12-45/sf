@@ -159,6 +159,9 @@ app.use(
 );
 
 
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
 
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
 
@@ -171,8 +174,7 @@ const apiLimiter = rateLimit({
 });
 app.use(['/api', '/login', '/register'], apiLimiter);
 
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+
 
 // CSRF protection (MUST come _after_ session middleware)
 app.use(csrf());
