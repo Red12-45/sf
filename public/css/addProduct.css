@@ -376,25 +376,32 @@ body {
 .form-container form input[type="text"],
 .form-container form input[type="number"],
 .form-container form select {
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 0.95rem;
-  transition: all 0.2s ease;
-  background-color: #f9fafb;
+  padding: 1rem 1.2rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(145deg, #ffffff, #f8fafc);
   width: 100%;
   color: #334155;
   font-family: inherit;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04), inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  position: relative;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
-/* Improved Focus State */
+/* Advanced Focus State with Glow Effect */
 .form-container form input:focus,
 .form-container form select:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.15);
-  background-color: #fff;
+  background: linear-gradient(145deg, #ffffff, #fefeff);
+  box-shadow: 
+    0 0 0 4px rgba(58, 123, 213, 0.12),
+    0 4px 12px rgba(58, 123, 213, 0.15),
+    inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  transform: translateY(-1px);
 }
 
 /* Label color change when input is focused */

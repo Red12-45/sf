@@ -200,12 +200,12 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
             %>
               <tr id="product-row-<%= product.id %>" class="product-row <%= product.quantity<=10 ? 'low-stock' : '' %>">
                 <td class="expand-cell">
-                  <% if (product.batches && product.batches.length) { %>
-                    <button class="expand-button" onclick="toggleBatches('<%= product.id %>')">
-                      <i class="fas fa-chevron-down" id="icon-<%= product.id %>"></i>
-                    </button>
-                  <% } %>
-                </td>
+  <% if (product.batches && product.batches.length) { %>
+    <button class="expand-button" data-id="<%= product.id %>">
+      <i class="fas fa-chevron-down" id="icon-<%= product.id %>"></i>
+    </button>
+  <% } %>
+</td>
 
                 <td class="serial-number"><%= index+1 %></td>
                 <td class="product-name"><%= product.productName %></td>
@@ -440,6 +440,14 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
       icon.classList.toggle('fa-chevron-up');
       icon.classList.toggle('fa-chevron-down');
     }
+    document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.expand-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      toggleBatches(id);
+    });
+  });
+});
 
 /*  Deletion handler (products & batches) ---------------------- */
 document.addEventListener('submit', async e => {
