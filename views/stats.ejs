@@ -115,6 +115,17 @@
           <div class="kpi-trend positive" id="kpiMarginTrend">...</div>
         </div>
       </div>
+
+      <!-- GST Payable -->
+<div class="kpi-card">
+  <div class="kpi-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+  <div class="kpi-content">
+    <h3>GST Payable</h3>
+    <div class="kpi-value" id="kpiGst">...</div>
+    <div class="kpi-trend negative" id="kpiGstTrend">...</div>
+  </div>
+</div>
+
     </section>
 
     <!-- ────────── Controls (layout + global type) ────────── -->
@@ -190,6 +201,19 @@
         </div>
         <div class="chart-container"><canvas id="chartMonthlyExpense"></canvas></div>
       </div>
+
+
+      <!-- GST payable trend -->
+<div class="chart-card">
+  <h2><i class="fas fa-file-invoice-dollar"></i> Monthly GST Payable</h2>
+  <div class="chart-type-toggle" data-chart="chartMonthlyGst">
+    <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
+    <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
+    <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
+  </div>
+  <div class="chart-container"><canvas id="chartMonthlyGst"></canvas></div>
+</div>
+
     </section>
   </div>
 
@@ -204,12 +228,14 @@
 
     /* MONTH-level totals (keyed YYYY-MM) */
     window.MONTHLY_DATA = {
-      profit  : <%- JSON.stringify(monthlyProfit  || {}) %>,
-      expense : <%- JSON.stringify(monthlyExpense || {}) %>
-    };
+  profit  : <%- JSON.stringify(monthlyProfit   || {}) %>,
+  expense : <%- JSON.stringify(monthlyExpense || {}) %>,
+  gst     : <%- JSON.stringify(monthlyGst      || {}) %>   // ★ NEW
+};
 
-    /* exact revenue for the selected period */
-    window.TOTAL_REVENUE = <%- totalRevenue.toFixed(2) %>;
+window.TOTAL_REVENUE = <%- totalRevenue.toFixed(2) %>;
+window.TOTAL_GST     = <%- totalGstPayable.toFixed(2) %>;  // ★ NEW
+
   </script>
 
   <!-- Chart.js & plugin -->
@@ -255,21 +281,28 @@
           : (short ? fmtRupeeShort(v) : fmtRupee(v));
 
       /* ⇢⇢ KPI Calculation */
-      const calcKPIs = () => {
-        const totalRevenue = TOTAL_REVENUE;
-        let grossProfit = 0, totalExpense = 0;
+  const calcKPIs = () => {
+  const totalRevenue = TOTAL_REVENUE;
 
-        Object.values(MONTHLY_DATA.profit ).forEach(v => grossProfit  += v);
-        Object.values(MONTHLY_DATA.expense).forEach(v => totalExpense += v);
+  let grossProfit   = 0,
+      totalExpense  = 0,
+      totalGst      = 0;
 
-        const netProfit    = grossProfit - totalExpense;
-        const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
+  Object.values(MONTHLY_DATA.profit ).forEach(v => grossProfit  += v);
+  Object.values(MONTHLY_DATA.expense).forEach(v => totalExpense += v);
+  Object.values(MONTHLY_DATA.gst    ).forEach(v => totalGst     += v);
 
-        document.getElementById('kpiRevenue').textContent = fmtRupee(totalRevenue);
-        document.getElementById('kpiProfit' ).textContent = fmtRupee(netProfit);
-        document.getElementById('kpiExpense').textContent = fmtRupee(totalExpense);
-        document.getElementById('kpiMargin' ).textContent = profitMargin.toFixed(2) + '%';
-      };
+  const netProfit    = grossProfit - totalExpense - totalGst;
+  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
+
+  document.getElementById('kpiRevenue').textContent = fmtRupee(totalRevenue);
+document.getElementById('kpiProfit' ).textContent = fmtRupee(netProfit);
+document.getElementById('kpiExpense').textContent = fmtRupee(totalExpense);
+document.getElementById('kpiGst'    ).textContent = fmtRupee(totalGst);      // ★ NEW
+document.getElementById('kpiMargin' ).textContent = profitMargin.toFixed(2) + '%';
+
+};
+
       calcKPIs();
 
       /* ⇢⇢ Bar config helper */
@@ -397,6 +430,7 @@
 
       const profitSeries  = buildSeries(MONTHLY_DATA.profit);
       const expenseSeries = buildSeries(MONTHLY_DATA.expense);
+      const gstSeries = buildSeries(MONTHLY_DATA.gst);
 
       /* Build Net-Profit series */
       const allMonths = Array.from(new Set([
@@ -408,9 +442,12 @@
         labels : allMonths.map(m =>
           new Date(m + '-01').toLocaleString('default',{ month:'short', year:'2-digit' })
         ),
-        values : allMonths.map(m =>
-          +((profitSeries.map[m] || 0) - (expenseSeries.map[m] || 0)).toFixed(2)
-        )
+      values : allMonths.map(m =>
+  +((profitSeries.map[m] || 0) -
+     (expenseSeries.map[m] || 0) -
+     (MONTHLY_DATA.gst[m]  || 0)).toFixed(2)
+)
+
       };
 
       /* ⇢⇢ Data registry (id → meta) */
@@ -439,7 +476,14 @@
           labels    : expenseSeries.labels,
           values    : expenseSeries.values,
           valueType : 'Expense',    color : colors.red
-        }
+        },
+        chartMonthlyGst : {
+  labels    : gstSeries.labels,
+  values    : gstSeries.values,
+  valueType : 'GST Payable',
+  color     : colors.orange        // pick what you like
+},
+
       };
 
       /* ⇢⇢ Runtime registry (id → Chart instance) */

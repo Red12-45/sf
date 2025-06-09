@@ -145,9 +145,12 @@
       <!-- Overall Profit Summary Card -->
       <div class="formBox">
         <h2><i class="fas fa-chart-line"></i> Overall Profit Summary</h2>
-        <p>Total Profit (Sales Only): <strong><%= totalProfit.toFixed(2) %></strong></p>
-        <p>Total Expenses: <strong><%= totalExpenses.toFixed(2) %></strong></p>
-        <p>Net Profit: <strong><%= netProfit.toFixed(2) %></strong></p>
+    <p>Total Profit (Sales Only): <strong><%= totalProfit.toFixed(2) %></strong></p>
+<p>Total Expenses: <strong><%= totalExpenses.toFixed(2) %></strong></p>
+<p>GST Payable: <strong><%= totalGstPayable.toFixed(2) %></strong></p>
+<p>Net Profit <em>(after Expenses&nbsp;&amp;&nbsp;GST)</em>: <strong><%= netProfit.toFixed(2) %></strong></p>
+
+
       </div>
 
       <!-- Profit by Month Card/Table -->
@@ -158,21 +161,24 @@
         <% } else { %>
           <table>
             <thead>
-              <tr>
-                <th>Month (YYYY-MM)</th>
-                <th>Total Profit</th>
-                <th>Total Expenses</th>
-                <th>Net Profit</th>
-              </tr>
+            <tr>
+  <th>Month (YYYY-MM)</th>
+  <th>Total Profit</th>
+  <th>Total Expenses</th>
+  <th>GST Payable</th>
+  <th>Net Profit</th>
+</tr>
+
             </thead>
             <tbody>
               <% for (let m in profitByMonth) { %>
-                <tr>
-                  <td><%= m %></td>
-                  <td><%= profitByMonth[m].profit.toFixed(2) %></td>
-                  <td><%= profitByMonth[m].expenses.toFixed(2) %></td>
-                  <td><%= profitByMonth[m].netProfit.toFixed(2) %></td>
-                </tr>
+            <tr>
+  <td><%= m %></td>
+  <td><%= profitByMonth[m].profit.toFixed(2) %></td>
+  <td><%= profitByMonth[m].expenses.toFixed(2) %></td>
+  <td><%= profitByMonth[m].gst.toFixed(2) %></td>
+  <td><%= profitByMonth[m].netProfit.toFixed(2) %></td>
+</tr>
               <% } %>
             </tbody>
           </table>

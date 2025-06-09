@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tax Invoice – <%= invoiceNo %></title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/css/invoice.css?v=<%= v %>">
+<script>window.addEventListener('load',()=>window.print());</script>
+</head>
+<body>
+
+<section class="invoice">
+  <header>
+    <h1><%= shop.businessName || 'Your Business Name' %></h1>
+    <p>
+      <% if (shop.address) { %><%= shop.address %><br><% } %>
+      <% if (shop.phone)   { %>Phone: <%= shop.phone %><br><% } %>
+      <% if (shop.email)   { %>Email: <%= shop.email %><br><% } %>
+    </p>
+    <h2>Tax Invoice</h2>
+  </header>
+
+  <div class="invoice-meta">
+    <div><strong>Invoice #</strong> <%= invoiceNo %></div>
+    <div><strong>Date</strong> <%= saleDate %></div>
+    <div><strong>Time</strong>
+      <%= (createdAt.toDate ? createdAt.toDate()
+                            : new Date(createdAt))
+           .toLocaleTimeString('en-IN',{hour12:false}) %>
+    </div>
+  </div>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th>Description</th><th class="num">Qty</th><th class="num">Unit ₹</th>
+        <th class="num">Amount ₹</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% items.forEach(item => { %>
+        <tr>
+          <td><%= item.productName %></td>
+          <td class="num"><%= item.saleQuantity.toFixed(2) %>&nbsp;<%= item.unit %></td>
+          <td class="num"><%= item.retailPrice.toFixed(2) %></td>
+          <td class="num"><%= item.totalSale.toFixed(2) %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+    <tfoot>
+      <% if (outputTax) { %>
+      <tr>
+        <td colspan="3" class="num">GST</td>
+        <td class="num"><%= outputTax.toFixed(2) %></td>
+      </tr>
+      <% } %>
+      <tr>
+        <td colspan="3" class="total-label">Grand Total</td>
+        <td class="num total"><%= totalSale.toFixed(2) %></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <p class="thanks">Thank you for your purchase!</p>
+</section>
+
+</body>
+</html>

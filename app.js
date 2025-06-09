@@ -20,13 +20,46 @@ const Razorpay            = require('razorpay');
 const ExcelJS             = require('exceljs');      
 const compression         = require('compression');
 
+const cors    = require('cors');          // NEW
+const morgan  = require('morgan');        // NEW – logging (used in §3)
+
+const http    = require('http');
+const cluster = require('cluster');
+const os      = require('os');
+
 const crypto     = require('crypto');      
 const nodemailer = require('nodemailer'); 
 
-const cluster = require('cluster');
-const os = require('os');
+
 
 require('dotenv').config();
+
+/* ─────────── env sanity check ─────────── */
+const REQUIRED_ENV = [
+  'SESSION_SECRET',
+  'REDIS_URL',
+  'RAZORPAY_KEY_ID',
+  'RAZORPAY_KEY_SECRET',
+  'EMAIL_USER',
+  'EMAIL_PASS'
+];
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length) {
+  console.error('❌  Missing env vars →', missing.join(', '));
+  process.exit(1);
+}
+
+
+/* ─────────── global crash safety ─────────── */
+process.on('unhandledRejection', err => {
+  console.error('❌ Unhandled-Promise-Rejection:', err);
+});
+process.on('uncaughtException', err => {
+  console.error('❌ Uncaught-Exception:', err);
+  /* Optional: restart policy via PM2; here we exit so PM2 can respawn */
+  process.exit(1);
+});
+
 
 // ─────────── cache ───────────
 const NodeCache = require('node-cache');
@@ -39,18 +72,51 @@ const db = admin.firestore();
 
 // ─────────── Express base ───────────
 const app = express();
+app.disable('x-powered-by');              // hide Express fingerprint
+
+app.set('trust proxy', 1);     // behind Nginx / Cloudflare / Render / etc.
 
 
+
+/* ─────────── Redis client & session store ─────────── */
 const redisClient = createClient({
-  url: process.env.REDIS_URL
-});
-redisClient.connect().catch(console.error);  // connect to Redis (for node-redis v4)
+  url: process.env.REDIS_URL,
+  socket: {
+    /* keep idle connections alive (some cloud hosts kill quiet TCP streams) */
+    keepAlive: 10_000,                          // ping kernel every 10 s
 
-// 2. Create RedisStore instance for sessions
+    /* exponential back-off:  0.1 s → … → max 30 s */
+    reconnectStrategy: retries => Math.min(retries * 100, 30_000),
+
+    /* auto-TLS when the URL starts with “rediss://” (Redis Cloud, Upstash, etc.) */
+    tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined
+  }
+});
+
+/* nicer, de-noised logging */
+redisClient
+  .on('connect',     () => console.log('✅ Redis: connected'))
+  .on('ready',       () => console.log('✅ Redis: ready for commands'))
+  .on('reconnecting',({ attempt, delay }) =>
+                       console.warn(`⚠️ Redis: reconnect #${attempt} in ${delay} ms`))
+  .on('end',         () => console.warn('⚠️ Redis: connection closed'))
+  .on('error',       err => {
+    if (err.code !== 'ECONNRESET') {
+      console.error('Redis error:', err);       // real problems
+    } else {
+      /* ECONNRESET = server dropped the socket; client will auto-reconnect */
+      console.warn('⚠️ Redis ECONNRESET – reconnecting…');
+    }
+  });
+
+redisClient.connect().catch(console.error);     // kick off the first connect
+
+/* Express-session store */
 const redisStore = new RedisStore({
   client: redisClient,
-  prefix: 'sess:'  // optional key prefix in Redis, defaults to "sess:"
+  prefix: 'sess:'                                // default key prefix
 });
+
 
 app.use(session({
   store: redisStore,
@@ -58,11 +124,12 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 86400000,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax'
-  }
+  maxAge  : 24 * 60 * 60 * 1000,  // 1 day
+  httpOnly: true,
+  secure  : process.env.NODE_ENV === 'production',
+  sameSite: 'strict'
+}
+
 }));
 
 
@@ -110,7 +177,7 @@ app.use((req, res, next) => {
 
 
 
-/* ─────────── Security middleware stack (NEW) ─────────── */
+/* ─────────── Helmet – strict CSP ─────────── */
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -118,17 +185,13 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'",
-          "'unsafe-eval'",
           "https://cdnjs.cloudflare.com",
           "https://cdn.jsdelivr.net",
           "https://www.gstatic.com",
-          // razorpay checkout script
-          "https://checkout.razorpay.com",
+          "https://checkout.razorpay.com"
         ],
         styleSrc: [
           "'self'",
-          "'unsafe-inline'",
           "https://cdnjs.cloudflare.com",
           "https://fonts.googleapis.com"
         ],
@@ -136,31 +199,31 @@ app.use(
           "'self'",
           "https://*.firebaseio.com",
           "https://firestore.googleapis.com",
-          // for XHR/secure calls back to Razorpay
           "https://*.razorpay.com"
         ],
-        imgSrc: ["'self'", "data:", "blob:"],
-        fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
-        // **here** add the API domain so the checkout iframe can load
-        frameSrc: [
-          "'self'",
-          "https://checkout.razorpay.com",
-          "https://api.razorpay.com"
-        ],
-        // if you want to be extra-sure for legacy browsers:
-        childSrc: [
-          "'self'",
-          "https://checkout.razorpay.com",
-          "https://api.razorpay.com"
-        ]
+        imgSrc  : ["'self'", "data:", "blob:"],
+        fontSrc : ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
+        frameSrc: ["https://checkout.razorpay.com", "https://api.razorpay.com"],
+        objectSrc: ["'none'"],                 // disallow <object>, <embed>
+        baseUri : ["'self'"]                   // block <base> tag abuse
       }
-    }
+    },
+    crossOriginEmbedderPolicy: true,
+    crossOriginOpenerPolicy  : { policy: 'same-origin' },
+    crossOriginResourcePolicy: { policy: 'same-origin' }
   })
 );
 
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+
+/* ─────────── CORS & logging ─────────── */
+app.use(cors({
+  origin      : (process.env.ALLOWED_ORIGINS || '').split(','),
+  credentials : true
+}));
+app.use(morgan('combined'));              // Apache-style log line per request
 
 
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
@@ -275,14 +338,21 @@ async function computeDailySummary(accountId, saleDate) {
     totalOnlineSales: 0,
     totalNotPaidSales: 0,
     totalCashExpenses: 0,
-    totalOnlineExpenses: 0
+    totalOnlineExpenses: 0,
+    totalGstPayable: 0
   };
 
   salesSnap.forEach(doc => {
     const d = doc.data();
-    const amt = d.retailPrice * d.saleQuantity;
+      // Use the exact amount the cashier entered, falling back to per-unit × qty
+    const amt = (d.totalSale !== undefined)
+      ? +parseFloat(d.totalSale)                 // TOTAL typed in the form
+      : d.retailPrice * d.saleQuantity;          // legacy per-unit logic
+
     s.totalProfit += d.profit;
-    s.totalSales += amt;
+    s.totalSales  += amt;
+
+
     switch (d.status) {
       case 'Paid Cash':            s.totalCashSales += amt; break;
       case 'Paid Online':          s.totalOnlineSales += amt; break;
@@ -300,6 +370,8 @@ async function computeDailySummary(accountId, saleDate) {
         if (d.paymentDetail2) s.totalNotPaidSales += d.paymentDetail2;
         break;
     }
+    s.totalGstPayable += (d.gstPayable || 0);
+
   });
 
   expSnap.forEach(doc => {
@@ -335,96 +407,108 @@ async function computeDailySummary(accountId, saleDate) {
 // ────────────────────────────────────────────────────────────────
 /* ─────────── processSale (shared full‑page + Ajax) ─────────── */
 async function processSale(body, user) {
-  const accountId = user.accountId;
+  return db.runTransaction(async tx => {
+    const accountId = user.accountId;
 
-  // NOTICE:  `retailPrice` in the incoming body is now the **TOTAL Sale value**
-  let {
-    productId,
-    customProductId,
-    retailPrice: totalSaleInput,      // ① renamed for clarity
-    saleQuantity,
-    saleDate,
-    status,
-    extraInfo = '',
-    paymentDetail1,
-    paymentDetail2
-  } = body;
+    // ――― 0. Destructure & convert inputs ―――
+    let {
+      productId,
+      customProductId,
+      retailPrice: totalSaleInput,
+      saleQuantity,
+      saleDate,
+      status,
+      invoiceNo,
+      extraInfo = '',
+      paymentDetail1,
+      paymentDetail2
+    } = body;
 
-  saleQuantity     = +parseFloat(saleQuantity);
-  const totalSale  = +parseFloat(totalSaleInput);   // ② total amount    (₹)
+    saleQuantity    = +parseFloat(saleQuantity);
+    const totalSale = +parseFloat(totalSaleInput);
 
-  /* 1. resolve the product (unchanged) ---------------------------------- */
-  const selectedProductId = (customProductId?.trim()) ? customProductId : productId;
-  const productRef = db.collection('products').doc(selectedProductId);
-  const productDoc = await productRef.get();
-  if (!productDoc.exists || productDoc.data().accountId !== accountId)
-    throw new Error('Product not found or unauthorized');
+    // ――― 1. Load product row ―――
+    const selectedProductId = (customProductId?.trim()) ? customProductId : productId;
+    const productRef = db.collection('products').doc(selectedProductId);
+    const productDoc = await tx.get(productRef);
+    if (!productDoc.exists || productDoc.data().accountId !== accountId)
+      throw new Error('Product not found or unauthorized');
+    const product = productDoc.data();
 
-  const product = productDoc.data();
+    // ――― 2. FIFO consume batches ―――
+    const batchQuery = db.collection('stockBatches')
+                         .where('productId','==',selectedProductId)
+                         .where('remainingQuantity','>',0)
+                         .orderBy('batchDate','asc');
+    const batchSnap = await tx.get(batchQuery);
 
-  /* 2. FIFO stock consumption (unchanged) ------------------------------- */
-  const batchesSnap = await db.collection('stockBatches')
-    .where('productId', '==', selectedProductId)
-    .where('remainingQuantity', '>', 0)
-    .orderBy('batchDate', 'asc')
-    .get();
+    let remaining      = saleQuantity;
+    let totalWholesale = 0;
+    const batchesUsed  = [];
 
-  let remaining      = saleQuantity;
-  let totalWholesale = 0;
-  const batch        = db.batch();
-  const batchesUsed  = [];
+    for (const b of batchSnap.docs) {
+      if (remaining <= 0) break;
+      const d    = b.data();
+      const take = Math.min(d.remainingQuantity, remaining);
 
-  for (const b of batchesSnap.docs) {
-    if (remaining <= 0) break;
-    const d    = b.data();
-    const take = Math.min(d.remainingQuantity, remaining);
+      tx.update(b.ref, {
+        quantity         : admin.firestore.FieldValue.increment(-take),
+        remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
+      });
 
-    batch.update(b.ref, {
-      quantity         : admin.firestore.FieldValue.increment(-take),
-      remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
-    });
+      totalWholesale += d.purchasePrice * take;
+      batchesUsed.push({ id: b.id, qtyUsed: take });
+      remaining -= take;
+    }
+    if (remaining > 0) throw new Error('Not enough stock');
 
-    totalWholesale += d.purchasePrice * take;
-    batchesUsed.push({ id: b.id, qtyUsed: take });
-    remaining -= take;
-  }
+    // ――― 3. Profit & GST math (unchanged) ―――
+    const avgWholesale  = +(totalWholesale / saleQuantity).toFixed(2);
+    const retailPerUnit = +(totalSale / saleQuantity).toFixed(2);
+    const profitPerUnit = +(retailPerUnit - avgWholesale).toFixed(2);
+    const totalProfit   = +(profitPerUnit * saleQuantity).toFixed(2);
 
-  if (remaining > 0) throw new Error('Not enough stock');
-  await batch.commit();
+    let outputTax = 0, inputTax = 0, gstPayable = 0;
+    if (product.inclusiveTax) {
+      const r = product.inclusiveTax;
+      outputTax  = +(totalSale      * r / (100 + r)).toFixed(2);
+      inputTax   = +(totalWholesale * r / (100 + r)).toFixed(2);
+      gstPayable = +(outputTax - inputTax).toFixed(2);
+    }
 
-  /* 3. profit maths – re-keyed for TOTAL-SALE input --------------------- */
-  const avgWholesale  = +(totalWholesale / saleQuantity).toFixed(2);      // FIFO ₹ / unit
-  const retailPerUnit = +(totalSale / saleQuantity).toFixed(2);           // NEW
-  const profitPerUnit = +(retailPerUnit - avgWholesale).toFixed(2);
-  const totalProfit   = +(profitPerUnit * saleQuantity).toFixed(2);
+    // ――― 4. Insert sale row ―――
+    const saleRef = db.collection('sales').doc();   // pre-allocate ID
+    const saleData = {
+      productId      : selectedProductId,
+      productName    : product.productName,
+      unit           : product.unit || '',
+      wholesalePrice : avgWholesale,
+      retailPrice    : retailPerUnit,
+      saleQuantity,
+      saleDate,
+      invoiceNo,
+      totalSale,
+      profitPerUnit,
+      profit         : totalProfit,
+      status,
+      outputTax,
+      inputTax,
+      gstPayable,
+      extraInfo,
+      batchesUsed,
+      createdAt      : new Date(),
+      accountId,
+      ...(paymentDetail1 && { paymentDetail1:+parseFloat(paymentDetail1) }),
+      ...(paymentDetail2 && { paymentDetail2:+parseFloat(paymentDetail2) })
+    };
+    tx.set(saleRef, saleData);
 
-  /* 4. parent-product stock refresh (unchanged) ------------------------- */
-  await recalcProductFromBatches(selectedProductId);
+    // ――― 5. Recalc parent product stock ―――
+    await recalcProductFromBatches(selectedProductId, tx);   // overload accepts tx!
 
-  /* 5. write the sale --------------------------------------------------- */
-  const saleData = {
-    productId      : selectedProductId,
-    productName    : product.productName,
-    unit           : product.unit || '',
-    wholesalePrice : avgWholesale,   // FIFO ₹ / unit
-    retailPrice    : retailPerUnit,  // still stored *per-unit* for reports
-    saleQuantity,
-    saleDate,
-    totalSale,                       // NEW: exact user-entered amount
-    profitPerUnit,
-    profit         : totalProfit,
-    status,
-    extraInfo,
-    batchesUsed,
-    createdAt      : new Date(),
-    accountId,
-    ...(paymentDetail1 && { paymentDetail1:+parseFloat(paymentDetail1) }),
-    ...(paymentDetail2 && { paymentDetail2:+parseFloat(paymentDetail2) })
-  };
-
-  const saleRef = await db.collection('sales').add(saleData);
-  saleData.id   = saleRef.id;
-  return saleData;
+    saleData.id = saleRef.id;   // so the caller gets the ID
+    return saleData;
+  });
 }
 
 
@@ -1086,8 +1170,13 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     }
 
     // Summaries
-    let totalProfit = 0, totalSales = 0, totalCashSales = 0,
-        totalOnlineSales = 0, totalNotPaidSales = 0;
+   let totalProfit = 0,
+    totalSales = 0,
+    totalCashSales = 0,
+    totalOnlineSales = 0,
+    totalNotPaidSales = 0,
+    totalGstPayable = 0;          // ➊  add this
+
     sales.forEach(s => {
       totalProfit += s.profit;
       const amt = s.retailPrice * s.saleQuantity;
@@ -1109,6 +1198,9 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
           if (s.paymentDetail2) totalNotPaidSales += s.paymentDetail2;
           break;
       }
+        if (s.gstPayable !== undefined) {
+    totalGstPayable += +s.gstPayable;
+  }
     });
     let totalCashExpenses = 0, totalOnlineExpenses = 0;
     expenses.forEach(e => {
@@ -1136,13 +1228,18 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       subscriptionRemaining = Math.max(Math.ceil(diff / (1000*60*60*24)), 0);
     }
 
-    res.render('index', {
-      products, sales, expenses, saleDate, categories,
-      openingBalance, openingTime, closingTime,
-      totalProfit, totalSales, totalCashSales, totalOnlineSales, totalNotPaidSales,
-      totalCashExpenses, totalOnlineExpenses, finalCash, subscriptionRemaining,
-      user: req.session.user
-    });
+   res.render('index', {
+  products, sales, expenses, saleDate, categories,
+  openingBalance, openingTime, closingTime,
+  totalProfit, totalSales, totalCashSales,
+  totalOnlineSales, totalNotPaidSales,
+  totalCashExpenses, totalOnlineExpenses,
+  finalCash,
+  totalGstPayable,                // ➌  new line
+  subscriptionRemaining,
+  user: req.session.user
+});
+
   } catch (err) {
     res.status(500).send(err.toString());
   }
@@ -1237,6 +1334,7 @@ app.post(
         wholesalePrice,
         retailPrice,
         quantity,
+        inclusiveTax,
         selectedCategory,
         newCategory,
         selectedUnit,
@@ -1247,6 +1345,15 @@ app.post(
 const wp = +parseFloat(wholesalePrice);
 const rp = +parseFloat(retailPrice);
 const qty = +parseFloat(quantity);
+
+/* NEW ▸ inclusive-tax validation */
+let taxPct = null;
+if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
+  taxPct = +parseFloat(inclusiveTax);
+  if (!Number.isFinite(taxPct) || taxPct < 0 || taxPct > 100)
+    return res.status(400).send('Inclusive-Tax % must be between 0 and 100');
+}
+
 
 if (!Number.isFinite(wp) || wp <= 0 ||
     !Number.isFinite(rp) || rp <= 0 ||
@@ -1336,38 +1443,44 @@ const newRetail = +(
 ).toFixed(2);
 
 
-        await productRef.update({
-          quantity      : newQ,
-          wholesalePrice: newWholesale,
-          retailPrice   : newRetail,
-          profitMargin  : newRetail - newWholesale,
-          updatedAt     : new Date(),
-          ...(unit     && { unit }),
-          ...(category && { category })
-        });
+       await productRef.update({
+  quantity      : newQ,
+  wholesalePrice: newWholesale,
+  retailPrice   : newRetail,
+  profitMargin  : newRetail - newWholesale,
+  updatedAt     : new Date(),
+  ...(unit       && { unit }),
+  ...(category   && { category }),
+  // ⬇️  only overwrite when the user actually entered a value
+  ...(taxPct !== null && { inclusiveTax: taxPct })
+});
+
 
       /* --------------------------------------------------------------
          3. CREATE flow
       -------------------------------------------------------------- */
       } else {
         const data = {
-          productName : productName.trim(),
-          nameKey,
-          wholesalePrice: wp,
-          retailPrice   : rp,
-          quantity      : qty,
-          profitMargin  : rp - wp,
-          category,
-          unit,
-          createdAt     : new Date(),
-          accountId,
-          // legacy compat
-          oldestWholesale: wp,
-          oldestBatchQty : qty,
-          secondWholesale: null,
-          oldestRetail   : rp,
-          secondRetail   : null
-        };
+  productName     : productName.trim(),
+  nameKey,
+  wholesalePrice  : wp,
+  retailPrice     : rp,
+  quantity        : qty,
+  profitMargin    : rp - wp,
+  category,
+  unit,
+  createdAt       : new Date(),
+  accountId,
+  ...(taxPct !== null && { inclusiveTax: taxPct }), // ✅ persist GST %
+
+  /* ── legacy compat fields (unchanged) ── */
+  oldestWholesale : wp,
+  oldestBatchQty  : qty,
+  secondWholesale : null,
+  oldestRetail    : rp,
+  secondRetail    : null
+};
+
         productRef  = await db.collection('products').add(data);
         productSnap = { id: productRef.id, data: () => data };
       }
@@ -1515,7 +1628,8 @@ app.get('/download-products', isAuthenticated, restrictRoute('/view-products'), 
       }
 
       ws.addRow({
-        serial        : (idx+1).toFixed(2),
+        serial: idx + 1,
+
         productName   : p.productName,
         wholesalePrice: (+p.wholesalePrice).toFixed(2),
         retailPrice   : (+p.retailPrice).toFixed(2),
@@ -1587,29 +1701,47 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-
 
 
 async function recalcProductFromBatches(productId) {
-  const snap = await db.collection('stockBatches')
-    .where('productId','==',productId)
-    .get();
-  let totalRemaining=0, totalWholesale=0, totalRetail=0;
-  snap.docs.forEach(doc => {
-    const d = doc.data();
-    totalRemaining += d.remainingQuantity;
-    totalWholesale  += d.remainingQuantity * d.purchasePrice;
-    totalRetail     += d.remainingQuantity * d.salePrice;
+
+  await db.runTransaction(async tx => {
+
+    /* 1️⃣  Read every batch that still belongs to this product */
+    const batchQuery = db.collection('stockBatches')
+                         .where('productId', '==', productId);
+    const batchSnap  = await tx.get(batchQuery);
+
+    let totalRemaining = 0,
+        totalWholesale = 0,
+        totalRetail    = 0;
+
+    batchSnap.docs.forEach(doc => {
+      const d   = doc.data();
+      const qty = +d.remainingQuantity || 0;
+
+      totalRemaining += qty;
+      totalWholesale += qty * (+d.purchasePrice);
+      totalRetail    += qty * (+d.salePrice);
+    });
+
+    /* 2️⃣  Protect against divide-by-zero */
+    const safeDivide = (num, den) => den > 0 ? +(num / den).toFixed(2) : 0;
+
+    const newWholesale = safeDivide(totalWholesale, totalRemaining);
+    const newRetail    = safeDivide(totalRetail,    totalRemaining);
+    const profitMargin = +(newRetail - newWholesale).toFixed(2);
+
+    /* 3️⃣  Persist the freshly-computed figures */
+    tx.update(
+      db.collection('products').doc(productId),
+      {
+        quantity      : +totalRemaining.toFixed(3),
+        wholesalePrice: newWholesale,
+        retailPrice   : newRetail,
+        profitMargin,
+        updatedAt     : new Date()
+      }
+    );
   });
-  let newWholesale=0, newRetail=0, profitMargin=0;
-  if (totalRemaining>0) {
-    newWholesale = totalWholesale / totalRemaining;
-    newRetail    = totalRetail    / totalRemaining;
-    profitMargin = newRetail - newWholesale;
-  }
-  await db.collection('products').doc(productId).update({
-    quantity: totalRemaining,
-    wholesalePrice: newWholesale,
-    retailPrice: newRetail,
-    profitMargin,
-    updatedAt: new Date()
-  });
+
 }
 
 // GET /edit-stock-batch/:batchId
@@ -1631,15 +1763,20 @@ app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
       getUnits(req.session.user.accountId)
     ]);
 
-    // build a mutable batch object
-    const batchData = { id: batchSnap.id, ...batchSnap.data() };
+  // build a mutable batch object
+const batchData = { id: batchSnap.id, ...batchSnap.data() };
 
-    // if the batch has no category, fall back to the parent product's category
-    const productRef  = db.collection('products').doc(batchData.productId);
-    const productSnap = await productRef.get();
-    if (productSnap.exists) {
-      batchData.category = batchData.category || productSnap.data().category || '';
-    }
+// fall back to parent-product fields when missing
+const productRef  = db.collection('products').doc(batchData.productId);
+const productSnap = await productRef.get();
+if (productSnap.exists) {
+  const pData = productSnap.data();
+  batchData.category = batchData.category || pData.category || '';
+  if (batchData.inclusiveTax === undefined && pData.inclusiveTax !== undefined) {
+    batchData.inclusiveTax = pData.inclusiveTax;         // ★ NEW: pre-fill GST %
+  }
+}
+
 
     res.render('editStockBatch', {
       batch:      batchData,
@@ -1714,7 +1851,7 @@ app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
     const { batchId }   = req.params;
     const {
-      productName, purchasePrice, salePrice, quantity,
+      productName, purchasePrice, salePrice, quantity, inclusiveTax,
       newCategory, selectedCategory, newUnit, selectedUnit
     } = req.body;
 
@@ -1741,16 +1878,26 @@ if (!Number.isFinite(pp)  || pp  <= 0 ||
     !Number.isFinite(qty) || qty <= 0) {
   return res.status(400).send('Prices and quantity must be greater than zero');
 }
+// NEW ➜ Inclusive-Tax % validation (0–100 or blank)
+let taxPct = null;
+if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
+  taxPct = +parseFloat(inclusiveTax);
+  if (!Number.isFinite(taxPct) || taxPct < 0 || taxPct > 100) {
+    return res.status(400).send('Inclusive-Tax % must be between 0 and 100');
+  }
+}
 
 
     const unitRaw = newUnit?.trim() || selectedUnit || '';
     const catRaw  = newCategory?.trim() || selectedCategory || '';
 
 /* ----- keep previously-sold units intact ----- */
-const oldQty     = batchSnap.data().quantity          || 0;
-const oldRemain  = batchSnap.data().remainingQuantity ?? oldQty;
-const newRemain  = Math.max(0,
-                    +(oldRemain + (qty - oldQty)).toFixed(3)); // round to 3 dp
+/* ----- keep previously-sold units intact ----- */
+const oldQty    = batchSnap.data().quantity          || 0;
+const oldRemain = batchSnap.data().remainingQuantity ?? oldQty;
+const deltaQty  = qty - oldQty;
+const newRemain = Math.max(0, +(oldRemain + deltaQty).toFixed(3)); // NEW – never negative
+
 
 await batchRef.update({
   productName      : newName,
@@ -1792,13 +1939,15 @@ await batchRef.update({
 
     /* 3. refresh the surviving product doc ---------------------------- */
     const prodRef = db.collection('products').doc(targetProdId);
-    await prodRef.set({
-      productName : newName,
-      nameKey     : newNameKey,
-      ...(unitRaw && { unit: unitRaw.toLowerCase() }),
-      ...(catRaw  && { category: catRaw }),
-      updatedAt   : new Date()
-    }, { merge: true });
+ await prodRef.set({
+  productName : newName,
+  nameKey     : newNameKey,
+  ...(unitRaw && { unit: unitRaw.toLowerCase() }),
+  ...(catRaw  && { category: catRaw }),
+  ...(taxPct !== null && { inclusiveTax: taxPct }),  // ★ NEW
+  updatedAt   : new Date()
+}, { merge: true });
+
 
     await recalcProductFromBatches(targetProdId);
     cache.del(`categories_${accountId}`);
@@ -1828,7 +1977,9 @@ app.get(
   async (req, res) => {
     try {
       const accountId          = req.session.user.accountId;
-      const { saleDate, month, status } = req.query;
+      // (updated code)
+let { saleDate, month, status } = req.query;   // ← month is now mutable
+
 
       /* ─── 0. Work out the month window we’ll “lock” the badges to ─── */
       const pad = n => String(n).padStart(2, '0');
@@ -1860,30 +2011,53 @@ app.get(
         monthEnd    = `${nextY}-${pad(nextM)}-01`;
       }
 
-      /* ─── 1. Build the MAIN (filtered) queries for the table ─── */
-      let salesQ   = db.collection('sales')
-                       .where('accountId', '==', accountId)
-                       .orderBy('createdAt', 'desc');
-      let expenseQ = db.collection('expenses')
-                       .where('accountId', '==', accountId)
-                       .orderBy('createdAt', 'desc');
+   /* ─── 1. Build the MAIN (filtered) queries for the table ─── */
+let salesQ = db.collection('sales')
+               .where('accountId', '==', accountId)
+               .orderBy('createdAt', 'desc');
 
-      if (saleDate) {
-        salesQ   = salesQ  .where('saleDate', '==', saleDate);
-        expenseQ = expenseQ.where('saleDate', '==', saleDate);
-      } else if (month) {
-        salesQ   = salesQ
-                    .where('saleDate', '>=', monthStart)
-                    .where('saleDate', '<',  monthEnd);
-        expenseQ = expenseQ
-                    .where('saleDate', '>=', monthStart)
-                    .where('saleDate', '<',  monthEnd);
-      }
+let expenseQ = db.collection('expenses')
+                 .where('accountId', '==', accountId)
+                 .orderBy('createdAt', 'desc');
 
-      if (status && status.trim() && status !== 'All') {
-        salesQ   = salesQ  .where('status',        '==', status);
-        expenseQ = expenseQ.where('expenseStatus', '==', status);
-      }
+/* -----------------------------------------------------------
+   Apply date filters in priority order
+   1. ?saleDate=YYYY-MM-DD       → single-day view
+   2. ?month=YYYY-MM             → explicit month view
+   3. (no filter)                → **current month** view  ← NEW
+----------------------------------------------------------- */
+if (saleDate) {
+
+  // 1️⃣ single day
+  salesQ   = salesQ  .where('saleDate', '==', saleDate);
+  expenseQ = expenseQ.where('saleDate', '==', saleDate);
+
+} else if (month) {
+
+  // 2️⃣ explicit month from query-string
+  salesQ   = salesQ .where('saleDate', '>=', monthStart)
+                    .where('saleDate', '<',  monthEnd);
+  expenseQ = expenseQ.where('saleDate', '>=', monthStart)
+                     .where('saleDate', '<',  monthEnd);
+
+} else {
+
+  // 3️⃣ DEFAULT → use the *current* month window calculated above
+  salesQ   = salesQ .where('saleDate', '>=', monthStart)
+                    .where('saleDate', '<',  monthEnd);
+  expenseQ = expenseQ.where('saleDate', '>=', monthStart)
+                     .where('saleDate', '<',  monthEnd);
+
+  // populate <input type="month"> so it shows the current month pre-selected
+  month = monthStart.substring(0, 7);          // e.g. "2025-06"
+}
+
+/* (status filter unchanged) */
+if (status && status.trim() && status !== 'All') {
+  salesQ   = salesQ  .where('status',        '==', status);
+  expenseQ = expenseQ.where('expenseStatus', '==', status);
+}
+
 
       /* ─── 2. ***Separate*** queries for MONTH totals (no status filter) ─── */
       const monthSalesQ = db.collection('sales')
@@ -1910,15 +2084,20 @@ app.get(
       const monthSales     = monthSalesSnap.docs.map(d => d.data());
       const monthExpenses  = monthExpSnap .docs.map(d => d.data());
 
-      /* ─── 4. Compute MONTH-locked badge totals ─── */
-      const monthRevenueAmount = monthSales.reduce((sum, s) =>
-        sum + (s.totalSale !== undefined
-                 ? parseFloat(s.totalSale)
-                 : s.retailPrice * s.saleQuantity), 0);
+    /* ─── 4. Compute MONTH-locked badge totals ─── */
+const monthRevenueAmount = monthSales.reduce((sum, s) =>
+  sum + (s.totalSale !== undefined
+           ? parseFloat(s.totalSale)
+           : s.retailPrice * s.saleQuantity), 0);
 
-      const monthGrossProfit   = monthSales.reduce((sum, s) => sum + s.profit, 0);
-      const monthExpenseTotal  = monthExpenses.reduce((sum, e) => sum + e.expenseCost, 0);
-      const monthNetProfit     = monthGrossProfit - monthExpenseTotal;
+const monthGrossProfit   = monthSales.reduce((sum, s) => sum + s.profit, 0);
+const monthExpenseTotal  = monthExpenses.reduce((sum, e) => sum + e.expenseCost, 0);
+const monthNetProfit     = monthGrossProfit - monthExpenseTotal;
+
+/* NEW ➜ total GST you owe this month */
+const monthGstPayable    = monthSales.reduce((sum, s) =>
+  sum + (s.gstPayable || 0), 0);
+
 
       /* ─── 5. Opening balances & times (unchanged) ─── */
       const dateSet = new Set();
@@ -1945,24 +2124,26 @@ app.get(
       }));
 
       /* ─── 6. Render – pass MONTH totals to the badges ─── */
-      res.render('sales', {
-        sales,
-        expenses,
+     res.render('sales', {
+  sales,
+  expenses,
 
-        saleDate,
-        month,
-        status,
+  saleDate,
+  month,
+  status,
 
-        // *** BADGE figures (month-locked) ***
-        totalRevenueAmount   : monthRevenueAmount,
-        profitWithoutExpenses: monthGrossProfit,
-        totalExpensesAmount  : monthExpenseTotal,
-        profitAfterExpenses  : monthNetProfit,
+  // *** BADGE figures (month-locked) ***
+  totalRevenueAmount   : monthRevenueAmount,
+  profitWithoutExpenses: monthGrossProfit,
+  totalExpensesAmount  : monthExpenseTotal,
+  profitAfterExpenses  : monthNetProfit,
+  monthGstPayable,                       // ★ NEW
 
-        openingTimes,
-        openingBalances,
-        blockedActions: req.session.blockedActions || {}
-      });
+  openingTimes,
+  openingBalances,
+  blockedActions: req.session.blockedActions || {}
+});
+
 
     } catch (err) {
       res.status(500).send(err.toString());
@@ -2017,18 +2198,20 @@ app.get('/download-sales', isAuthenticated, restrictRoute('/sales'), async (req,
       { header: 'Total Sale ₹',    key: 'totalSale',       width: 14 },
       { header: 'Profit / Unit ₹', key: 'profitPerUnit',   width: 16 },
       { header: 'Total Profit ₹',  key: 'profit',          width: 14 },
+        { header: 'GST Payable ₹',   key: 'gstPayable',      width: 14 },
       { header: 'Status',          key: 'status',          width: 24 },
       { header: 'Extra Info',      key: 'extraInfo',       width: 32 },
       { header: 'Created At',      key: 'createdAt',       width: 22 }
     ];
 
-    sales.forEach(s => ws.addRow({
-      ...s,
-      totalSale:     s.totalSale || (s.retailPrice * s.saleQuantity),
-      createdAt:     (s.createdAt?.toDate ? s.createdAt.toDate()
-                                          : new Date(s.createdAt))
-                     .toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-    }));
+  sales.forEach(s => ws.addRow({
+  ...s,
+  totalSale   : s.totalSale || (s.retailPrice * s.saleQuantity),
+  gstPayable  : s.gstPayable !== undefined ? s.gstPayable : '',
+  createdAt   : (s.createdAt?.toDate ? s.createdAt.toDate()
+                                     : new Date(s.createdAt))
+                .toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+}));
 
     /* 3. stream it to the client */
     res.setHeader('Content-Type',
@@ -2220,65 +2403,78 @@ app.post('/delete-product/:productId', isAuthenticated, restrictAction('/view-pr
 app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
-    let salesQuery    = db.collection('sales').where('accountId','==',accountId);
-    let expenseQuery  = db.collection('expenses').where('accountId','==',accountId);
+    let salesQuery   = db.collection('sales').where('accountId','==',accountId);
+    let expenseQuery = db.collection('expenses').where('accountId','==',accountId);
     const { month, year } = req.query;
 
+    /* ---------- date filter logic (unchanged) ---------- */
     if (month) {
       const [y,m] = month.split('-');
       const startDate = `${month}-01`;
       let nextM=parseInt(m,10)+1, nextY=parseInt(y,10);
       if(nextM>12){ nextM=1; nextY++; }
       const nextMonth = `${nextY}-${pad(nextM)}-01`;
-      salesQuery    = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',nextMonth);
-      expenseQuery  = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',nextMonth);
+      salesQuery   = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',nextMonth);
+      expenseQuery = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',nextMonth);
     } else if (year) {
       const startDate = `${year}-01-01`;
       const endDate   = `${parseInt(year)+1}-01-01`;
-      salesQuery    = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
-      expenseQuery  = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
+      salesQuery   = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
+      expenseQuery = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
     } else {
       const currentYear = new Date().getFullYear();
       const startDate = `${currentYear}-01-01`;
       const endDate   = `${currentYear+1}-01-01`;
-      salesQuery    = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
-      expenseQuery  = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
+      salesQuery   = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
+      expenseQuery = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
     }
-
+    /* ---------- fetch ---------- */
     const [salesSnap, expSnap] = await Promise.all([salesQuery.get(), expenseQuery.get()]);
-    const sales = salesSnap.docs.map(d=>d.data());
+    const sales    = salesSnap.docs.map(d=>d.data());
     const expenses = expSnap.docs.map(d=>d.data());
 
-    const totalProfit   = sales.reduce((sum,s)=>(sum+s.profit),0);
-    const totalExpenses = expenses.reduce((sum,e)=>(sum+e.expenseCost),0);
-    const netProfit     = totalProfit - totalExpenses;
+    /* ---------- totals ---------- */
+    const totalProfit      = sales.reduce((sum,s)=> sum + s.profit,0);
+    const totalExpenses    = expenses.reduce((sum,e)=> sum + e.expenseCost,0);
+    const totalGstPayable  = sales.reduce((sum,s)=> sum + (s.gstPayable||0),0);
 
+    const netProfit        = totalProfit - totalExpenses - totalGstPayable;
+
+    /* ---------- month buckets ---------- */
     const profitByMonth = {};
-    sales.forEach(s => {
+    sales.forEach(s=>{
       const m = s.saleDate.substring(0,7);
-      if (!profitByMonth[m]) profitByMonth[m] = { profit:0, expenses:0, netProfit:0 };
+      if (!profitByMonth[m]) profitByMonth[m]={ profit:0, expenses:0, gst:0, netProfit:0 };
       profitByMonth[m].profit += s.profit;
+      profitByMonth[m].gst    += (s.gstPayable||0);
     });
-    expenses.forEach(e => {
+    expenses.forEach(e=>{
       const m = e.saleDate.substring(0,7);
-      if (!profitByMonth[m]) profitByMonth[m] = { profit:0, expenses:0, netProfit:0 };
+      if (!profitByMonth[m]) profitByMonth[m]={ profit:0, expenses:0, gst:0, netProfit:0 };
       profitByMonth[m].expenses += e.expenseCost;
     });
-    Object.keys(profitByMonth).forEach(m => {
-      profitByMonth[m].netProfit = profitByMonth[m].profit - profitByMonth[m].expenses;
+    Object.keys(profitByMonth).forEach(m=>{
+      const row = profitByMonth[m];
+      row.netProfit = row.profit - row.expenses - row.gst;
     });
 
-    res.render('profit', {
+    /* ---------- render ---------- */
+    res.render('profit',{
       sales, expenses,
-      totalProfit, totalExpenses: totalExpenses, netProfit,
+      totalProfit,
+      totalExpenses,
+      totalGstPayable,
+      netProfit,
       profitByMonth,
       monthFilter: month || '',
-      yearFilter: req.query.year || ''
+      yearFilter : req.query.year || ''
     });
   } catch (err) {
     res.status(500).send(err.toString());
   }
 });
+
+
 
 
 /* ─────────── SUBSCRIPTION & PAYMENT ROUTES ─────────── */
@@ -2739,6 +2935,7 @@ app.post('/api/delete-sale', isAuthenticated, restrictAction('/sales','delete'),
     const productId = sale.productId;
     const batchCol  = db.collection('stockBatches');
     const batchOps  = db.batch();
+    
     const missing   = [];
 
     if (Array.isArray(sale.batchesUsed)) {
@@ -2775,8 +2972,9 @@ if (hasWrites) {
       });
     }
 
-    await recalcProductFromBatches(productId);                            // NEW
-    await saleRef.delete();
+        await saleRef.delete();           // 1️⃣ remove sale first
+    await recalcProductFromBatches(productId);   // 2️⃣ then correct stock
+
 
     const { summary } = await computeDailySummary(sale.accountId, sale.saleDate);
     res.json({ success:true, summary });
@@ -2800,6 +2998,10 @@ app.get('/terms-and-conditions', (req, res) => {
 app.get('/privacy', (req, res) => {
   res.render('privacy');
 });
+
+
+/* ─────────── Health check ─────────── */
+app.get('/healthz', (req, res) => res.status(200).send('OK'));
 
 /* ─────────── PERFORMANCE INSIGHTS ─────────── */
 // GET /performance
@@ -2917,15 +3119,17 @@ app.get('/performance',
 
 /* ─────────── STATS DASHBOARD ─────────── */
 // GET /stats
+/* ─────────── STATS DASHBOARD ─────────── */
+// GET /stats
 app.get(
   '/stats',
   isAuthenticated,
-  restrictRoute('/stats'),                // keep if you use route-locking
+  restrictRoute('/stats'),          // keep if you use route-locking
   async (req, res) => {
     try {
       const accountId = req.session.user.accountId;
 
-      /* 1️⃣  Resolve date window → default = whole current year */
+      /* 1️⃣  Resolve date window → default = current month */
       const pad   = n => String(n).padStart(2, '0');
       const today = new Date();
       const currentYear = today.getFullYear();
@@ -2963,16 +3167,30 @@ app.get(
         endDate     = `${parseInt(year, 10) + 1}-01-01`;
         periodLabel = `Year ${year}`;
 
-      } else {                                             // DEFAULT = current year
-        startDate   = `${currentYear}-01-01`;
-        endDate     = `${currentYear + 1}-01-01`;
-        periodLabel = `Year ${currentYear}`;
-        uiYear      = currentYear;
+      } else {                                             // DEFAULT = current month
+        const curYM = `${currentYear}-${pad(today.getMonth() + 1)}`;
+
+        /* start of this month (YYYY-MM-01) */
+        startDate = `${curYM}-01`;
+
+        /* first day of NEXT month */
+        let nextM = today.getMonth() + 2,
+            nextY = currentYear;
+        if (nextM > 12) { nextM = 1; nextY++; }
+        endDate = `${nextY}-${pad(nextM)}-01`;
+
+        /* “June 2025”-style label */
+        periodLabel = new Date(startDate)
+                        .toLocaleString('default', { month: 'long', year: 'numeric' });
+
+        /* pre-select the current month in the filter panel */
+        uiMonth = curYM;
       }
 
+      /* how many rows to show in the Top-N lists (default 10) */
       const topN = Math.max(parseInt(topParam, 10) || 10, 1);
 
-      /* 2️⃣  Fetch sales + expenses in the window */
+      /* 2️⃣  Fetch sales + expenses in the window (+ GST map) */
       const [salesSnap, expSnap] = await Promise.all([
         db.collection('sales')
           .where('accountId', '==', accountId)
@@ -2989,22 +3207,65 @@ app.get(
       const sales    = salesSnap.docs.map(d => d.data());
       const expenses = expSnap .docs.map(d => d.data());
 
-      /* 3️⃣  Top-N product aggregation */
-      const prodMap = {};
+      /* 2-B ► build GST map & total */
+      const monthlyGst = {};        // { YYYY-MM : ₹ }
+      let   totalGstPayable = 0;
       sales.forEach(s => {
-        const id = s.productId;
-        if (!prodMap[id]) prodMap[id] = {
-          productName: s.productName,
-          unitsSold  : 0,
-          revenue    : 0,
-          profit     : 0
-        };
-        const qty = +s.saleQuantity;
-        prodMap[id].unitsSold += qty;
-        prodMap[id].revenue   += (s.totalSale !== undefined
-                                   ? +parseFloat(s.totalSale)
-                                   : s.retailPrice * qty);
-        prodMap[id].profit    += +s.profit;
+        const ym  = s.saleDate.substring(0, 7);
+        const gst = +s.gstPayable || 0;
+        monthlyGst[ym] = (monthlyGst[ym] || 0) + gst;
+        totalGstPayable += gst;
+      });
+
+      /* 3️⃣  Per-product aggregation + global totals */
+      const prodMap = {};
+      let totalProfit        = 0,
+          totalSales         = 0,
+          totalCashSales     = 0,
+          totalOnlineSales   = 0,
+          totalNotPaidSales  = 0;   // (kept for future badge work)
+
+      sales.forEach(s => {
+        /* ⓐ global totals */
+        totalProfit += s.profit;
+
+        const rowAmt = (s.totalSale !== undefined)
+          ? +parseFloat(s.totalSale)
+          : s.retailPrice * s.saleQuantity;
+        totalSales += rowAmt;
+
+        switch (s.status) {
+          case 'Paid Cash':                   totalCashSales   += rowAmt; break;
+          case 'Paid Online':                 totalOnlineSales += rowAmt; break;
+          case 'Not Paid':                    totalNotPaidSales+= rowAmt; break;
+          case 'Half Cash + Half Online':
+            if (s.paymentDetail1) totalCashSales   += s.paymentDetail1;
+            if (s.paymentDetail2) totalOnlineSales += s.paymentDetail2;
+            break;
+          case 'Half Cash + Not Paid':
+            if (s.paymentDetail1) totalCashSales   += s.paymentDetail1;
+            if (s.paymentDetail2) totalNotPaidSales+= s.paymentDetail2;
+            break;
+          case 'Half Online + Not Paid':
+            if (s.paymentDetail1) totalOnlineSales += s.paymentDetail1;
+            if (s.paymentDetail2) totalNotPaidSales+= s.paymentDetail2;
+            break;
+        }
+
+        /* ⓑ per-product bucket for Top-N tables */
+        const pid = s.productId;
+        if (!prodMap[pid]) {
+          prodMap[pid] = {
+            productName : s.productName,
+            unitsSold   : 0,
+            revenue     : 0,
+            profit      : 0
+          };
+        }
+        const p = prodMap[pid];
+        p.unitsSold += +s.saleQuantity;
+        p.revenue   += rowAmt;
+        p.profit    += s.profit;
       });
 
       const prodArr = Object.values(prodMap);
@@ -3047,11 +3308,13 @@ app.get(
         topProfit,
         monthlyProfit,
         monthlyExpense,
-        totalRevenue,            // <<──────── NEW
+        totalRevenue,           // overall turnover in the chosen window
         periodLabel,
         month : uiMonth,
         from  : uiFrom,
         to    : uiTo,
+        totalGstPayable,        // GST owed for the period
+        monthlyGst,             // bar-chart ready { ym:₹ }
         year  : uiYear,
         topN
       });
@@ -3062,6 +3325,7 @@ app.get(
     }
   }
 );
+
 
 
 /* ─────────── PASSWORD RESET ROUTES (MASTER-ONLY) ─────────── */
@@ -3185,10 +3449,140 @@ app.post('/reset-password', async (req, res) => {
   }
 });
 
+/* ─────────── SINGLE INVOICE (HTML-for-print) ─────────── */
+
+// GET /invoice/:saleId
+app.get(
+  '/invoice/:saleId',
+  isAuthenticated,                    // same guard you use elsewhere
+  async (req, res) => {
+    try {
+      const { saleId } = req.params;
+
+      // 1️⃣  Fetch the sale row
+      const saleSnap = await db.collection('sales').doc(saleId).get();
+      if (!saleSnap.exists)
+        return res.status(404).send('Sale not found');
+
+      const sale = { id: saleSnap.id, ...saleSnap.data() };
+
+      if (sale.accountId !== req.session.user.accountId)
+        return res.status(403).send('Access denied');
+
+      // 2️⃣  Pull business header
+      const userDoc = await db.collection('users')
+                              .doc(req.session.user.accountId).get();
+      const shop    = userDoc.exists ? userDoc.data() : {};
+
+      // 3️⃣  GST % helper
+      const gstPct = (sale.outputTax && sale.totalSale)
+        ? ((sale.outputTax / sale.totalSale) * 100).toFixed(2)
+        : '';
+
+      // 4️⃣  Render
+      res.render('invoice', {
+        sale,
+        gstPct,
+        shop,
+        v: res.locals.v,
+        csrfToken: req.csrfToken()
+      });
+    } catch (e) {
+      res.status(500).send(e.toString());
+    }
+  }
+);
+
+
+
+// GET /invoice-number/:invoiceNo  – print ALL sales that share this number
+app.get(
+  '/invoice-number/:invoiceNo',
+  isAuthenticated,
+  async (req, res) => {
+    try {
+      const { invoiceNo } = req.params;
+      const accountId     = req.session.user.accountId;
+
+      // 1️⃣ Fetch every sale row that belongs to this invoice
+      const snap = await db.collection('sales')
+                           .where('accountId','==',accountId)
+                           .where('invoiceNo','==',invoiceNo)
+                           .orderBy('createdAt','asc')
+                           .get();
+      if (snap.empty) return res.status(404).send('Invoice not found');
+
+      const items = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+
+      // 2️⃣ Business header
+      const shopDoc = await db.collection('users').doc(accountId).get();
+      const shop    = shopDoc.exists ? shopDoc.data() : {};
+
+      // 3️⃣ Totals
+      const totalSale = items.reduce((t,i)=>t + (+i.totalSale), 0);
+      const outputTax = items.reduce((t,i)=>t + (+i.outputTax||0), 0);
+
+      res.render('invoiceMulti', {
+        items,
+        invoiceNo,
+        saleDate : items[0].saleDate,
+        createdAt: items[0].createdAt,
+        totalSale,
+        outputTax,
+        shop,
+        v: res.locals.v,
+        csrfToken: req.csrfToken()
+      });
+
+    } catch (e) {
+      res.status(500).send(e.toString());
+    }
+  }
+);
 
 /* ─────────── START THE SERVER ─────────── */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const CPUS = parseInt(process.env.WEB_CONCURRENCY || os.cpus().length, 10);
+
+if (cluster.isPrimary) {
+  console.log(`🛡  Master ${process.pid} forking ${CPUS} workers…`);
+  for (let i = 0; i < CPUS; i++) cluster.fork();
+
+  /* respawn crashed workers (simple policy) */
+  cluster.on('exit', (worker, code, signal) => {
+    console.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
+    cluster.fork();
+  });
+
+} else {
+  const server = http.createServer(app).listen(PORT, () => {
+  console.log(`✅  Worker ${process.pid} listening on :${PORT}`);
 });
 
+/* ─── graceful shutdown + last-chance timer ─── */
+const graceful = async (reason) => {
+  console.warn(`⏳  Worker ${process.pid} shutting down – ${reason}`);
+  clearTimeout(forceTimeout);
+  server.close(() => console.log('HTTP closed'));
+  await Promise.allSettled([
+    redisClient.quit().catch(() => {}),
+    admin.app().delete().catch(() => {})
+  ]);
+  process.exit(0);
+};
+
+/* hard-kill safeguard (30 s) */
+const forceTimeout = setTimeout(() => {
+  console.error('❌  Force-killing stuck worker');
+  process.exit(1);
+}, 30_000).unref();
+
+process
+  .on('SIGTERM', () => graceful('SIGTERM'))
+  .on('SIGINT',  () => graceful('SIGINT'))
+  .on('uncaughtException', (err) => {
+    console.error('❌  Uncaught exception:', err);
+    graceful('uncaughtException');
+  });
+
+}

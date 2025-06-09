@@ -128,24 +128,34 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
   <span class="filter-title-with-badges">
     Filter
     <div class="summary-inline">
-      <div class="summary-item revenue">Revenue
-        <i class="fas fa-coins"></i>
-        <span>₹<%= totalRevenueAmount.toFixed(2) %></span>
-      </div>
-       <div class="summary-item  gross">Gross Profit
-        <i class="fas fa-arrow-trend-up"></i>
+  <div class="summary-item revenue">Revenue
+    <i class="fas fa-coins"></i>
+    <span>₹<%= totalRevenueAmount.toFixed(2) %></span>
+  </div>
 
-        <span>₹<%= profitWithoutExpenses.toFixed(2) %></span>
-      </div>
-      <div class="summary-item  net">Net Profit
-        <i class="fas fa-chart-line"></i>
-        <span>₹<%= profitAfterExpenses.toFixed(2) %></span>
-      </div>
-      <div class="summary-item expense">Expense
-        <i class="fas fa-money-bill-wave"></i>
-        <span>₹<%= totalExpensesAmount.toFixed(2) %></span>
-      </div>
-    </div>
+  <div class="summary-item gross">Gross&nbsp;Profit
+    <i class="fas fa-arrow-trend-up"></i>
+    <span>₹<%= profitWithoutExpenses.toFixed(2) %></span>
+  </div>
+
+  <div class="summary-item expense">Expense
+    <i class="fas fa-money-bill-wave"></i>
+    <span>₹<%= totalExpensesAmount.toFixed(2) %></span>
+  </div>
+
+  <!-- ★ NEW GST badge -->
+  <div class="summary-item gst">GST&nbsp;Payable
+    <i class="fas fa-file-invoice-dollar"></i>
+    <span>₹<%= monthGstPayable.toFixed(2) %></span>
+  </div>
+
+<div class="summary-item net">Net&nbsp;Profit&nbsp;after&nbsp;Expenses&nbsp;&amp;&nbsp;GST
+  <i class="fas fa-chart-line"></i>
+  <span>₹<%= (profitAfterExpenses - monthGstPayable).toFixed(2) %></span>
+</div>
+
+</div>
+
   </span>
 </h2>
 
@@ -233,7 +243,9 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
                   <th>Total Sale</th>
                   <th>Profit/Unit</th>
                   <th>Total Profit</th>
-                  <th>Status</th>
+<th>GST Payable</th>
+<th>Status</th>
+
                   
                   <th>Extra Info</th>
                   <th>Time</th>
@@ -281,6 +293,11 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
 
                   <td data-field="profitPerUnit"><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
                   <td data-field="profit"><%= parseFloat(sale.profit).toFixed(2) %></td>
+<td data-field="gstPayable">
+  <%= sale.gstPayable !== undefined
+       ? parseFloat(sale.gstPayable).toFixed(2)
+       : '-' %>
+</td>
 
                   <!-- Status inline edit with data-detail attributes -->
                   <td class="editable-status" 

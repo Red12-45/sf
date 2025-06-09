@@ -85,16 +85,21 @@ nav{
 }
 
 /* ─── KPI Cards ─── */
-.kpi-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1.25rem;margin-bottom:1.6rem}
+.kpi-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:1.25rem;margin-bottom:1.6rem}
+
 .kpi-card{
   background:var(--white);border-radius:var(--card-radius);padding:1.55rem;display:flex;align-items:center;
   box-shadow:var(--card-shadow);transition:var(--transition);overflow:hidden;position:relative;
 }
 .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
 .kpi-card:nth-child(1)::before{background:var(--gradient-orange)}
+
 .kpi-card:nth-child(2)::before{background:var(--gradient-green)}
 .kpi-card:nth-child(3)::before{background:var(--gradient-red)}
 .kpi-card:nth-child(4)::before{background:var(--gradient-blue)}
+.kpi-card:nth-child(5)::before{background:var(--gradient-blue)}
+.kpi-card:nth-child(5) .kpi-icon{background:var(--primary-light);color:var(--primary)}
+
 .kpi-card:hover{transform:translateY(-3px);box-shadow:0 15px 30px rgba(67,97,238,.1)}
 .kpi-icon{width:3.6rem;height:3.6rem;border-radius:1.05rem;display:flex;align-items:center;justify-content:center;margin-right:1.3rem;font-size:1.65rem}
 .kpi-card:nth-child(1) .kpi-icon{background:var(--warning-light);color:var(--warning)}

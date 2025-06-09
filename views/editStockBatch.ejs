@@ -140,50 +140,56 @@
           </div>
         </div>
 
-        <!-- ── Pricing & Quantity ───────────────────────────────────────── -->
-        <div class="form-row">
-          <div class="form-group">
-            <label for="purchasePrice">Purchase Price</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              id="purchasePrice"
-              name="purchasePrice"
-              value="<%= typeof batch.purchasePrice === 'number'
-          ? (+batch.purchasePrice).toFixed(2)
-          : '' %>"
+        <!-- ── Pricing, Tax & Quantity ─────────────────────────────────── -->
+<div class="form-row">
+  <!-- Purchase price -->
+  <div class="form-group">
+    <label for="purchasePrice" class="required">Purchase Price</label>
+    <input
+      type="number" step="0.01" min="0.01"
+      id="purchasePrice" name="purchasePrice"
+      value="<%= typeof batch.purchasePrice === 'number'
+                ? (+batch.purchasePrice).toFixed(2) : '' %>"
+      required
+    >
+  </div>
 
-              required
-            >
-          </div>
-          <div class="form-group">
-            <label for="salePrice">Retail Price</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              id="salePrice"
-              name="salePrice"
-              value="<%= typeof batch.salePrice === 'number'
-          ? (+batch.salePrice).toFixed(2)
-          : '' %>"
-              required
-            >
-          </div>
-          <div class="form-group">
-            <label for="quantity">Quantity</label>
-            <input
-              type="number"
-              step="any"
-              min="0.01"
-              id="quantity"
-              name="quantity"
-              value="<%= batch.quantity %>"
-              required
-            >
-          </div>
-        </div>
+  <!-- Retail price (TOTAL, tax-inclusive) -->
+  <div class="form-group">
+    <label for="salePrice" class="required">Retail Price</label>
+    <input
+      type="number" step="0.01" min="0.01"
+      id="salePrice" name="salePrice"
+      value="<%= typeof batch.salePrice === 'number'
+                ? (+batch.salePrice).toFixed(2) : '' %>"
+      required
+    >
+  </div>
+
+  <!-- NEW ➜ Inclusive GST % -->
+  <div class="form-group">
+    <label for="inclusiveTax">Inclusive&nbsp;Tax&nbsp;% (optional)</label>
+    <input
+      type="number" step="0.01" min="0" max="100"
+      id="inclusiveTax" name="inclusiveTax"
+      value="<%= batch.inclusiveTax !== undefined
+                ? (+batch.inclusiveTax).toFixed(2) : '' %>"
+      placeholder="e.g. 18"
+    >
+  </div>
+
+  <!-- Quantity -->
+  <div class="form-group">
+    <label for="quantity" class="required">Quantity</label>
+    <input
+      type="number" step="any" min="0.01"
+      id="quantity" name="quantity"
+      value="<%= batch.quantity %>"
+      required
+    >
+  </div>
+</div>
+
 
         <button type="submit">Update Batch</button>
       </form>

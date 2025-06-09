@@ -188,7 +188,18 @@
             <label for="totalProfit">Total Profit:</label>
             <input type="text" id="totalProfit" name="totalProfit" readonly>
           </div>
-      
+
+      <!-- Invoice Number -->
+<div>
+  <label for="invoiceNo">Invoice No:</label>
+  <input
+    type="text"
+    id="invoiceNo"
+    name="invoiceNo"
+    placeholder="e.g. INV-00123"
+    required>
+</div>
+
           <!-- Sale Date -->
           <div>
             <label for="saleDate">Sale Date:</label>
@@ -361,13 +372,14 @@
         <thead>
           <tr>
             <th>Product</th>
-            <th>FIFO Avg. Wholesale</th>
+            <th>Wholesale</th>
             <th>Sale Price</th>
             <th>Qty</th>
             <th>Unit</th>
             <th>Total Sale</th>
             <th>Profit/Unit</th>
             <th>Total Profit</th>
+            <th>GST Payable</th> 
             <th>Status</th>
             <th>Info</th>
             <th>Time</th>
@@ -385,6 +397,10 @@
               <td><%= parseFloat(sale.totalSale).toFixed(2) %></td>
               <td><%= parseFloat(sale.profitPerUnit).toFixed(2) %></td>
               <td><%= parseFloat(sale.profit).toFixed(2) %></td>
+              <td><%= sale.gstPayable !== undefined
+        ? parseFloat(sale.gstPayable).toFixed(2)
+        : '-' %></td>
+
               <td>
                 <%
                   let statusClass = "";
@@ -424,14 +440,27 @@
                 <%= saleTime %>
               </td>
 
-              <td style="text-align:center;">
-                <i
-                  class="fas fa-trash-alt delete-sale-btn"
-                  data-id="<%= sale.id %>"
-                  data-product-id="<%= sale.productId %>"
-                  data-quantity="<%= sale.saleQuantity %>"
-                ></i>
-              </td>
+<td style="text-align:center;">
+  <!-- Single-item invoice (kept) -->
+  <a href="/invoice/<%= sale.id %>" target="_blank" class="print-btn"
+     title="Print **this line only**">
+    <i class="fas fa-receipt"></i>
+  </a>
+  &nbsp;
+  <!-- NEW: multi-item invoice -->
+  <a href="/invoice-number/<%= sale.invoiceNo %>" target="_blank"
+     title="Print full invoice <%= sale.invoiceNo %>">
+    <i class="fas fa-file-invoice"></i>
+  </a>
+  &nbsp;
+  <i class="fas fa-trash-alt delete-sale-btn"
+     data-id="<%= sale.id %>"
+     data-product-id="<%= sale.productId %>"
+     data-quantity="<%= sale.saleQuantity %>"
+     title="Delete sale">
+  </i>
+</td>
+
             </tr>
           <% }); %>
         </tbody>
@@ -463,8 +492,10 @@
                 <th>Payment Method</th>
                 <th>Detail 1</th>
                 <th>Detail 2</th>
-                <th>Time</th>
-                <th>Action</th> 
+                <th>GST Payable</th>
+<th>Time</th>
+<th>Action</th>
+
               </tr>
             </thead>
             <tbody>
@@ -508,6 +539,12 @@
           <p data-label="Total Online Sales: " data-key="totalOnlineSales"><%= totalOnlineSales.toFixed(2) %></p>
           <p data-label="Total Not Paid Sales: " data-key="totalNotPaidSales"><%= totalNotPaidSales.toFixed(2) %></p>
           <p data-label="Total Cash Expenses: " data-key="totalCashExpenses"><%= totalCashExpenses.toFixed(2) %></p>
+         <p data-label="Total GST Payable: "
+   data-key="totalGstPayable">
+   <%= (typeof totalGstPayable !== 'undefined' ? totalGstPayable.toFixed(2) : '0.00') %>
+</p>
+
+
           <p data-label="Total Online Expenses: " data-key="totalOnlineExpenses"><%= totalOnlineExpenses.toFixed(2) %></p>
           <p data-label="Final Cash: " data-key="finalCash"><%= finalCash.toFixed(2) %></p>
         </div>
@@ -827,18 +864,40 @@ filterProductOptions(false);   // initialise list, keep collapsed
     saleQuantityInput.addEventListener('input', updateSaleCalculations);
     productSelect.addEventListener('change', updateSaleCalculations);
 
-    function ensureTableExists (wrapperSelector, tableId, theadHtml) {
-      if (document.querySelector(tableId)) return;
-      const wrap = document.querySelector(wrapperSelector);
-      if (!wrap) return;
-      wrap.innerHTML = `
-        <table id="${tableId.substring(1)}">
-          ${theadHtml}
-          <tbody></tbody>
-        </table>`;
-    }
+/* ──────────────────────────────────────────────────────────────
+   ensureTableExists – create the table **without** nuking the H2
+   (preserves header, kills “no-data” div, and keeps page dynamic)
+   ────────────────────────────────────────────────────────────── */
+function ensureTableExists (wrapperSelector, tableId, theadHtml) {
+  /* already present? --> nothing to do */
+  if (document.querySelector(tableId)) return;
+
+  const wrap = document.querySelector(wrapperSelector);
+  if (!wrap) return;
+
+  /* 1) zap the temporary “No data” notice, if any                  */
+  const noData = wrap.querySelector('.no-data');
+  if (noData) noData.remove();
+
+  /* 2) build the <table> element                                   */
+  const table = document.createElement('table');
+  table.id = tableId.substring(1);              // strip leading “#”
+  table.innerHTML = `${theadHtml}<tbody></tbody>`;
+
+  /* 3) insert *after* the existing <h2> header (keeps header alive) */
+  const header = wrap.querySelector('h2');
+  if (header) {
+    header.insertAdjacentElement('afterend', table);
+  } else {
+    /* fallback – shouldn’t happen, but be safe */
+    wrap.appendChild(table);
+  }
+}
+
 
     const cash = n => Number(n).toFixed(2);
+    const qty  = n => Number(n).toFixed(2);   // NEW – always 2-dp for quantities
+
     const postJSON = async (url, obj) => {
       const r = await fetch(url, {
         method: 'POST',
@@ -850,14 +909,30 @@ filterProductOptions(false);   // initialise list, keep collapsed
       if (!j.success) throw new Error(j.error || 'Unknown error');
       return j;
     };
-    const refreshSummary = s => {
-      for (const [k, v] of Object.entries(s)) {
-        const el = document.querySelector(`#summaryContent [data-key="${k}"]`);
-        if (el) el.textContent = el.textContent.replace(/[-+]?\d+(\.\d+)?$/, cash(v));
-      }
-      document.getElementById('summaryContent').style.display = 'block';
-      document.getElementById('toggleSummary').textContent = 'Hide Summary';
-    };
+ /* ──────────────────────────────────────────────────────────────
+   refreshSummary – robust label-agnostic updater
+   (no regex → always overwrites the number, so *every* figure
+    – including Total GST Payable – swaps instantly after any
+    add / delete / update action)
+   ────────────────────────────────────────────────────────────── */
+const refreshSummary = summary => {
+  const money = n => Number(n).toFixed(2);
+
+  for (const [key, value] of Object.entries(summary)) {
+    const el = document.querySelector(
+                `#summaryContent [data-key="${key}"]`
+              );
+    if (!el) continue;
+
+    if (key === 'totalSales') el.dataset.raw = value;  // keep raw number
+    el.textContent = money(value);                     // ← one-shot replace
+  }
+
+  /* auto-open the summary so the user sees the fresh totals */
+  document.getElementById('summaryContent').style.display = 'block';
+  document.getElementById('toggleSummary').textContent    = 'Hide Summary';
+};
+
 
     /* ── helper: recompute total expense and patch header ── */
 function refreshExpenseHeader () {
@@ -913,48 +988,61 @@ document.getElementById('saleForm').addEventListener('submit', async e => {
       opt.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
     }
 
-    /* build a new row and prepend it */
-    const row = document.createElement('tr');
-    const pillClass = {
-      'Paid Cash'  : 'status-cash',
-      'Paid Online': 'status-online',
-      'Not Paid'   : 'status-notpaid'
-    }[s.status] || 'status-mixed';
+/* build a new row and prepend it */
+const row = document.createElement('tr');
+const pillClass = {
+  'Paid Cash'  : 'status-cash',
+  'Paid Online': 'status-online',
+  'Not Paid'   : 'status-notpaid'
+}[s.status] || 'status-mixed';
 
-    row.innerHTML = `
-      <td>${s.productName}</td>
-      <td>${cash(s.wholesalePrice)}</td>
-      <td>${cash(s.retailPrice)}</td>
-      <td>${s.saleQuantity}</td>
-      <td>${s.unit || '-'}</td>
-      <td>${cash(s.totalSale)}</td>
-      <td>${cash(s.profitPerUnit)}</td>
-      <td>${cash(s.profit)}</td>
-      <td>
-        <span class="status-pill ${pillClass}">${s.status}</span>
-        ${(s.paymentDetail1 || s.paymentDetail2)
-          ? `<br><small>${s.paymentDetail1 ? 'Detail1: ' + s.paymentDetail1 : ''}${s.paymentDetail2 ? ', Detail2: ' + s.paymentDetail2 : ''}</small>`
-          : ''} 
-      </td>
-      <td>${s.extraInfo || '-'}</td>
-      <td>${new Date(s.createdAt).toLocaleTimeString()}</td>
-      <td style="text-align:center;">
-        <i class="fas fa-trash-alt delete-sale-btn" data-id="${s.id}"></i>
-      </td>`;
+row.innerHTML = `
+  <td>${s.productName}</td>
+  <td>${cash(s.wholesalePrice)}</td>
+  <td>${cash(s.retailPrice)}</td>
+  <td>${qty(s.saleQuantity)}</td>              <!-- formatted immediately -->
+  <td>${s.unit || '-'}</td>
+  <td>${cash(s.totalSale)}</td>
+  <td>${cash(s.profitPerUnit)}</td>
+  <td>${cash(s.profit)}</td>
+  <td>${s.gstPayable !== undefined ? cash(s.gstPayable) : '-'}</td>
+  <td>
+    <span class="status-pill ${pillClass}">${s.status}</span>
+    ${(s.paymentDetail1 || s.paymentDetail2)
+        ? `<div class="status-details-inline">
+             ${s.paymentDetail1 ? `<span><strong>Detail1:</strong> ₹${cash(s.paymentDetail1)}</span>` : ''}
+             ${s.paymentDetail2 ? `<span><strong>Detail2:</strong> ₹${cash(s.paymentDetail2)}</span>` : ''}
+           </div>` : ''}
+  </td>
+  <td>${s.extraInfo || '-'}</td>
+  <td>${new Date(s.createdAt).toLocaleTimeString('en-IN',
+        {hour12:false,timeZone:'Asia/Kolkata'})}</td>
+  <td style="text-align:center;">
+    <a href="/invoice/${s.id}" target="_blank" class="print-btn"
+       title="Print this line only"><i class="fas fa-receipt"></i></a>&nbsp;
+    <a href="/invoice-number/${s.invoiceNo}" target="_blank"
+       title="Print full invoice ${s.invoiceNo}"><i class="fas fa-file-invoice"></i></a>&nbsp;
+    <i class="fas fa-trash-alt delete-sale-btn"
+       data-id="${s.id}" data-product-id="${s.productId}"
+       data-quantity="${s.saleQuantity}" title="Delete sale"></i>
+  </td>`;
+
+
 
     /* ensure table exists, then prepend */
-    ensureTableExists(
-      '.tables-content div:first-child',
-      '#salesTable',
-      `<thead>
-         <tr>
-           <th>Product</th><th>FIFO Avg. Wholesale</th><th>Sale Price</th>
-           <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
-           <th>Total Profit</th><th>Status</th><th>Info</th><th>Time</th>
-           <th>Action</th>
-         </tr>
-       </thead>`
-    );
+  ensureTableExists(
+  '.tables-content div:first-child',
+  '#salesTable',
+  `<thead>
+     <tr>
+       <th>Product</th><th>Wholesale</th><th>Sale Price</th>
+       <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
+       <th>Total Profit</th><th>GST Payable</th><th>Status</th>
+       <th>Info</th><th>Time</th><th>Action</th>
+     </tr>
+   </thead>`
+);
+
     document.querySelector('#salesTable tbody').prepend(row);
 
     /* refresh UI */

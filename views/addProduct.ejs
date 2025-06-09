@@ -152,23 +152,39 @@
             </div>
           </div>
 
-          <!-- Pricing & Quantity -->
-          <div class="form-row">
-            <div class="form-group">
-              <label for="wholesalePrice" class="required">Purchase Price</label>
-              <div class="input-group">
-                <span class="input-group-prefix">₹</span>
-                <input type="number" step="0.01" min="0.01" id="wholesalePrice" name="wholesalePrice" required placeholder="0.00" class="input-with-prefix">
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="retailPrice" class="required">Retail Price</label>
-              <div class="input-group">
-                <span class="input-group-prefix">₹</span>
-                <input type="number" step="0.01"  min="0.01" id="retailPrice" name="retailPrice" required placeholder="0.00" class="input-with-prefix">
-              </div>
-            </div>
-          </div>
+         <!-- Pricing, Tax & Quantity -->
+<div class="form-row">
+  <!-- Purchase price -->
+  <div class="form-group">
+    <label for="wholesalePrice" class="required">Purchase Price</label>
+    <div class="input-group">
+      <span class="input-group-prefix">₹</span>
+      <input type="number" step="0.01" min="0.01"
+             id="wholesalePrice" name="wholesalePrice"
+             required placeholder="0.00" class="input-with-prefix">
+    </div>
+  </div>
+
+  <!-- Retail price (TOTAL, tax-inclusive) -->
+  <div class="form-group">
+    <label for="retailPrice" class="required">Retail Price</label>
+    <div class="input-group">
+      <span class="input-group-prefix">₹</span>
+      <input type="number" step="0.01"  min="0.01"
+             id="retailPrice" name="retailPrice"
+             required placeholder="0.00" class="input-with-prefix">
+    </div>
+  </div>
+
+  <!-- NEW: optional inclusive GST% -->
+  <div class="form-group">
+    <label for="inclusiveTax">Inclusive&nbsp;Tax&nbsp;% (optional)</label>
+    <input type="number" step="0.01" min="0" max="100"
+           id="inclusiveTax" name="inclusiveTax"
+           placeholder="e.g. 18">
+  </div>
+</div>
+
 
           <div class="form-row">
             <div class="form-group">
