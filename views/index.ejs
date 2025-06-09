@@ -45,6 +45,19 @@
         <i class="fas fa-chart-pie"></i>
         <span>Stats</span>
       </a>
+          <!-- NEW ─────────── Invoice helper ─────────── -->
+      <% if (currentInvoiceNo) { %>
+        <div class="nav-item current-invoice">
+          <i class="fas fa-file-invoice"></i>
+          <span>Invoice #<%= currentInvoiceNo %></span>
+          <a href="/invoice/finish" class="nav-action">Finish</a>
+        </div>
+      <% } else { %>
+        <a href="/invoice/start" class="nav-item">
+          <i class="fas fa-file-invoice"></i>
+          <span>Start Invoice</span>
+        </a>
+      <% } %>
       <a href="/pricing" class="nav-item">
         <i class="fas fa-tags"></i>
         <span>Pricing</span>
@@ -188,17 +201,16 @@
             <label for="totalProfit">Total Profit:</label>
             <input type="text" id="totalProfit" name="totalProfit" readonly>
           </div>
-
-      <!-- Invoice Number -->
+      <!-- Auto-generated, read-only Invoice No -->
 <div>
-  <label for="invoiceNo">Invoice No:</label>
-  <input
-    type="text"
-    id="invoiceNo"
-    name="invoiceNo"
-    placeholder="e.g. INV-00123"
-    required>
+  <label>Invoice No:</label>
+  <span class="readonly-field">
+    <%= currentInvoiceNo || '—' %>
+  </span>
+  <input type="hidden" name="invoiceNo"
+         value="<%= currentInvoiceNo || '' %>">
 </div>
+
 
           <!-- Sale Date -->
           <div>
@@ -1211,6 +1223,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
   </script>
+
+  <script>
+  if (!<%= JSON.stringify(currentInvoiceNo) %>) {
+    document.querySelector('#saleForm button[type="submit"]').disabled = true;
+  }
+</script>
     <!-- subscription expired modal -->
   <div id="subscriptionModal" class="modal-overlay" style="display:none;">
     <div class="modal-content">

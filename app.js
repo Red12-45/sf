@@ -1,31 +1,31 @@
 // app.js – Ultimate Optimized version (Ajax‑ready, no missing pieces)
 
-const express             = require('express');
-const admin               = require('firebase-admin');
-const path                = require('path');
-const bcrypt              = require('bcrypt');
+const express = require('express');
+const admin = require('firebase-admin');
+const path = require('path');
+const bcrypt = require('bcrypt');
 const session = require('express-session');
 const { createClient } = require('redis');       // using Node Redis client
 const { RedisStore } = require('connect-redis'); // import RedisStore from connect-redis
 
 // ─────────── security deps (NEW) ───────────
-const helmet        = require('helmet');              // 🔒
-const rateLimit     = require('express-rate-limit');  // 🔒
-const csrf          = require('csurf');               // 🔒
+const helmet = require('helmet');              // 🔒
+const rateLimit = require('express-rate-limit');  // 🔒
+const csrf = require('csurf');               // 🔒
 const { body, validationResult } = require('express-validator'); // 🔒
 
 
-const favicon             = require('serve-favicon');
-const Razorpay            = require('razorpay');
-const ExcelJS             = require('exceljs');      
-const compression         = require('compression');
+const favicon = require('serve-favicon');
+const Razorpay = require('razorpay');
+const ExcelJS = require('exceljs');      
+const compression = require('compression');
 
-const cors    = require('cors');          // NEW
-const morgan  = require('morgan');        // NEW – logging (used in §3)
+const cors = require('cors');          // NEW
+const morgan = require('morgan');        // NEW – logging (used in §3)
 
-const http    = require('http');
+const http = require('http');
 const cluster = require('cluster');
-const os      = require('os');
+const os = require('os');
 
 const crypto     = require('crypto');      
 const nodemailer = require('nodemailer'); 
@@ -179,19 +179,23 @@ app.use((req, res, next) => {
 
 /* ─────────── Helmet – strict CSP ─────────── */
 app.use(
-  helmet({
+helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
+          "'unsafe-inline'",
+          
           "https://cdnjs.cloudflare.com",
           "https://cdn.jsdelivr.net",
           "https://www.gstatic.com",
-          "https://checkout.razorpay.com"
+          // razorpay checkout script
+          "https://checkout.razorpay.com",
         ],
         styleSrc: [
           "'self'",
+          "'unsafe-inline'",
           "https://cdnjs.cloudflare.com",
           "https://fonts.googleapis.com"
         ],
@@ -199,18 +203,25 @@ app.use(
           "'self'",
           "https://*.firebaseio.com",
           "https://firestore.googleapis.com",
+          // for XHR/secure calls back to Razorpay
           "https://*.razorpay.com"
         ],
-        imgSrc  : ["'self'", "data:", "blob:"],
-        fontSrc : ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
-        frameSrc: ["https://checkout.razorpay.com", "https://api.razorpay.com"],
-        objectSrc: ["'none'"],                 // disallow <object>, <embed>
-        baseUri : ["'self'"]                   // block <base> tag abuse
+        imgSrc: ["'self'", "data:", "blob:"],
+        fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
+        // **here** add the API domain so the checkout iframe can load
+        frameSrc: [
+          "'self'",
+          "https://checkout.razorpay.com",
+          "https://api.razorpay.com"
+        ],
+        // if you want to be extra-sure for legacy browsers:
+        childSrc: [
+          "'self'",
+          "https://checkout.razorpay.com",
+          "https://api.razorpay.com"
+        ]
       }
-    },
-    crossOriginEmbedderPolicy: true,
-    crossOriginOpenerPolicy  : { policy: 'same-origin' },
-    crossOriginResourcePolicy: { policy: 'same-origin' }
+    }
   })
 );
 
@@ -591,6 +602,39 @@ const restrictAction = (routeId, action) => (req, res, next) => {
     return res.status(403).send('Access denied');
   next();
 };
+
+/* ─────────── Invoice sequencing ───────────
+   Keeps an atomic counter in  Firestore:
+   counters/{accountId}  { invoiceSeq: N }
+   Returns strings like  INV-000123
+─────────────────────────────────────────── */
+async function getNextInvoiceNo(accountId) {
+  const ctrRef = db.collection('counters').doc(accountId);
+  return db.runTransaction(async tx => {
+    const snap = await tx.get(ctrRef);
+    const seq  = snap.exists && typeof snap.data().invoiceSeq === 'number'
+                   ? snap.data().invoiceSeq + 1
+                   : 1;
+    tx.set(ctrRef, { invoiceSeq: seq }, { merge: true });
+    return 'INV-' + String(seq).padStart(6, '0');
+  });
+}
+
+/* ─────────── Start / finish invoice “session” ─────────── */
+app.get('/invoice/start', isAuthenticated, async (req, res) => {
+  if (!req.session.currentInvoiceNo) {
+    req.session.currentInvoiceNo =
+      await getNextInvoiceNo(req.session.user.accountId);
+  }
+  res.redirect('/dashboard');
+});
+
+app.get('/invoice/finish', isAuthenticated, (req, res) => {
+  delete req.session.currentInvoiceNo;
+  res.redirect('/dashboard');
+});
+
+
 
 /* ─────────── Razorpay ─────────── */
 const razorpay = new Razorpay({
@@ -1105,6 +1149,8 @@ app.get('/', (req, res) => {
 });
 
 
+
+
 /* ─────────── DASHBOARD (was GET "/") ─────────── */
 // -- identical logic, ONLY the path changed to "/dashboard" --
 app.get('/dashboard', isAuthenticated, async (req, res) => {
@@ -1235,10 +1281,14 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   totalOnlineSales, totalNotPaidSales,
   totalCashExpenses, totalOnlineExpenses,
   finalCash,
-  totalGstPayable,                // ➌  new line
+  totalGstPayable,
   subscriptionRemaining,
-  user: req.session.user
+  user: req.session.user,
+
+  /* NEW ▼ passes the in-progress number (or null) to every template */
+  currentInvoiceNo : req.session.currentInvoiceNo || null
 });
+
 
   } catch (err) {
     res.status(500).send(err.toString());
@@ -3559,23 +3609,34 @@ if (cluster.isPrimary) {
   console.log(`✅  Worker ${process.pid} listening on :${PORT}`);
 });
 
-/* ─── graceful shutdown + last-chance timer ─── */
+/* ─── graceful shutdown + hard-kill safeguard ───
+   The 30-second “kill” timer now starts **only after**
+   we begin shutting down, so the worker no longer
+   suicides every 30 s during normal operation.          */
+
+let killTimer = null;                         // will be set in graceful()
+
 const graceful = async (reason) => {
+  if (killTimer) return;                      // already running – ignore dupe
   console.warn(`⏳  Worker ${process.pid} shutting down – ${reason}`);
-  clearTimeout(forceTimeout);
+
+  // begin last-chance timer (30 s)
+  killTimer = setTimeout(() => {
+    console.error('❌  Force-killing stuck worker (grace period elapsed)');
+    process.exit(1);
+  }, 30_000).unref();
+
   server.close(() => console.log('HTTP closed'));
+
   await Promise.allSettled([
     redisClient.quit().catch(() => {}),
     admin.app().delete().catch(() => {})
   ]);
+
+  clearTimeout(killTimer);                    // shutdown finished in time
   process.exit(0);
 };
 
-/* hard-kill safeguard (30 s) */
-const forceTimeout = setTimeout(() => {
-  console.error('❌  Force-killing stuck worker');
-  process.exit(1);
-}, 30_000).unref();
 
 process
   .on('SIGTERM', () => graceful('SIGTERM'))
