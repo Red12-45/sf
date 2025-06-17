@@ -45,19 +45,8 @@
         <i class="fas fa-chart-pie"></i>
         <span>Stats</span>
       </a>
-          <!-- NEW ─────────── Invoice helper ─────────── -->
-      <% if (currentInvoiceNo) { %>
-        <div class="nav-item current-invoice">
-          <i class="fas fa-file-invoice"></i>
-          <span>Invoice #<%= currentInvoiceNo %></span>
-          <a href="/invoice/finish" class="nav-action">Finish</a>
-        </div>
-      <% } else { %>
-        <a href="/invoice/start" class="nav-item">
-          <i class="fas fa-file-invoice"></i>
-          <span>Start Invoice</span>
-        </a>
-      <% } %>
+   
+
       <a href="/pricing" class="nav-item">
         <i class="fas fa-tags"></i>
         <span>Pricing</span>
@@ -147,14 +136,19 @@
               <% products
                    .sort((a, b) => a.productName.localeCompare(b.productName))
                    .forEach(product => { %>
-                    <option
-                    value="<%= product.id %>"
-                    data-category="<%= product.category %>"
-                    data-retail="<%= product.retailPrice %>"
-                    data-quantity="<%= product.quantity %>"
-                    data-batches='<%= JSON.stringify(product.batches || []) %>'>
-                    <%= product.productName %> (Stock: <%= parseFloat(product.quantity).toFixed(2) %>)
-                  </option>
+                    <<%
+  /* stringify once and keep only safe Base64 text inside the attribute */
+  const b64Batches =
+        Buffer.from(JSON.stringify(product.batches || [])).toString('base64');
+%>
+<option
+  value="<%= product.id %>"
+  data-category="<%= product.category %>"
+  data-retail="<%= product.retailPrice %>"
+  data-quantity="<%= product.quantity %>"
+  data-batches="<%= b64Batches %>">
+  <%= product.productName %> (Stock: <%= parseFloat(product.quantity).toFixed(2) %>)
+</option>
                   
               <% }); %>
             </select>
@@ -204,11 +198,14 @@
       <!-- Auto-generated, read-only Invoice No -->
 <div>
   <label>Invoice No:</label>
-  <span class="readonly-field">
-    <%= currentInvoiceNo || '—' %>
-  </span>
-  <input type="hidden" name="invoiceNo"
-         value="<%= currentInvoiceNo || '' %>">
+<span id="invoiceNoDisplay" class="readonly-field">
+  <%= currentInvoiceNo || '—' %>
+</span>
+
+<input type="hidden" id="invoiceNoHidden"
+       name="invoiceNo"
+       value="<%= currentInvoiceNo || '' %>">
+
 </div>
 
 
@@ -353,26 +350,44 @@
   <!-- Sales Table -->
   <div>
     <h2>
- <span id="salesHeader">
-  Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)
+      <span id="salesHeader">
+        Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)
+      </span>
+
+ <!-- ▸ INVOICE ACTIONS (AJAX, zero-refresh) -->
+<span id="invoiceActionWrap">
+  <% if (!currentInvoiceNo) { %>
+    <a href="#" id="startInvoiceBtn" class="invoice-action-btn btn-blue ajax-invoice">
+      <i class="fas fa-file-invoice"></i>
+      <span>Start Invoice</span>
+    </a>
+  <% } else { %>
+    <span class="current-invoice-label">
+      <i class="fas fa-file-invoice"></i>
+      Invoice #<%= currentInvoiceNo %>
+    </span>
+    <a href="#" id="finishInvoiceBtn" class="invoice-action-btn btn-green ajax-invoice">
+      <i class="fas fa-check-circle"></i>
+      <span>Finish</span>
+    </a>
+  <% } %>
 </span>
 
-<!-- live-updating time chips -->
-<span id="dateInfo" class="date-info">
-  <span id="openTimeWrap" <%= openingTime ? '' : 'style="display:none;"' %>>
 
-    <i class="far fa-clock"></i>
-    Open: <span id="openTimeDisplay"><%= openingTime || '-' %></span>
-  </span>
-
-  <span id="closeTimeWrap"
-        <%= closingTime ? '' : 'style="display:none;"' %>>
-    &nbsp;<i class="fas fa-clock"></i>
-    Close: <span id="closeTimeDisplay"><%= closingTime || '-' %></span>
-  </span>
-</span>
-
+      <!-- live-updating time chips -->
+      <span id="dateInfo" class="date-info">
+        <span id="openTimeWrap" <%= openingTime ? '' : 'style="display:none;"' %>>
+          <i class="far fa-clock"></i>
+          Open: <span id="openTimeDisplay"><%= openingTime || '-' %></span>
+        </span>
+        <span id="closeTimeWrap" <%= closingTime ? '' : 'style="display:none;"' %>>
+          &nbsp;<i class="fas fa-clock"></i>
+          Close: <span id="closeTimeDisplay"><%= closingTime || '-' %></span>
+        </span>
+      </span>
     </h2>
+
+
 
     <% if (sales.length === 0) { %>
       <div class="no-data">
@@ -454,16 +469,16 @@
 
 <td style="text-align:center;">
   <!-- Single-item invoice (kept) -->
-  <a href="/invoice/<%= sale.id %>" target="_blank" class="print-btn"
-     title="Print **this line only**">
-    <i class="fas fa-receipt"></i>
-  </a>
+<a href="/invoice/<%= sale.id %>" target="_blank" rel="noopener noreferrer" class="print-btn"
+   title="Print **this line only**">
+  <i class="fas fa-receipt"></i>
+</a>
   &nbsp;
   <!-- NEW: multi-item invoice -->
-  <a href="/invoice-number/<%= sale.invoiceNo %>" target="_blank"
-     title="Print full invoice <%= sale.invoiceNo %>">
-    <i class="fas fa-file-invoice"></i>
-  </a>
+<a href="/invoice-number/<%= sale.invoiceNo %>" target="_blank" rel="noopener noreferrer"
+   title="Print full invoice <%= sale.invoiceNo %>">
+  <i class="fas fa-file-invoice"></i>
+</a>
   &nbsp;
   <i class="fas fa-trash-alt delete-sale-btn"
      data-id="<%= sale.id %>"
@@ -480,65 +495,61 @@
     <% } %>
   </div>
 
+<!-- Expenses Table (rendered only when at least one expense exists) -->
+<div>
+  <% if (expenses && expenses.length > 0) { %>
+    <% const totalExpenseAmount =
+         expenses.reduce((sum, exp) =>
+           sum + parseFloat(exp.expenseCost || 0), 0); %>
 
-      <!-- Expenses Table -->
-      <div>
-        <% 
-          let totalExpenseAmount = 0;
-          if (expenses && expenses.length > 0) {
-            totalExpenseAmount = expenses.reduce((sum, exp) => sum + parseFloat(exp.expenseCost || 0), 0);
-          }
-        %>
-        <h2>
-          Expenses for <%= saleDate %>
-          <% if (expenses.length > 0) { %>
-            (Expense Amount: ₹<%= totalExpenseAmount.toFixed(2) %>)
-          <% } %>
-        </h2>
-        <% if (expenses && expenses.length > 0) { %>
-          <table id="expenseTable">
-            <thead>
-              <tr>
-                <th>Expense Reason</th>
-                <th>Expense Cost</th>
-                <th>Payment Method</th>
-                <th>Detail 1</th>
-                <th>Detail 2</th>
-                <th>GST Payable</th>
-<th>Time</th>
-<th>Action</th>
+    <h2>
+      Expenses for <%= saleDate %>
+      (Expense Amount: ₹<%= totalExpenseAmount.toFixed(2) %>)
+    </h2>
 
-              </tr>
-            </thead>
-            <tbody>
-              <% expenses.forEach(function(expense){ %>
-                <tr>
-                  <td><%= expense.expenseReason %></td>
-                  <td><%= expense.expenseCost.toFixed(2) %></td>
-                  <td><%= expense.expenseStatus %></td>
-                  <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : "-" %></td>
-                  <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : "-" %></td>
-                  <td>
-                    <% let expenseTime = expense.createdAt.toDate
-                         ? expense.createdAt.toDate().toLocaleTimeString()
-                         : new Date(expense.createdAt).toLocaleTimeString();
-                    %>
-                    <%= expenseTime %>
-                  </td>
-                  <td style="text-align:center;">
-                    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="<%= expense.id %>"></i>
-                  </td>
-                </tr>
-              <% }); %>
-            </tbody>
-          </table>
-        <% } else { %>
-          <div class="no-data">
-            <i class="fas fa-file-invoice-dollar"></i>
-            <p>No expenses recorded for this date.</p>
-          </div>
-        <% } %>
-      </div>
+    <table id="expenseTable">
+      <thead>
+        <tr>
+          <th>Expense Reason</th>
+          <th>Expense Cost</th>
+          <th>Payment Method</th>
+          <th>Detail&nbsp;1</th>
+          <th>Detail&nbsp;2</th>
+          <th>GST Payable</th>
+          <th>Time</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% expenses.forEach(expense => { %>
+          <tr>
+            <td><%= expense.expenseReason %></td>
+            <td><%= expense.expenseCost.toFixed(2) %></td>
+            <td><%= expense.expenseStatus %></td>
+            <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : '-' %></td>
+            <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : '-' %></td>
+            <td><%= expense.gstPayable !== undefined
+                    ? expense.gstPayable.toFixed(2)
+                    : '-' %></td>
+            <td>
+              <%
+                const expenseTime = expense.createdAt.toDate
+                  ? expense.createdAt.toDate().toLocaleTimeString()
+                  : new Date(expense.createdAt).toLocaleTimeString();
+              %>
+              <%= expenseTime %>
+            </td>
+            <td style="text-align:center;">
+              <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
+                 data-id="<%= expense.id %>"></i>
+            </td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  <% } %> <!-- nothing is rendered when there are zero expenses -->
+</div>
+
 
       <!-- Summary Section -->
       <div id="summarySection" class="formBox">
@@ -563,6 +574,23 @@
       </div>
     </div>
   </div>
+
+  <!-- XSS-escape helper: always load *before* any other inline JS -->
+<script>
+  /**
+   * escapeHtml(str) – converts &, <, >, ", ' into safe entities
+   * so template literals injected with .innerHTML can’t break out.
+   */
+  function escapeHtml (str = '') {
+    return String(str)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+</script>
+
 
   <!-- Client‑Side Script -->
   <script>
@@ -849,8 +877,10 @@ filterProductOptions(false);   // initialise list, keep collapsed
   }
 
   /* FIFO averages from remaining batches */
-  let batches = [];
-  try { batches = JSON.parse(opt.getAttribute('data-batches') || '[]'); } catch {}
+const b64      = opt.getAttribute('data-batches') || 'W10='; // default "[]"
+let batches    = [];
+try { batches  = JSON.parse(atob(b64)); } catch {}
+
   const cmp   = computeFIFO(batches, qty);          // { wholesale, retail }
   const avgWh = cmp.wholesale;                      // ₹ / unit (FIFO)
 
@@ -913,8 +943,11 @@ function ensureTableExists (wrapperSelector, tableId, theadHtml) {
     const postJSON = async (url, obj) => {
       const r = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json','X-CSRF-Token': '<%= csrfToken %>'
- },
+      headers: {
+  'Content-Type': 'application/json',
+  'X-CSRF-Token': "<%= csrfToken %>"
+}
+,
         body: JSON.stringify(obj)
       });
       const j = await r.json();
@@ -1001,6 +1034,8 @@ document.getElementById('saleForm').addEventListener('submit', async e => {
     }
 
 /* build a new row and prepend it */
+/* build a new row and prepend it – HTML now escaped */
+/* build a new row and prepend it – every dynamic value is escaped */
 const row = document.createElement('tr');
 const pillClass = {
   'Paid Cash'  : 'status-cash',
@@ -1009,35 +1044,40 @@ const pillClass = {
 }[s.status] || 'status-mixed';
 
 row.innerHTML = `
-  <td>${s.productName}</td>
+  <td>${escapeHtml(s.productName)}</td>
   <td>${cash(s.wholesalePrice)}</td>
   <td>${cash(s.retailPrice)}</td>
-  <td>${qty(s.saleQuantity)}</td>              <!-- formatted immediately -->
-  <td>${s.unit || '-'}</td>
+  <td>${qty(s.saleQuantity)}</td>
+  <td>${escapeHtml(s.unit || '-')}</td>
   <td>${cash(s.totalSale)}</td>
   <td>${cash(s.profitPerUnit)}</td>
   <td>${cash(s.profit)}</td>
   <td>${s.gstPayable !== undefined ? cash(s.gstPayable) : '-'}</td>
   <td>
-    <span class="status-pill ${pillClass}">${s.status}</span>
+    <span class="status-pill ${pillClass}">${escapeHtml(s.status)}</span>
     ${(s.paymentDetail1 || s.paymentDetail2)
         ? `<div class="status-details-inline">
              ${s.paymentDetail1 ? `<span><strong>Detail1:</strong> ₹${cash(s.paymentDetail1)}</span>` : ''}
              ${s.paymentDetail2 ? `<span><strong>Detail2:</strong> ₹${cash(s.paymentDetail2)}</span>` : ''}
            </div>` : ''}
   </td>
-  <td>${s.extraInfo || '-'}</td>
+  <td>${s.extraInfo ? escapeHtml(s.extraInfo) : '-'}</td>
   <td>${new Date(s.createdAt).toLocaleTimeString('en-IN',
-        {hour12:false,timeZone:'Asia/Kolkata'})}</td>
+        { hour12:false, timeZone:'Asia/Kolkata' })}</td>
   <td style="text-align:center;">
-    <a href="/invoice/${s.id}" target="_blank" class="print-btn"
+    <a href="/invoice/${escapeHtml(s.id)}"
+       target="_blank" rel="noopener noreferrer" class="print-btn"
        title="Print this line only"><i class="fas fa-receipt"></i></a>&nbsp;
-    <a href="/invoice-number/${s.invoiceNo}" target="_blank"
-       title="Print full invoice ${s.invoiceNo}"><i class="fas fa-file-invoice"></i></a>&nbsp;
+    <a href="/invoice-number/${escapeHtml(s.invoiceNo)}"
+       target="_blank" rel="noopener noreferrer"
+       title="Print full invoice ${escapeHtml(s.invoiceNo)}"><i class="fas fa-file-invoice"></i></a>&nbsp;
     <i class="fas fa-trash-alt delete-sale-btn"
-       data-id="${s.id}" data-product-id="${s.productId}"
-       data-quantity="${s.saleQuantity}" title="Delete sale"></i>
+       data-id="${escapeHtml(s.id)}"
+       data-product-id="${escapeHtml(s.productId)}"
+       data-quantity="${escapeHtml(s.saleQuantity)}"
+       title="Delete sale"></i>
   </td>`;
+
 
 
 
@@ -1096,17 +1136,20 @@ document.getElementById('expenseForm').addEventListener('submit', async e => {
     );
 
     /* build row and prepend */
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${ex.expenseReason}</td>
-      <td>${cash(ex.expenseCost)}</td>
-      <td>${ex.expenseStatus}</td>
-      <td>${ex.expenseDetail1 || '-'}</td>
-      <td>${ex.expenseDetail2 || '-'}</td>
-      <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
-      <td style="text-align:center;">
-        <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn" data-id="${ex.id}"></i>
-      </td>`;
+const row = document.createElement('tr');
+row.innerHTML = `
+  <td>${escapeHtml(ex.expenseReason)}</td>
+  <td>${cash(ex.expenseCost)}</td>
+  <td>${escapeHtml(ex.expenseStatus)}</td>
+  <td>${ex.expenseDetail1 ? cash(ex.expenseDetail1) : '-'}</td>
+  <td>${ex.expenseDetail2 ? cash(ex.expenseDetail2) : '-'}</td>
+  <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
+  <td style="text-align:center;">
+    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
+       data-id="${escapeHtml(ex.id)}"></i>
+  </td>`;
+
+
     document.querySelector('#expenseTable tbody').prepend(row);
 
     /* refresh summary and clean up */
@@ -1155,6 +1198,76 @@ document.getElementById('openingForm').addEventListener('submit', async e => {
 
 
   </script>
+
+
+<!-- ─── Invoice AJAX helpers (spam-safe) ─── -->
+<script>
+/* keep current invoice number in JS memory */
+let currentInvoiceNo = <%= currentInvoiceNo ? `'${currentInvoiceNo}'` : 'null' %>;
+
+/* one shared flag = true while a request is running */
+let invoiceBusy = false;
+
+/* tiny helpers to “disable” <a> elements (anchors don’t support .disabled) */
+const lockBtn   = el => { if (el){ el.style.pointerEvents='none'; el.classList.add('btn-lock'); } };
+const unlockBtn = el => { if (el){ el.style.pointerEvents='';     el.classList.remove('btn-lock'); } };
+
+async function startInvoice (btn) {
+  if (invoiceBusy) return;          // already sending – ignore extra click
+  invoiceBusy = true;  lockBtn(btn);
+  try {
+    const res = await postJSON('/api/invoice/start', {});
+    currentInvoiceNo = res.invoiceNo;
+    updateInvoiceUI();
+  } catch (e) { alert(e.message); }
+  finally     { unlockBtn(btn); invoiceBusy = false; }
+}
+
+async function finishInvoice (btn) {
+  if (invoiceBusy) return;
+  invoiceBusy = true;  lockBtn(btn);
+  try {
+    await postJSON('/api/invoice/finish', {});
+    currentInvoiceNo = null;
+    updateInvoiceUI();
+  } catch (e) { alert(e.message); }
+  finally     { unlockBtn(btn); invoiceBusy = false; }
+}
+
+/* redraw header + sale form whenever the invoice state flips */
+function updateInvoiceUI () {
+  const wrap = document.getElementById('invoiceActionWrap');
+  if (!wrap) return;
+
+  wrap.innerHTML = currentInvoiceNo
+    ? `<span class="current-invoice-label">
+         <i class="fas fa-file-invoice"></i>
+         Invoice #${escapeHtml(currentInvoiceNo)}
+       </span>
+       <a href="#" id="finishInvoiceBtn"
+          class="invoice-action-btn btn-green ajax-invoice">
+         <i class="fas fa-check-circle"></i><span>Finish</span>
+       </a>`
+    : `<a href="#" id="startInvoiceBtn"
+          class="invoice-action-btn btn-blue ajax-invoice">
+         <i class="fas fa-file-invoice"></i><span>Start Invoice</span>
+       </a>`;
+
+  document.getElementById('invoiceNoDisplay').textContent =
+    currentInvoiceNo || '—';
+  document.getElementById('invoiceNoHidden').value =
+    currentInvoiceNo || '';
+}
+
+/* global click-delegate – passes the clicked element to the helper */
+document.addEventListener('click', e => {
+  const startBtn  = e.target.closest('#startInvoiceBtn');
+  const finishBtn = e.target.closest('#finishInvoiceBtn');
+  if (startBtn)  { e.preventDefault(); startInvoice(startBtn);  }
+  if (finishBtn) { e.preventDefault(); finishInvoice(finishBtn); }
+});
+</script>
+
   <!-- convenience fill‑time buttons -->
   <script>
     function getCurrentTimeString() {
@@ -1224,11 +1337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
   </script>
 
-  <script>
-  if (!<%= JSON.stringify(currentInvoiceNo) %>) {
-    document.querySelector('#saleForm button[type="submit"]').disabled = true;
-  }
-</script>
+
     <!-- subscription expired modal -->
   <div id="subscriptionModal" class="modal-overlay" style="display:none;">
     <div class="modal-content">

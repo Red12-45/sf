@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/css/sales.css?v=<%= v %>">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
-  <style>
+<style nonce="<%= cspNonce %>">
     /* Inline‐editing styles */
     td.editable, td.editable-status { position: relative; cursor: pointer; }
     td.editable .edit-icon,
@@ -95,6 +95,7 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
           <li class="sidebar-item"><a href="/" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a></li>
           <li class="sidebar-item"><a href="/sales" class="sidebar-link active"><i class="fas fa-shopping-cart"></i> Sales Report</a></li>
           <li class="sidebar-item"><a href="/profit" class="sidebar-link"><i class="fas fa-chart-bar"></i> Profit Report</a></li>
+           <li class="sidebar-item"><a href="/gst" class="sidebar-link"><i class="fas fa-receipt"></i> GST</a></li>
           <li class="sidebar-item"><a href="/performance" class="sidebar-link"><i class="fas fa-rocket"></i> Performance</a></li>
           <li class="sidebar-item"><a href="/stats" class="sidebar-link"><i class="fas fa-chart-pie"></i> Stats</a></li>
           <li class="sidebar-item"><a href="/expense" class="sidebar-link"><i class="fas fa-money-bill-wave"></i> Expenses</a></li>
@@ -300,12 +301,13 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
 </td>
 
                   <!-- Status inline edit with data-detail attributes -->
-                  <td class="editable-status" 
-                      data-id="<%= sale.id %>" 
-                      data-field="status" 
-                      data-date="<%= date %>"
-                      data-detail1="<%= sale.paymentDetail1||'' %>"
-                      data-detail2="<%= sale.paymentDetail2||'' %>">
+        <td class="editable-status" 
+      data-id="<%= sale.id %>" 
+      data-field="status" 
+      data-date="<%= date %>"
+      data-detail1="<%= attr(sale.paymentDetail1||'') %>"
+      data-detail2="<%= attr(sale.paymentDetail2||'') %>">
+
                     <span class="value"><%= sale.status %>
                       <% if (sale.paymentDetail1 || sale.paymentDetail2) { %><br><small>
                         <% if (sale.paymentDetail1) { %>Detail1: <%= parseFloat(sale.paymentDetail1).toFixed(2) %><% } %>
@@ -359,9 +361,11 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
       <tr>
         <td><%= exp.expenseReason %></td>
         <td><%= parseFloat(exp.expenseCost).toFixed(2) %></td>
-        <td class="<%= canEdit ? 'editable-status' : '' %>"
-            data-id="<%= exp.id %>" data-field="expenseStatus" data-date="<%= date %>"
-            data-detail1="<%= exp.expenseDetail1||'' %>" data-detail2="<%= exp.expenseDetail2||'' %>">
+  <td class="<%= canEdit ? 'editable-status' : '' %>"
+        data-id="<%= exp.id %>" data-field="expenseStatus" data-date="<%= date %>"
+        data-detail1="<%= attr(exp.expenseDetail1||'') %>"
+        data-detail2="<%= attr(exp.expenseDetail2||'') %>">
+
           <span class="value"><%= exp.expenseStatus %>
             <% if (exp.expenseDetail1||exp.expenseDetail2) { %><br><small>
               <% if (exp.expenseDetail1) { %>Detail1: <%= parseFloat(exp.expenseDetail1).toFixed(2) %><% } %>
@@ -459,7 +463,7 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
   <!-- Client‑Side Scripts -->
  
     <!-- Client‑Side Script -->
-    <script>
+   <script nonce="<%= cspNonce %>">
       const csrfToken = document
     .querySelector('form.form-inline input[name="_csrf"]')
     .value;

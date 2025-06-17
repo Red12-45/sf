@@ -696,8 +696,10 @@ button:active {
   padding-bottom: 0.75rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;   /* keep items together */
+  gap: 0.5rem;                   /* ≈ 8 px  → “one space” look */
 }
+
 
 .tables-content h2::after {
   content: '';
@@ -717,7 +719,9 @@ button:active {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-left: auto;      /* ⬅️ pushes the chip to the far right */
 }
+
 
 .date-info i {
   color: var(--accent-color);
@@ -1192,3 +1196,47 @@ button[disabled] { opacity: .6; cursor: not-allowed; }
 .modal-content button:hover {
   opacity: 0.9;
 }
+
+/* “Start Invoice” button beside the sales header */
+.start-invoice-btn {
+  margin-left: 12px;          /* gap after the header text */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: #0d6efd;        /* primary blue – tweak to taste */
+  color: #fff;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.start-invoice-btn:hover { opacity: 0.9; }
+
+
+/* ────────── Invoice controls beside the “Sales for …” header ────────── */
+.invoice-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 14px;
+  color: #fff;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  /* no extra margin – spacing now handled by flex gap */
+}
+
+.invoice-action-btn:hover { opacity: 0.9; }
+
+.btn-blue  { background: #0d6efd; }   /* Start Invoice */
+.btn-green { background: #28a745; }   /* Finish        */
+
+.current-invoice-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;        /* matches button spacing */
+  font-weight: 600;
+  /* margin removed – flex gap handles it */
+}
+/* btn-lock = temporary disabled state for invoice buttons */
+.btn-lock { opacity: 0.6; }

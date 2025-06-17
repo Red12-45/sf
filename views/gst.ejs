@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GST Summary</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Fonts / Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+  <!-- Global + page-specific CSS (create /public/css/gst.css later if you like) -->
+  <link rel="stylesheet" href="/css/global.css?v=<%= v %>">
+  <link rel="stylesheet" href="/css/gst.css?v=<%= v %>">
+  <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
+
+  <!-- Minimal built-in style so the page still looks OK without extra CSS -->
+  <style>
+    body{margin:0;display:flex;font-family:'Inter',sans-serif}
+    /* sidebar */
+    .sidebar{width:220px;background:#1f2937;color:#fff;min-height:100vh;padding:20px 15px;box-sizing:border-box}
+    .sidebar-logo{display:flex;align-items:center;margin-bottom:25px;font-size:1.1rem;font-weight:600}
+    .sidebar-logo i{margin-right:8px}
+    .sidebar-links a{display:flex;align-items:center;color:#cbd5e1;text-decoration:none;padding:8px 0;border-radius:4px;font-size:.95rem}
+    .sidebar-links a i{width:18px;margin-right:10px;text-align:center}
+    .sidebar-links a.active,.sidebar-links a:hover{background:#334155;color:#fff}
+    /* main */
+    main.page{flex:1;padding:25px;overflow:auto}
+    .page-title{margin-top:0;font-size:1.4rem}
+    .filter-bar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px}
+    .filter-bar label{font-size:.9rem}
+    .filter-bar input{margin-left:4px;padding:4px}
+    .btn{cursor:pointer;border:none;padding:6px 12px;border-radius:4px;font-weight:500}
+    .btn-primary{background:#2563eb;color:#fff}
+    /* table */
+    .table{width:100%;border-collapse:collapse;font-size:.92rem}
+    .table th,.table td{border:1px solid #e2e8f0;padding:8px 6px;text-align:left}
+    .table th.num,.table td.num{text-align:right}
+    tfoot th{background:#f8fafc}
+    .note{font-size:.8rem;color:#475569;margin-top:10px}
+  </style>
+</head>
+
+<body>
+  <!-- ───── Sidebar ───── -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <i class="fas fa-chart-line"></i>
+      <span><%= user?.businessName || 'Dashboard' %></span>
+    </div>
+
+    <div class="sidebar-links">
+      <a href="/dashboard"><i class="fas fa-home"></i><span>Dashboard</span></a>
+      <a href="/sales"><i class="fas fa-rupee-sign"></i><span>Sales</span></a>
+      <a href="/expense"><i class="fas fa-wallet"></i><span>Expenses</span></a>
+      <a href="/profit"><i class="fas fa-chart-pie"></i><span>Profit</span></a>
+      <a href="/gst" class="active"><i class="fas fa-receipt"></i><span>GST</span></a>
+    </div>
+  </div>
+
+  <!-- ───── Main content ───── -->
+  <main class="page">
+    <h1 class="page-title">
+      GST Summary <small style="font-weight:400;font-size:.9rem;">(<%= periodLabel %>)</small>
+    </h1>
+
+    <!-- filter panel -->
+    <form class="filter-bar" method="get">
+      <label>Month:
+        <input type="month" name="month" value="<%= month %>">
+      </label>
+      <label>From:
+        <input type="month" name="from" value="<%= from %>">
+      </label>
+      <label>To:
+        <input type="month" name="to" value="<%= to %>">
+      </label>
+      <label>Year:
+        <input type="number" name="year" min="2000" max="2100" value="<%= year %>">
+      </label>
+      <button class="btn btn-primary">Apply</button>
+    </form>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th class="num">Taxable Turnover ₹</th>
+          <th class="num">Output GST ₹</th>
+          <th class="num">Input GST ₹</th>
+          <th class="num">Net Payable ₹</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(r => { %>
+          <tr>
+            <td><%= r.month %></td>
+            <td class="num"><%= r.taxable.toFixed(2) %></td>
+            <td class="num"><%= r.output.toFixed(2) %></td>
+            <td class="num"><%= r.input.toFixed(2) %></td>
+            <td class="num"><strong><%= r.net.toFixed(2) %></strong></td>
+          </tr>
+        <% }) %>
+      </tbody>
+      <tfoot>
+        <tr>
+          <th>Total</th>
+          <th class="num"><%= totals.taxable.toFixed(2) %></th>
+          <th class="num"><%= totals.output.toFixed(2) %></th>
+          <th class="num"><%= totals.input.toFixed(2) %></th>
+          <th class="num"><%= totals.net.toFixed(2) %></th>
+        </tr>
+      </tfoot>
+    </table>
+
+    <p class="note">
+      * Figures are based solely on sales recorded in this system.<br>
+      * Add purchase data to keep input-tax accurate.
+    </p>
+  </main>
+
+  <!-- any global bundle -->
+  <script src="/js/main.js?v=<%= v %>"></script>
+</body>
+</html>

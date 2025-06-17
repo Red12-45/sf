@@ -1,3 +1,5 @@
+
+
 // app.js – Ultimate Optimized version (Ajax‑ready, no missing pieces)
 
 const express = require('express');
@@ -21,7 +23,7 @@ const ExcelJS = require('exceljs');
 const compression = require('compression');
 
 const cors = require('cors');          // NEW
-const morgan = require('morgan');        // NEW – logging (used in §3)
+
 
 const http = require('http');
 const cluster = require('cluster');
@@ -33,6 +35,34 @@ const nodemailer = require('nodemailer');
 
 
 require('dotenv').config();
+
+// ─── Logger (Pino) ──────────────────────────────────────────────
+const pino   = require('pino');
+const logger = pino({
+  level: process.env.LOG_LEVEL || (
+    process.env.NODE_ENV === 'production' ? 'info' : 'debug'
+  ),
+  transport: process.env.NODE_ENV === 'development'
+    ? { target: 'pino-pretty',
+        options: { colorize: true, translateTime: 'SYS:standard' } }
+    : undefined
+});
+
+// ─── HTTP-logger middleware (after the logger exists) ───────────
+const pinoHttp = require('pino-http')({
+  logger,
+  autoLogging : false,
+  serializers : {
+    req (req) { return { method:req.method, url:req.url }; }
+  },
+  // ↓ skip static, health & favicon to save ~6 µs/req
+  ignore : (req) =>
+    req.url.startsWith('/healthz') ||
+    req.url.startsWith('/favicon.ico') ||
+    /\.(?:js|css|png|jpe?g|svg|woff2?)$/i.test(req.url)
+});
+
+
 
 /* ─────────── env sanity check ─────────── */
 const REQUIRED_ENV = [
@@ -52,30 +82,90 @@ if (missing.length) {
 
 /* ─────────── global crash safety ─────────── */
 process.on('unhandledRejection', err => {
-  console.error('❌ Unhandled-Promise-Rejection:', err);
+  logger.error({ err }, 'Unhandled Promise Rejection');
 });
 process.on('uncaughtException', err => {
-  console.error('❌ Uncaught-Exception:', err);
-  /* Optional: restart policy via PM2; here we exit so PM2 can respawn */
-  process.exit(1);
+  logger.fatal({ err }, 'Uncaught Exception');
+  process.exit(1);                  // let PM2/cluster restart
 });
+
 
 
 // ─────────── cache ───────────
-const NodeCache = require('node-cache');
-const cache     = new NodeCache({ stdTTL: 300, checkperiod: 120 });
+/* ─────────── Distributed cache (shared by every worker) ─────────── */
+const cacheKey = k => `cache:${k}`;          // neat namespacing prefix
+
+const cacheGet = async key => {
+  try {
+    const raw = await redisClient.get(cacheKey(key));
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    logger.warn({ err, key }, 'Redis cache → GET failed (fail-open)');
+    return null;                             // fall back to live DB read
+  }
+};
+
+const cacheSet = async (key, value, ttlSec = 300) => {
+  try {
+    await redisClient.set(
+      cacheKey(key),
+      JSON.stringify(value),
+      { EX: ttlSec }                         // seconds-to-live
+    );
+  } catch (err) {
+    logger.warn({ err, key }, 'Redis cache → SET failed');
+  }
+};
+
+const cacheDel = async key => {
+  try { await redisClient.del(cacheKey(key)); }
+  catch (err) { logger.warn({ err, key }, 'Redis cache → DEL failed'); }
+};
+
+
 
 // ─────────── Firebase Admin ───────────
 const serviceAccount = require('./serviceAccountKey.json');
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-// ─────────── Express base ───────────
+/* ─────────── Express base ─────────── */
 const app = express();
 app.disable('x-powered-by');              // hide Express fingerprint
 
+
+/* ─── FAST-PATH: static assets & favicon (Brotli/Gzip first) ─── */
+const expressStaticGzip = require('express-static-gzip');
+
+app.use('/', expressStaticGzip(path.join(__dirname, 'public'), {
+  enableBrotli   : true,
+  orderPreference: ['br', 'gz'],
+
+  /* ↓ tell serve-static to SKIP directory indexes  
+        so the request falls through to your route */
+  index          : false,                // *** critical ***
+
+  setHeaders(res, filePath) {
+    if (/\.(?:js|css|svg|ico|png|jpe?g|woff2?)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
+
+app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
+
+
+/* ───────── Per-request CSP nonce ───────── */
+app.use((req, res, next) => {
+  res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+  next();
+});
+
+
 app.set('trust proxy', 1);     // behind Nginx / Cloudflare / Render / etc.
 
+// later, plug it into Express
+app.use(pinoHttp);
 
 
 /* ─────────── Redis client & session store ─────────── */
@@ -93,21 +183,26 @@ const redisClient = createClient({
   }
 });
 
-/* nicer, de-noised logging */
 redisClient
-  .on('connect',     () => console.log('✅ Redis: connected'))
-  .on('ready',       () => console.log('✅ Redis: ready for commands'))
-  .on('reconnecting',({ attempt, delay }) =>
-                       console.warn(`⚠️ Redis: reconnect #${attempt} in ${delay} ms`))
-  .on('end',         () => console.warn('⚠️ Redis: connection closed'))
-  .on('error',       err => {
+  // log “ready” only **once** to stop startup spam
+  .once('ready', () => logger.info('✅ Redis ready (initial connection)'))
+
+  // each reconnect attempt is still useful, keep it:
+  .on('reconnecting', ({ attempt, delay }) =>
+    logger.warn({ attempt, delay }, 'Redis reconnecting'))
+
+  // connection actually closed
+  .on('end', () => logger.warn('⚠️ Redis connection closed'))
+
+  // serious or ECONNRESET errors
+  .on('error', err => {
     if (err.code !== 'ECONNRESET') {
-      console.error('Redis error:', err);       // real problems
+      logger.error({ err }, 'Redis error');
     } else {
-      /* ECONNRESET = server dropped the socket; client will auto-reconnect */
-      console.warn('⚠️ Redis ECONNRESET – reconnecting…');
+      logger.warn('⚠️ Redis ECONNRESET – reconnecting…');
     }
   });
+
 
 redisClient.connect().catch(console.error);     // kick off the first connect
 
@@ -229,12 +324,13 @@ helmet({
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
+
 /* ─────────── CORS & logging ─────────── */
 app.use(cors({
   origin      : (process.env.ALLOWED_ORIGINS || '').split(','),
   credentials : true
 }));
-app.use(morgan('combined'));              // Apache-style log line per request
+
 
 
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
@@ -246,8 +342,18 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
 app.use(['/api', '/login', '/register'], apiLimiter);
 
+
+/* extra lock on high-risk routes */
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,   // 15 min
+  max: 20,                    // much tighter
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use(['/forgot-password', '/reset-password', '/payment-success'], authLimiter);
 
 
 // CSRF protection (MUST come _after_ session middleware)
@@ -257,8 +363,7 @@ app.use((req, res, next) => {
   res.locals.csrfToken = req.csrfToken();
   next();
 });
-// Redis safety-net
-redisClient.on('error', err => console.error('Redis error:', err));
+
 
 /* CSRF & generic error shields (keep these LAST) */
 app.use((err, req, res, next) => {        // CSRF failure handler
@@ -273,13 +378,6 @@ app.use((err, req, res, next) => {        // generic 500
 
 
 
-// serve static assets with a long maxAge—but they'll be re-requested whenever `v` changes
-app.use(express.static('public', { maxAge: '365d' }));
-
-app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-
-
-
 app.locals.formatIST = date => {
   const d = (typeof date?.toDate === 'function') 
             ? date.toDate() 
@@ -287,6 +385,13 @@ app.locals.formatIST = date => {
   return d.toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' });
 };
 
+
+app.locals.attr = (s = '') => String(s)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#x27;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;');
 
 
 app.set('view engine', 'ejs');
@@ -305,97 +410,112 @@ const normalizeName = s =>
     .trim();
 
 const getCategories = async accountId => {
-  const key = `categories_${accountId}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const snap = await db.collection('products').where('accountId', '==', accountId).get();
-  const uniq = [...new Set(snap.docs.map(d => d.data().category).filter(c => c))];
-  cache.set(key, uniq);
+  const key  = `categories_${accountId}`;
+  const from = await cacheGet(key);
+  if (from) return from;
+
+  /* ── FULL docs (no .select) so Firestore skips any rule-based strip ── */
+  const snap = await db.collection('products')
+                       .where('accountId', '==', accountId)
+                       .get();
+
+  const uniq = [...new Set(
+    snap.docs.map(d => d.data().category).filter(Boolean)
+  )];
+
+  /* ⚠️  cache ONLY when we have at least one real category */
+  if (uniq.length) await cacheSet(key, uniq, 3600);
   return uniq;
 };
 
-const getPermissions = async accountId => {
-  const key = `permissions_${accountId}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const doc = await db.collection('permissions').doc(accountId).get();
-  const locked = doc.exists ? (doc.data().lockedRoutes || []) : [];
-  cache.set(key, locked);
-  return locked;
-};
 
 const getUnits = async accountId => {
-  const key = `units_${accountId}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const snap = await db.collection('products').where('accountId', '==', accountId).get();
-  const uniq = [...new Set(snap.docs.map(d => (d.data().unit || '').toLowerCase()).filter(u => u))];
-  cache.set(key, uniq);
+  const key  = `units_${accountId}`;
+  const from = await cacheGet(key);
+  if (from) return from;
+
+  const snap = await db.collection('products')
+                       .where('accountId', '==', accountId)
+                       .get();
+
+  const uniq = [...new Set(
+    snap.docs
+        .map(d => (d.data().unit || '').toLowerCase())
+        .filter(Boolean)
+  )];
+
+  if (uniq.length) await cacheSet(key, uniq, 3600);
   return uniq;
 };
 
-/* ─────────── DAILY SUMMARY (used by Ajax) ─────────── */
+
+/* ─────────── DAILY SUMMARY (used by Ajax & dashboard) ─────────── */
 async function computeDailySummary(accountId, saleDate) {
+  /* 0. HOT-CACHE (30 s) – most dashboards reload within this */
+  const ck = `dailySum_${accountId}_${saleDate}`;
+  const cached = await cacheGet(ck);
+  if (cached) return cached;            // hit ➜ <0.5 ms path
+
+  /* 1. ORIGINAL Firestore work (unchanged logic) */
   const [salesSnap, expSnap, obDoc] = await Promise.all([
-    db.collection('sales').where('accountId', '==', accountId).where('saleDate', '==', saleDate).get(),
-    db.collection('expenses').where('accountId', '==', accountId).where('saleDate', '==', saleDate).get(),
+    db.collection('sales')
+      .where('accountId','==',accountId)
+      .where('saleDate',  '==',saleDate)
+      .get(),
+    db.collection('expenses')
+      .where('accountId','==',accountId)
+      .where('saleDate',  '==',saleDate)
+      .get(),
     db.collection('openingBalances').doc(`${accountId}_${saleDate}`).get()
   ]);
 
   const s = {
-    totalProfit: 0,
-    totalSales: 0,
-    totalCashSales: 0,
-    totalOnlineSales: 0,
-    totalNotPaidSales: 0,
-    totalCashExpenses: 0,
-    totalOnlineExpenses: 0,
-    totalGstPayable: 0
+    totalProfit:0, totalSales:0,
+    totalCashSales:0, totalOnlineSales:0, totalNotPaidSales:0,
+    totalCashExpenses:0, totalOnlineExpenses:0,
+    totalGstPayable:0
   };
 
   salesSnap.forEach(doc => {
-    const d = doc.data();
-      // Use the exact amount the cashier entered, falling back to per-unit × qty
-    const amt = (d.totalSale !== undefined)
-      ? +parseFloat(d.totalSale)                 // TOTAL typed in the form
-      : d.retailPrice * d.saleQuantity;          // legacy per-unit logic
+    const d   = doc.data();
+    const amt = d.totalSale !== undefined
+                  ? +parseFloat(d.totalSale)
+                  : d.retailPrice * d.saleQuantity;
 
     s.totalProfit += d.profit;
     s.totalSales  += amt;
 
-
     switch (d.status) {
-      case 'Paid Cash':            s.totalCashSales += amt; break;
-      case 'Paid Online':          s.totalOnlineSales += amt; break;
-      case 'Not Paid':             s.totalNotPaidSales += amt; break;
+      case 'Paid Cash':               s.totalCashSales   += amt; break;
+      case 'Paid Online':             s.totalOnlineSales += amt; break;
+      case 'Not Paid':                s.totalNotPaidSales+= amt; break;
       case 'Half Cash + Half Online':
-        if (d.paymentDetail1) s.totalCashSales += d.paymentDetail1;
+        if (d.paymentDetail1) s.totalCashSales   += d.paymentDetail1;
         if (d.paymentDetail2) s.totalOnlineSales += d.paymentDetail2;
         break;
       case 'Half Cash + Not Paid':
-        if (d.paymentDetail1) s.totalCashSales += d.paymentDetail1;
-        if (d.paymentDetail2) s.totalNotPaidSales += d.paymentDetail2;
+        if (d.paymentDetail1) s.totalCashSales   += d.paymentDetail1;
+        if (d.paymentDetail2) s.totalNotPaidSales+= d.paymentDetail2;
         break;
       case 'Half Online + Not Paid':
         if (d.paymentDetail1) s.totalOnlineSales += d.paymentDetail1;
-        if (d.paymentDetail2) s.totalNotPaidSales += d.paymentDetail2;
+        if (d.paymentDetail2) s.totalNotPaidSales+= d.paymentDetail2;
         break;
     }
     s.totalGstPayable += (d.gstPayable || 0);
-
   });
 
   expSnap.forEach(doc => {
     const d = doc.data();
     switch (d.expenseStatus) {
-      case 'Paid Cash':            s.totalCashExpenses += d.expenseCost; break;
-      case 'Paid Online':          s.totalOnlineExpenses += d.expenseCost; break;
+      case 'Paid Cash':               s.totalCashExpenses += d.expenseCost; break;
+      case 'Paid Online':             s.totalOnlineExpenses+= d.expenseCost; break;
       case 'Half Cash + Half Online':
-        if (d.expenseDetail1) s.totalCashExpenses += d.expenseDetail1;
+        if (d.expenseDetail1) s.totalCashExpenses   += d.expenseDetail1;
         if (d.expenseDetail2) s.totalOnlineExpenses += d.expenseDetail2;
         break;
       case 'Half Cash + Not Paid':
-        if (d.expenseDetail1) s.totalCashExpenses += d.expenseDetail1;
+        if (d.expenseDetail1) s.totalCashExpenses   += d.expenseDetail1;
         break;
       case 'Half Online + Not Paid':
         if (d.expenseDetail1) s.totalOnlineExpenses += d.expenseDetail1;
@@ -404,24 +524,38 @@ async function computeDailySummary(accountId, saleDate) {
   });
 
   const openingBal = obDoc.exists ? (obDoc.data().balance || 0) : 0;
-  s.finalCash = parseFloat(openingBal) + s.totalCashSales - s.totalCashExpenses;
-  s.totalSales = +s.totalSales.toFixed(2);
-  s.totalProfit = +s.totalProfit.toFixed(2);
+  s.finalCash      = +((+openingBal) + s.totalCashSales - s.totalCashExpenses).toFixed(2);
+  s.totalSales     = +s.totalSales.toFixed(2);
+  s.totalProfit    = +s.totalProfit.toFixed(2);
 
-  return { summary: s, openingBalance: openingBal };
+  const result = { summary: s, openingBalance: openingBal };
+
+  /* 2. STORE in Redis (30 s TTL) */
+  await cacheSet(ck, result, 30);
+
+  return result;
 }
 
-/* ─────────── processSale (shared full‑page + Ajax) ─────────── */
+
+
+/* ─────────── processSale (shared full-page + Ajax) ─────────── */
 // ────────────────────────────────────────────────────────────────
 // processSale — creates one sale, updates stock/batches and
-//               returns the saved document               (AJAX + full‑page)
+//               returns the saved document               (AJAX + full-page)
 // ────────────────────────────────────────────────────────────────
-/* ─────────── processSale (shared full‑page + Ajax) ─────────── */
 async function processSale(body, user) {
-  return db.runTransaction(async tx => {
-    const accountId = user.accountId;
 
-    // ――― 0. Destructure & convert inputs ―――
+  /* 0️⃣  PRE-WORK ────────── */
+  const accountId = user.accountId;
+
+  // (only now it’s safe to run a separate Firestore tx)
+  if (!body.invoiceNo || !body.invoiceNo.trim()) {
+    body.invoiceNo = await getNextInvoiceNo(accountId);
+  }
+
+  /* --------------- 1.  MAIN TRANSACTION --------------- */
+  const saleData = await db.runTransaction(async tx => {
+
     let {
       productId,
       customProductId,
@@ -430,23 +564,27 @@ async function processSale(body, user) {
       saleDate,
       status,
       invoiceNo,
-      extraInfo = '',
+      extraInfo,
       paymentDetail1,
       paymentDetail2
     } = body;
 
+    /* 🔒 Sanitise free-text note (≤200 chars, no leading/trailing space) */
+    extraInfo = extraInfo ? extraInfo.toString().substring(0, 200).trim() : '';
+
+
     saleQuantity    = +parseFloat(saleQuantity);
     const totalSale = +parseFloat(totalSaleInput);
 
-    // ――― 1. Load product row ―――
+    /* ――― 1. Load product row ――― */
     const selectedProductId = (customProductId?.trim()) ? customProductId : productId;
-    const productRef = db.collection('products').doc(selectedProductId);
-    const productDoc = await tx.get(productRef);
+    const productRef        = db.collection('products').doc(selectedProductId);
+    const productDoc        = await tx.get(productRef);
     if (!productDoc.exists || productDoc.data().accountId !== accountId)
       throw new Error('Product not found or unauthorized');
     const product = productDoc.data();
 
-    // ――― 2. FIFO consume batches ―――
+    /* ――― 2. FIFO consume batches ――― */
     const batchQuery = db.collection('stockBatches')
                          .where('productId','==',selectedProductId)
                          .where('remainingQuantity','>',0)
@@ -473,9 +611,9 @@ async function processSale(body, user) {
     }
     if (remaining > 0) throw new Error('Not enough stock');
 
-    // ――― 3. Profit & GST math (unchanged) ―――
+    /* ――― 3. Profit & GST math ――― */
     const avgWholesale  = +(totalWholesale / saleQuantity).toFixed(2);
-    const retailPerUnit = +(totalSale / saleQuantity).toFixed(2);
+    const retailPerUnit = +(totalSale     / saleQuantity).toFixed(2);
     const profitPerUnit = +(retailPerUnit - avgWholesale).toFixed(2);
     const totalProfit   = +(profitPerUnit * saleQuantity).toFixed(2);
 
@@ -487,9 +625,9 @@ async function processSale(body, user) {
       gstPayable = +(outputTax - inputTax).toFixed(2);
     }
 
-    // ――― 4. Insert sale row ―――
+    /* ――― 4. Insert sale row ――― */
     const saleRef = db.collection('sales').doc();   // pre-allocate ID
-    const saleData = {
+    const row     = {
       productId      : selectedProductId,
       productName    : product.productName,
       unit           : product.unit || '',
@@ -512,50 +650,62 @@ async function processSale(body, user) {
       ...(paymentDetail1 && { paymentDetail1:+parseFloat(paymentDetail1) }),
       ...(paymentDetail2 && { paymentDetail2:+parseFloat(paymentDetail2) })
     };
-    tx.set(saleRef, saleData);
+    tx.set(saleRef, row);
 
-    // ――― 5. Recalc parent product stock ―――
-    await recalcProductFromBatches(selectedProductId, tx);   // overload accepts tx!
+    /* 5.  🔄  Stock recalc moved OUTSIDE the transaction  */
 
-    saleData.id = saleRef.id;   // so the caller gets the ID
-    return saleData;
+    row.id = saleRef.id;            // bubble ID to caller
+    return row;
   });
+
+  /* --------------- 2.  POST-COMMIT UPDATE --------------- */
+  // Re-compute parent-product stock *after* the transaction closes
+  await recalcProductFromBatches(saleData.productId);
+  await cacheDel(`dailySum_${accountId}_${saleData.saleDate}`);
+
+
+  return saleData;
 }
-
-
 
 /* ─────────── processExpense (shared) ─────────── */
 async function processExpense(body, user) {
   const accountId = user.accountId;
   const saleDate  = body.saleDate;
 
-  // Normalise to arrays so single‑row & multi‑row both work
+  // Normalise to arrays so single-row & multi-row both work
   const reasons  = Array.isArray(body.expenseReason) ? body.expenseReason  : [body.expenseReason];
   const costs    = Array.isArray(body.expenseCost)   ? body.expenseCost    : [body.expenseCost];
   const statuses = Array.isArray(body.expenseStatus) ? body.expenseStatus  : [body.expenseStatus];
   const d1s      = Array.isArray(body.expenseDetail1)? body.expenseDetail1 : [body.expenseDetail1];
   const d2s      = Array.isArray(body.expenseDetail2)? body.expenseDetail2 : [body.expenseDetail2];
 
-  const saved = [];
+  /* 🔄 Validate & trim once */
+  reasons .forEach((v,i)=>reasons [i]=(v||'').toString().substring(0,100).trim());
+  statuses.forEach((v,i)=>statuses[i]=(v||'').toString().substring(0,40) .trim());
+
+  const batch = db.batch();
+  let lastRef = null;
 
   for (let i = 0; i < reasons.length; i++) {
+    const ref = db.collection('expenses').doc();   // pre-allocate ID
+    lastRef   = ref;
     const data = {
       expenseReason : reasons[i],
       expenseCost   : parseFloat(costs[i]),
       expenseStatus : statuses[i] || 'Paid Cash',
       saleDate,
       accountId,
-      createdAt     : new Date()
+      createdAt     : new Date(),
+      ...(d1s[i] && { expenseDetail1: parseFloat(d1s[i]) }),
+      ...(d2s[i] && { expenseDetail2: parseFloat(d2s[i]) })
     };
-    if (d1s[i]) data.expenseDetail1 = parseFloat(d1s[i]);
-    if (d2s[i]) data.expenseDetail2 = parseFloat(d2s[i]);
-
-    await db.collection('expenses').add(data);
-    saved.push(data);
+    batch.set(ref, data);
   }
 
-  // Return the last one so the Ajax patch keeps working
-  return saved[saved.length - 1];
+  await batch.commit();
+  await cacheDel(`dailySum_${accountId}_${saleDate}`);
+
+  return (await lastRef.get()).data();             // keep Ajax contract
 }
 
 /* ─────────── Global subscription check middleware ─────────── */
@@ -629,12 +779,30 @@ app.get('/invoice/start', isAuthenticated, async (req, res) => {
   res.redirect('/dashboard');
 });
 
+
+app.post('/api/invoice/start', isAuthenticated, async (req, res) => {
+  try {
+    if (!req.session.currentInvoiceNo) {
+      req.session.currentInvoiceNo =
+        await getNextInvoiceNo(req.session.user.accountId);
+    }
+    return res.json({ success: true, invoiceNo: req.session.currentInvoiceNo });
+  } catch (err) {
+    console.error('/api/invoice/start error:', err);
+    return res.json({ success: false, error: err.toString() });
+  }
+});
 app.get('/invoice/finish', isAuthenticated, (req, res) => {
   delete req.session.currentInvoiceNo;
   res.redirect('/dashboard');
 });
 
 
+/* ───────────  AJAX “Finish Invoice”  ─────────── */
+app.post('/api/invoice/finish', isAuthenticated, (req, res) => {
+  delete req.session.currentInvoiceNo;      // clear the session flag
+  return res.json({ success: true });
+});
 
 /* ─────────── Razorpay ─────────── */
 const razorpay = new Razorpay({
@@ -1123,7 +1291,7 @@ app.post(
               .doc(req.session.user.accountId)
               .set({ lockedRoutes, blockedActions });   // ← important change
 
-      cache.del(`permissions_${req.session.user.accountId}`);
+      await cacheDel(`permissions_${req.session.user.accountId}`);
       return res.redirect('/permission?success=1');
 
     } catch (e) {
@@ -1132,9 +1300,6 @@ app.post(
     }
   }
 );
-
-
-
 
 
 /* ─────────── PROTECTED APP ROUTES ─────────── */
@@ -1147,8 +1312,6 @@ app.get('/', (req, res) => {
   // Everyone else sees the beautiful marketing page
   res.render('landing');         // v is already supplied by the global middleware
 });
-
-
 
 
 /* ─────────── DASHBOARD (was GET "/") ─────────── */
@@ -1550,8 +1713,9 @@ const newRetail = +(
         unit
       });
 
-      cache.del(`categories_${accountId}`);
-      cache.del(`units_${accountId}`);
+      await cacheDel(`categories_${accountId}`);
+await cacheDel(`units_${accountId}`);
+
 
       res.redirect('/add-product?success=1');
     } catch (err) {
@@ -1581,7 +1745,8 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
     const productIds = products.map(p => p.id);
     const batchesMap = {};
     if (productIds.length > 0) {
-      const chunkSize = 10;
+      const chunkSize = 10;   // ↑ fewer round-trips, same RAM usage
+
       const batchPromises = [];
       for (let i = 0; i < productIds.length; i += chunkSize) {
         const chunk = productIds.slice(i, i+chunkSize);
@@ -1749,15 +1914,17 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-
   }
 });
 
+/* ─────────── STOCK BATCH HELPER (transaction-aware) ───────────
+   • If a Firestore transaction object is supplied, we reuse it.
+   • Otherwise we create a standalone transaction (old behaviour).
+   ----------------------------------------------------------------*/
+async function recalcProductFromBatches(productId, tx = null) {
 
-async function recalcProductFromBatches(productId) {
-
-  await db.runTransaction(async tx => {
-
+  const work = async (transaction) => {
     /* 1️⃣  Read every batch that still belongs to this product */
     const batchQuery = db.collection('stockBatches')
                          .where('productId', '==', productId);
-    const batchSnap  = await tx.get(batchQuery);
+    const batchSnap  = await transaction.get(batchQuery);
 
     let totalRemaining = 0,
         totalWholesale = 0,
@@ -1773,14 +1940,13 @@ async function recalcProductFromBatches(productId) {
     });
 
     /* 2️⃣  Protect against divide-by-zero */
-    const safeDivide = (num, den) => den > 0 ? +(num / den).toFixed(2) : 0;
-
-    const newWholesale = safeDivide(totalWholesale, totalRemaining);
-    const newRetail    = safeDivide(totalRetail,    totalRemaining);
-    const profitMargin = +(newRetail - newWholesale).toFixed(2);
+    const safeDivide  = (num, den) => den > 0 ? +(num / den).toFixed(2) : 0;
+    const newWholesale= safeDivide(totalWholesale, totalRemaining);
+    const newRetail   = safeDivide(totalRetail,    totalRemaining);
+    const profitMargin= +(newRetail - newWholesale).toFixed(2);
 
     /* 3️⃣  Persist the freshly-computed figures */
-    tx.update(
+    transaction.update(
       db.collection('products').doc(productId),
       {
         quantity      : +totalRemaining.toFixed(3),
@@ -1790,9 +1956,16 @@ async function recalcProductFromBatches(productId) {
         updatedAt     : new Date()
       }
     );
-  });
+  };
 
+  /* Re-use current transaction when available, else start a new one */
+  if (tx) {
+    await work(tx);                // already inside a transaction
+  } else {
+    await db.runTransaction(work); // standalone call
+  }
 }
+
 
 // GET /edit-stock-batch/:batchId
 app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
@@ -1999,11 +2172,12 @@ await batchRef.update({
 }, { merge: true });
 
 
-    await recalcProductFromBatches(targetProdId);
-    cache.del(`categories_${accountId}`);
-    cache.del(`units_${accountId}`);
+          await recalcProductFromBatches(targetProdId);
+      await cacheDel(`categories_${accountId}`);
+      await cacheDel(`units_${accountId}`);
 
-    res.redirect('/view-products');
+      res.redirect('/view-products');
+
   } catch (e) {
     res.status(500).send(e.toString());
   }
@@ -2032,7 +2206,7 @@ let { saleDate, month, status } = req.query;   // ← month is now mutable
 
 
       /* ─── 0. Work out the month window we’ll “lock” the badges to ─── */
-      const pad = n => String(n).padStart(2, '0');
+      
       let monthStart, monthEnd;
 
       if (month) {                                        // user picked a month
@@ -2581,29 +2755,56 @@ app.get('/subscribe/yearly', isAuthenticated, async (req, res) => {
   }
 });
 
-// POST /payment-success
+// POST /payment-success  (🔒 signature-verified)
 app.post('/payment-success', isAuthenticated, async (req, res) => {
   try {
-    const { plan } = req.body;
-    let days;
-    if (plan==='Monthly')      days=30;
-    else if (plan==='Half-Yearly') days=182;
-    else if (plan==='Yearly')   days=365;
-    else return res.status(400).send('Invalid plan');
+    /* Razorpay posts these three fields from the client SDK */
+    const {
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      plan
+    } = req.body;
 
-    const now     = new Date();
-    let newExpiry = req.session.user.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now
-      ? new Date(req.session.user.subscriptionExpiry)
-      : now;
-    newExpiry.setDate(newExpiry.getDate() + days);
+    /* 1️⃣  Signature validation */
+    const shasum  = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
+    shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const digest  = shasum.digest('hex');
 
-    await db.collection('users').doc(req.session.user.id).update({ subscriptionExpiry: newExpiry });
-    req.session.user.subscriptionExpiry = newExpiry;
+    if (digest !== razorpay_signature) {
+      return res.status(400).send('Payment signature invalid – request denied.');
+    }
+
+    /* 2️⃣  Plan → days mapping */
+    const days = ({
+      'Monthly'      :  30,
+      'Half-Yearly'  : 182,
+      'Yearly'       : 365
+    })[plan] || 0;
+    if (!days) return res.status(400).send('Invalid plan');
+
+    /* 3️⃣  Extend subscription for the *master* account only  */
+    const now      = new Date();
+    const userRef  = db.collection('users').doc(req.session.user.id);
+    const userSnap = await userRef.get();
+    const curExp   = userSnap.data().subscriptionExpiry
+                      ? new Date(userSnap.data().subscriptionExpiry.toDate
+                                   ? userSnap.data().subscriptionExpiry.toDate()
+                                   : userSnap.data().subscriptionExpiry)
+                      : now;
+    const newExp   = (curExp > now ? curExp : now);
+    newExp.setDate(newExp.getDate() + days);
+
+    await userRef.update({ subscriptionExpiry: newExp });
+    req.session.user.subscriptionExpiry = newExp;
+
     res.redirect('/');
   } catch (e) {
-    res.status(500).send(e.toString());
+    console.error('/payment-success error:', e);
+    res.status(500).send('Payment processing failed, please contact support.');
   }
 });
+
 
 
 /* ─────────── PROFILE & BILLING (Master Only) ─────────── */
@@ -3063,7 +3264,7 @@ app.get('/performance',
       const accountId = req.session.user.accountId;
 
       /* ───── 1. Determine date window ───── */
-      const pad = n => String(n).padStart(2,'0');
+     
       const today  = new Date();
       const curYM  = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
       const {
@@ -3180,7 +3381,7 @@ app.get(
       const accountId = req.session.user.accountId;
 
       /* 1️⃣  Resolve date window → default = current month */
-      const pad   = n => String(n).padStart(2, '0');
+    
       const today = new Date();
       const currentYear = today.getFullYear();
 
@@ -3407,19 +3608,21 @@ app.post('/forgot-password', async (req, res) => {
 
     const userDoc = snap.docs[0];
 
-    // generate & persist token
-    const token   = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 60 * 60 * 1000);   // 1 hour
+// generate raw token + SHA-256 hash (store only the hash)
+const rawToken = crypto.randomBytes(32).toString('hex');
+const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+const expires   = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await db.collection('passwordResets').doc(token).set({
-      userId   : userDoc.id,
-      email,
-      expiresAt: expires,
-      used     : false,
-      createdAt: new Date()
-    });
+await db.collection('passwordResets').doc(tokenHash).set({
+  userId    : userDoc.id,
+  email,
+  expiresAt : expires,
+  used      : false,
+  createdAt : new Date()
+});
 
-    const link = `${process.env.BASE_URL || 'http://localhost:3000'}/reset-password/${token}`;
+const link = `${process.env.BASE_URL || 'http://localhost:3000'}/reset-password/${rawToken}`;
+
 
     // fire the email
     await transporter.sendMail({
@@ -3445,8 +3648,10 @@ app.post('/forgot-password', async (req, res) => {
 // GET /reset-password/:token
 app.get('/reset-password/:token', async (req, res) => {
   try {
-    const { token } = req.params;
-    const doc = await db.collection('passwordResets').doc(token).get();
+   const rawToken   = req.params.token;
+const tokenHash  = crypto.createHash('sha256').update(rawToken).digest('hex');
+const doc        = await db.collection('passwordResets').doc(tokenHash).get();
+
     if (!doc.exists) {
       return res.status(400).render('resetPassword',
         { token: '', invalid: true, error: 'Invalid or expired link.' });
@@ -3590,60 +3795,173 @@ app.get(
   }
 );
 
+
+/* ─────────── GST SUMMARY HELPER ─────────── *
+   Returns an array like
+   [
+     { month:'2025-06', taxable:₹, output:₹, input:₹, net:₹ },
+     …
+   ]
+   The month window and ordering exactly match your other
+   “profit” & “stats” pages, so one line of UI is enough.
+* --------------------------------------------------- */
+async function getGstSummary(accountId, startDate, endDate) {
+  const salesSnap = await db.collection('sales')
+    .where('accountId','==',accountId)
+    .where('saleDate','>=',startDate)
+    .where('saleDate','<', endDate)
+    .get();
+
+  const bucket = {};                // { YYYY-MM : { taxable, output, input } }
+
+  salesSnap.docs.forEach(doc => {
+    const s = doc.data();
+    const ym = s.saleDate.substring(0,7);
+    if (!bucket[ym]) bucket[ym] = { taxable:0, output:0, input:0 };
+    bucket[ym].taxable += +(s.totalSale || s.retailPrice * s.saleQuantity);
+    bucket[ym].output  += +(s.outputTax  || 0);
+    bucket[ym].input   += +(s.inputTax   || 0);
+  });
+
+  return Object.entries(bucket)          // [[ym,obj], …]
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([month, v]) => ({
+      month,
+      taxable : +v.taxable.toFixed(2),
+      output  : +v.output .toFixed(2),
+      input   : +v.input  .toFixed(2),
+      net     : +(v.output - v.input).toFixed(2)
+    }));
+}
+
+/* ─────────── GST SUMMARY  /gst  ─────────── */
+app.get(
+  '/gst',
+  isAuthenticated,
+  restrictRoute('/gst'),          // keep this if you use route-locking
+  async (req, res) => {
+    try {
+      const accountId = req.session.user.accountId;
+
+      /* Re-use the exact window logic from /stats so UX is identical */
+      const pad = n => String(n).padStart(2,'0');
+      const today = new Date();
+      const curYM = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
+
+      const { month='', from='', to='', year='' } = req.query;
+      let startDate, endDate, periodLabel;
+
+      if (month) {                                    // single month
+        startDate = `${month}-01`;
+        const [y,m] = month.split('-');
+        let nextM=parseInt(m,10)+1, nextY=parseInt(y,10);
+        if (nextM>12){ nextM=1; nextY++; }
+        endDate   = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = new Date(startDate)
+                        .toLocaleString('default',{ month:'long', year:'numeric' });
+
+      } else if (from && to) {                        // month-range
+        startDate = `${from}-01`;
+        const [ty,tm] = to.split('-');
+        let nextM=parseInt(tm,10)+1, nextY=parseInt(ty,10);
+        if (nextM>12){ nextM=1; nextY++; }
+        endDate   = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = `${from} → ${to}`;
+
+      } else if (year) {                              // whole year
+        startDate = `${year}-01-01`;
+        endDate   = `${parseInt(year,10)+1}-01-01`;
+        periodLabel = `Year ${year}`;
+
+      } else {                                       // default = current month
+        startDate = `${curYM}-01`;
+        let nextM=today.getMonth()+2, nextY=today.getFullYear();
+        if (nextM>12){ nextM=1; nextY++; }
+        endDate = `${nextY}-${pad(nextM)}-01`;
+        periodLabel = new Date(startDate)
+                        .toLocaleString('default',{ month:'long', year:'numeric' });
+      }
+
+      const rows = await getGstSummary(accountId, startDate, endDate);
+      const totals = rows.reduce((t,r)=>({
+        taxable: t.taxable + r.taxable,
+        output : t.output  + r.output,
+        input  : t.input   + r.input,
+        net    : t.net     + r.net
+      }), {taxable:0,output:0,input:0,net:0});
+
+     res.render('gst', {
+        rows,
+        totals,
+        periodLabel,
+        month,
+        from,
+        to,
+        year,
+        user : req.session.user            // ← makes <%= user.businessName %> work
+      });
+    } catch (err) {
+      console.error('/gst error:', err);
+      res.status(500).send(err.toString());
+    }
+  }
+);
+
+
+
+
+
 /* ─────────── START THE SERVER ─────────── */
 const PORT = process.env.PORT || 3000;
 const CPUS = parseInt(process.env.WEB_CONCURRENCY || os.cpus().length, 10);
 
 if (cluster.isPrimary) {
-  console.log(`🛡  Master ${process.pid} forking ${CPUS} workers…`);
+  logger.info(`🛡  Master ${process.pid} forking ${CPUS} workers…`);
+
   for (let i = 0; i < CPUS; i++) cluster.fork();
 
   /* respawn crashed workers (simple policy) */
   cluster.on('exit', (worker, code, signal) => {
-    console.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
+    logger.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
     cluster.fork();
   });
 
 } else {
   const server = http.createServer(app).listen(PORT, () => {
-  console.log(`✅  Worker ${process.pid} listening on :${PORT}`);
-});
-
-/* ─── graceful shutdown + hard-kill safeguard ───
-   The 30-second “kill” timer now starts **only after**
-   we begin shutting down, so the worker no longer
-   suicides every 30 s during normal operation.          */
-
-let killTimer = null;                         // will be set in graceful()
-
-const graceful = async (reason) => {
-  if (killTimer) return;                      // already running – ignore dupe
-  console.warn(`⏳  Worker ${process.pid} shutting down – ${reason}`);
-
-  // begin last-chance timer (30 s)
-  killTimer = setTimeout(() => {
-    console.error('❌  Force-killing stuck worker (grace period elapsed)');
-    process.exit(1);
-  }, 30_000).unref();
-
-  server.close(() => console.log('HTTP closed'));
-
-  await Promise.allSettled([
-    redisClient.quit().catch(() => {}),
-    admin.app().delete().catch(() => {})
-  ]);
-
-  clearTimeout(killTimer);                    // shutdown finished in time
-  process.exit(0);
-};
-
-
-process
-  .on('SIGTERM', () => graceful('SIGTERM'))
-  .on('SIGINT',  () => graceful('SIGINT'))
-  .on('uncaughtException', (err) => {
-    console.error('❌  Uncaught exception:', err);
-    graceful('uncaughtException');
+    logger.info(`✅  Worker ${process.pid} listening on :${PORT}`);
   });
 
+  /* ─── graceful shutdown + hard-kill safeguard ─── */
+  let killTimer = null;                         // will be set in graceful()
+
+  const graceful = async (reason) => {
+    if (killTimer) return;                      // already running – ignore dupe
+    logger.warn(`⏳  Worker ${process.pid} shutting down – ${reason}`);
+
+    // begin last-chance timer (30 s)
+    killTimer = setTimeout(() => {
+      logger.error('❌  Force-killing stuck worker (grace period elapsed)');
+      process.exit(1);
+    }, 30_000).unref();
+
+    server.close(() => console.log('HTTP closed'));
+
+    await Promise.allSettled([
+      redisClient.quit().catch(() => {}),
+      admin.app().delete().catch(() => {})
+    ]);
+
+    clearTimeout(killTimer);                    // shutdown finished in time
+    process.exit(0);
+  };
+
+  process
+    .on('SIGTERM', () => graceful('SIGTERM'))
+    .on('SIGINT',  () => graceful('SIGINT'))
+    .on('uncaughtException', (err) => {
+      console.error('❌  Uncaught exception:', err);
+      graceful('uncaughtException');
+    });
 }
+
+

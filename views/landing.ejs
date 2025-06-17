@@ -1,379 +1,379 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>SalesFlow – Retail Analytics Dashboard | SalesFlow Store</title>
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>SalesFlow – Retail Analytics Dashboard | SalesFlow Store</title>
 
-  <!-- SEO -->
-  <meta name="description"
-        content="Transform your retail business with SalesFlow. Track inventory, sales, profit, expenses and staff with our all-in-one dashboard. Real-time analytics, instant exports, and role-based access. Start your 30-day free trial today.">
-  <meta name="keywords" content="retail dashboard, inventory management, sales analytics, profit tracking, retail POS, business intelligence">
-  
-  <!-- Open Graph -->
-  <meta property="og:title" content="SalesFlow – Retail Analytics Dashboard | SalesFlow Store">
-  <meta property="og:description" content="Transform your retail business with real-time analytics. Start free today.">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://SalesFlow.com">
-  
-  <!-- Fonts / Icons -->
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/inter-ui/3.19.3/inter.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <!-- Landing styles -->
-  <link rel="stylesheet" href="/css/landing.css?v=<%= v %>">
-
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
-</head>
-<body>
-  <!-- Navigation -->
-  <nav class="navbar">
-    <div class="container">
-      <div class="logo">
-        <img src="/img/logo.png" alt="SalesFlow Logo" onerror="this.src='/api/placeholder/180/60'; this.onerror=null;">
-        <span>SalesFlow</span>
-      </div>
-      <div class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#testimonials">Testimonials</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/login" class="nav-login">Log In</a>
-        <a href="/register" class="nav-signup">Start Free</a>
-      </div>
-      <div class="menu-toggle">
-        <i class="fas fa-bars"></i>
-      </div>
-    </div>
-  </nav>
-
-  <!-- ────────── Hero ────────── -->
-  <header class="hero">
-    <div class="container">
-      <div class="hero-content">
-        <div class="hero-text">
-          <h1>
-            <span class="gradient-text">Your Retail Business,</span>
-            <span class="tagline">crystal-clear.</span>
-          </h1>
-          <p class="hero-subtitle">All-in-one dashboard that gives you complete visibility into your sales, inventory, and profit in real-time.</p>
-          
-          <ul class="punchlines">
-            <li><i class="fas fa-check-circle"></i> Real-time profit & loss tracking</li>
-            <li><i class="fas fa-check-circle"></i> Intelligent stock management with FIFO</li>
-            <li><i class="fas fa-check-circle"></i> Staff attendance & performance metrics</li>
-            <li><i class="fas fa-check-circle"></i> One-click reports for accountants</li>
-          </ul>
-
-          <div class="cta">
-            <a href="/register" class="btn primary pulse"><i class="fas fa-rocket"></i> Start 30-Day Free Trial</a>
-        
-          </div>
-          <p class="trial-note">No credit card required • Cancel anytime • Full feature access</p>
-        </div>
-        <div class="hero-image">
-          <img src="/img/das.jpg" alt="SalesFlow Dashboard Preview" onerror="this.src='/api/placeholder/550/400'; this.onerror=null;">
-        </div>
-      </div>
-    </div>
-    <div class="hero-shape">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
-        <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z"></path>
-      </svg>
-    </div>
-  </header>
-
-
-
-  <!-- ────────── Benefits ────────── -->
-  <section id="features" class="benefits">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Features</span>
-        <h2>Everything you need in one powerful view</h2>
-        
-      </div>
-
-      <div class="benefit-grid">
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-bolt"></i></div>
-          <h3>Real-Time Analytics</h3>
-          <p>Sales, expenses, and profit calculations update instantly with each transaction. No delays, no refresh needed.</p>
-        </article>
-
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-box-open"></i></div>
-          <h3>Smart Inventory</h3>
-          <p>FIFO batch tracking, low-stock alerts, and category management — all automatically synced with your sales.</p>
-        </article>
-
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-chart-line"></i></div>
-          <h3>Visual Reporting</h3>
-          <p>Beautiful Apache ECharts visualizations for profit trends, best-selling products, and revenue forecasting.</p>
-        </article>
-
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-user-shield"></i></div>
-          <h3>Secure User Roles</h3>
-          <p>Create sub-users with customized access levels, keeping sensitive financial data visible only to management.</p>
-        </article>
-
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-file-excel"></i></div>
-          <h3>Instant Exports</h3>
-          <p>Generate perfectly formatted Excel reports for products, sales, or expenses with a single click.</p>
-        </article>
-
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-indian-rupee-sign"></i></div>
-          <h3>Flexible Payments</h3>
-          <p>Handle cash, online, partial payments, and credit sales with native Razorpay integration for faster checkout.</p>
-        </article>
-
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-clock"></i></div>
-          <h3>Staff Management</h3>
-          <p>Digital check-in/out system accessible from any device, with attendance reports and performance tracking.</p>
-        </article>
-
-        <article class="card">
-          <div class="card-icon"><i class="fas fa-cloud"></i></div>
-          <h3>Enterprise Security</h3>
-          <p>Google Firestore backend with Redis sessions and advanced encryption keeps your business data safe.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-
-
-  <!-- ────────── Numbers strip ────────── -->
-  <section class="numbers">
-    <div class="container">
-      <div class="numbers-inner">
-        <div class="number-item">
-          <div class="number-icon"><i class="fas fa-store"></i></div>
-          <div class="number-value">3,000+</div>
-          <div class="number-label">Daily Bills Processed</div>
-        </div>
-        <div class="number-item">
-          <div class="number-icon"><i class="fas fa-chart-pie"></i></div>
-          <div class="number-value">₹50 Cr+</div>
-          <div class="number-label">Revenue Tracked</div>
-        </div>
-        <div class="number-item">
-          <div class="number-icon"><i class="fas fa-truck"></i></div>
-          <div class="number-value">150k</div>
-          <div class="number-label">Stock Batches Managed</div>
-        </div>
-        <div class="number-item">
-          <div class="number-icon"><i class="fas fa-user-friends"></i></div>
-          <div class="number-value">7,500</div>
-          <div class="number-label">Active Business Users</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-
-
-  <!-- ────────── Testimonials ────────── -->
-  <section id="testimonials" class="testimonials">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Success Stories</span>
-        <h2>What our customers are saying</h2>
-        <p class="section-subtitle">Join hundreds of satisfied retail businesses that have transformed their operations</p>
-      </div>
-      
-      <div class="testimonial-grid">
-        <div class="testimonial-card">
-          <div class="quote"><i class="fas fa-quote-left"></i></div>
-          <p class="testimonial-text">"SalesFlow has completely transformed how I run my business. I finally have real-time visibility into profits and inventory. The time saved on monthly reports alone is worth every rupee."</p>
-          <div class="testimonial-author">
-            <!-- <img src="/images/testimonial1.jpg" alt="Rajiv Sharma" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;"> -->
-            <div class="author-info">
-              <h4>Rajiv Sharma</h4>
-              <p>Fashion Retailer, Mumbai</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="testimonial-card">
-          <div class="quote"><i class="fas fa-quote-left"></i></div>
-          <p class="testimonial-text">"We reduced inventory discrepancies by 94% in the first month. The batch tracking feature is a game-changer for our electronics store, and staff attendance tracking has improved punctuality."</p>
-          <div class="testimonial-author">
-            <!-- <img src="/images/testimonial2.jpg" alt="Priya Patel" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;"> -->
-            <div class="author-info">
-              <h4>Priya Patel</h4>
-              <p>Electronics Store Owner, Bangalore</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="testimonial-card">
-          <div class="quote"><i class="fas fa-quote-left"></i></div>
-          <p class="testimonial-text">"My accountant loves the Excel exports, and I love seeing exactly how my business is performing at any moment. Setup was surprisingly easy and customer support has been exceptional."</p>
-          <div class="testimonial-author">
-            <!-- <img src="/images/testimonial3.jpg" alt="Anand Gupta" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;"> -->
-            <div class="author-info">
-              <h4>Anand Gupta</h4>
-              <p>Grocery Chain Owner, Delhi</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ────────── Price Comparison ────────── -->
-  <section class="pricing">
-    <div class="container">
-      <div class="section-header">
-        <span class="section-tag">Value Proposition</span>
-        <h2>SalesFlow vs. traditional solutions</h2>
-        <p class="section-subtitle">See why thousands of businesses are making the switch</p>
-      </div>
-      
-      <div class="comparison-table">
-        <table>
-          <thead>
-            <tr>
-              <th>Feature</th>
-              <th>Traditional POS</th>
-              <th>Spreadsheets</th>
-              <th>SalesFlow</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Real-time profit tracking</td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-check"></i></td>
-            </tr>
-            <tr>
-              <td>FIFO batch management</td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-check"></i></td>
-            </tr>
-            <tr>
-              <td>Staff attendance</td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-check"></i></td>
-              <td><i class="fas fa-check"></i></td>
-            </tr>
-            <tr>
-              <td>One-click reporting</td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-check"></i></td>
-            </tr>
-            <tr>
-              <td>Mobile friendly</td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-times"></i></td>
-              <td><i class="fas fa-check"></i></td>
-            </tr>
-            <tr>
-              <td>Setup time</td>
-              <td>Days or weeks</td>
-              <td>Hours</td>
-              <td>Minutes</td>
-            </tr>
-            <tr>
-              <td>Monthly cost</td>
-              <td>₹10,000+</td>
-              <td>Low/DIY</td>
-              <td>Starting ₹999</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-  
-
-
-  <!-- ────────── Call to Action ────────── -->
-  <section class="cta-banner">
-    <div class="container">
-      <div class="cta-content">
-        <h2>Stop guessing. Start knowing.</h2>
-        <p>Join 500+ successful businesses that have transformed their operations with SalesFlow.</p>
-        <a href="/register" class="btn big primary">
-          Start your free 30-day trial <i class="fas fa-arrow-right"></i>
-        </a>
-        <div class="cta-features">
-         
-          <span><i class="fas fa-mobile-alt"></i> Works on any device</span>
-          <span><i class="fas fa-headset"></i> 24×7 support</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
- 
-  <!-- ────────── Footer ────────── -->
-  <footer class="site-footer">
-    <div class="container">
-
-      <!-- Footer “mini-nav” -->
-      <nav class="footer-nav">
-        <a href="/">SalesFlow</a>
-        <a href="/Privacy">Privacy</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/customerservice">Contact</a>
-        <a href="/terms-and-conditions">Terms & Conditions</a>
-      </nav>
-
-      <div class="footer-content">
-        <div class="footer-column">
-          
-          
-          <div class="social-links">
-            <a href="#"><i class="fab fa-facebook-f"></i></a>
-            <a href="#"><i class="fab fa-twitter"></i></a>
-            <a href="#"><i class="fab fa-instagram"></i></a>
-          </div>
-        </div>
-        
-      </div>
-
-      <div class="footer-bottom">
-        <p>&copy; <%= new Date().getFullYear() %> SalesFlow. All rights reserved.</p>
-      </div>
-
-    </div>
-  </footer>
-
-
-  <!-- ────────── Javascript ────────── -->
-  <script>
-    // Mobile menu toggle
-    document.querySelector('.menu-toggle').addEventListener('click', function() {
-      document.querySelector('.nav-links').classList.toggle('active');
-    });
+    <!-- SEO -->
+    <meta name="description"
+          content="Transform your retail business with SalesFlow. Track inventory, sales, profit, expenses and staff with our all-in-one dashboard. Real-time analytics, instant exports, and role-based access. Start your 30-day free trial today.">
+    <meta name="keywords" content="retail dashboard, inventory management, sales analytics, profit tracking, retail POS, business intelligence">
     
-    // FAQ accordions
-    document.querySelectorAll('.faq-item h3').forEach(item => {
-      item.addEventListener('click', event => {
-        const parent = event.target.closest('.faq-item');
-        parent.classList.toggle('active');
+    <!-- Open Graph -->
+    <meta property="og:title" content="SalesFlow – Retail Analytics Dashboard | SalesFlow Store">
+    <meta property="og:description" content="Transform your retail business with real-time analytics. Start free today.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://SalesFlow.com">
+    
+    <!-- Fonts / Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/inter-ui/3.19.3/inter.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Landing styles -->
+    <link rel="stylesheet" href="/css/landing.css?v=<%= v %>">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
+  </head>
+  <body>
+    <!-- Navigation -->
+    <nav class="navbar">
+      <div class="container">
+        <div class="logo">
+          <img src="/img/logo.png" alt="SalesFlow Logo" onerror="this.src='/api/placeholder/180/60'; this.onerror=null;">
+          <span>SalesFlow</span>
+        </div>
+        <div class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#testimonials">Testimonials</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/login" class="nav-login">Log In</a>
+          <a href="/register" class="nav-signup">Start Free</a>
+        </div>
+        <div class="menu-toggle">
+          <i class="fas fa-bars"></i>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ────────── Hero ────────── -->
+    <header class="hero">
+      <div class="container">
+        <div class="hero-content">
+          <div class="hero-text">
+            <h1>
+              <span class="gradient-text">Your Retail Business,</span>
+              <span class="tagline">crystal-clear.</span>
+            </h1>
+            <p class="hero-subtitle">All-in-one dashboard that gives you complete visibility into your sales, inventory, and profit in real-time.</p>
+            
+            <ul class="punchlines">
+              <li><i class="fas fa-check-circle"></i> Real-time profit & loss tracking</li>
+              <li><i class="fas fa-check-circle"></i> Intelligent stock management with FIFO</li>
+              <li><i class="fas fa-check-circle"></i> Staff attendance & performance metrics</li>
+              <li><i class="fas fa-check-circle"></i> One-click reports for accountants</li>
+            </ul>
+
+            <div class="cta">
+              <a href="/register" class="btn primary pulse"><i class="fas fa-rocket"></i> Start 30-Day Free Trial</a>
+          
+            </div>
+            <p class="trial-note">No credit card required • Cancel anytime • Full feature access</p>
+          </div>
+          <div class="hero-image">
+            <img src="/img/das.jpg" alt="SalesFlow Dashboard Preview" onerror="this.src='/api/placeholder/550/400'; this.onerror=null;">
+          </div>
+        </div>
+      </div>
+      <div class="hero-shape">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+          <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z"></path>
+        </svg>
+      </div>
+    </header>
+
+
+
+    <!-- ────────── Benefits ────────── -->
+    <section id="features" class="benefits">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">Features</span>
+          <h2>Everything you need in one powerful view</h2>
+          
+        </div>
+
+        <div class="benefit-grid">
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-bolt"></i></div>
+            <h3>Real-Time Analytics</h3>
+            <p>Sales, expenses, and profit calculations update instantly with each transaction. No delays, no refresh needed.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-box-open"></i></div>
+            <h3>Smart Inventory</h3>
+            <p>FIFO batch tracking, low-stock alerts, and category management — all automatically synced with your sales.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+            <h3>Visual Reporting</h3>
+            <p>Beautiful Apache ECharts visualizations for profit trends, best-selling products, and revenue forecasting.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-user-shield"></i></div>
+            <h3>Secure User Roles</h3>
+            <p>Create sub-users with customized access levels, keeping sensitive financial data visible only to management.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-file-excel"></i></div>
+            <h3>Instant Exports</h3>
+            <p>Generate perfectly formatted Excel reports for products, sales, or expenses with a single click.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-indian-rupee-sign"></i></div>
+            <h3>Flexible Payments</h3>
+            <p>Handle cash, online, partial payments, and credit sales with native Razorpay integration for faster checkout.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-clock"></i></div>
+            <h3>Staff Management</h3>
+            <p>Digital check-in/out system accessible from any device, with attendance reports and performance tracking.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><i class="fas fa-cloud"></i></div>
+            <h3>Enterprise Security</h3>
+            <p>Google Firestore backend with Redis sessions and advanced encryption keeps your business data safe.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+
+
+    <!-- ────────── Numbers strip ────────── -->
+    <section class="numbers">
+      <div class="container">
+        <div class="numbers-inner">
+          <div class="number-item">
+            <div class="number-icon"><i class="fas fa-store"></i></div>
+            <div class="number-value">3,000+</div>
+            <div class="number-label">Daily Bills Processed</div>
+          </div>
+          <div class="number-item">
+            <div class="number-icon"><i class="fas fa-chart-pie"></i></div>
+            <div class="number-value">₹50 Cr+</div>
+            <div class="number-label">Revenue Tracked</div>
+          </div>
+          <div class="number-item">
+            <div class="number-icon"><i class="fas fa-truck"></i></div>
+            <div class="number-value">150k</div>
+            <div class="number-label">Stock Batches Managed</div>
+          </div>
+          <div class="number-item">
+            <div class="number-icon"><i class="fas fa-user-friends"></i></div>
+            <div class="number-value">7,500</div>
+            <div class="number-label">Active Business Users</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+
+    <!-- ────────── Testimonials ────────── -->
+    <section id="testimonials" class="testimonials">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">Success Stories</span>
+          <h2>What our customers are saying</h2>
+          <p class="section-subtitle">Join hundreds of satisfied retail businesses that have transformed their operations</p>
+        </div>
         
-        // Toggle icon
-        const icon = item.querySelector('i');
-        if (parent.classList.contains('active')) {
-          icon.classList.remove('fa-plus');
-          icon.classList.add('fa-minus');
-        } else {
-          icon.classList.remove('fa-minus');
-          icon.classList.add('fa-plus');
-        }
+        <div class="testimonial-grid">
+          <div class="testimonial-card">
+            <div class="quote"><i class="fas fa-quote-left"></i></div>
+            <p class="testimonial-text">"SalesFlow has completely transformed how I run my business. I finally have real-time visibility into profits and inventory. The time saved on monthly reports alone is worth every rupee."</p>
+            <div class="testimonial-author">
+              <!-- <img src="/images/testimonial1.jpg" alt="Rajiv Sharma" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;"> -->
+              <div class="author-info">
+                <h4>Rajiv Sharma</h4>
+                <p>Fashion Retailer, Mumbai</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="testimonial-card">
+            <div class="quote"><i class="fas fa-quote-left"></i></div>
+            <p class="testimonial-text">"We reduced inventory discrepancies by 94% in the first month. The batch tracking feature is a game-changer for our electronics store, and staff attendance tracking has improved punctuality."</p>
+            <div class="testimonial-author">
+              <!-- <img src="/images/testimonial2.jpg" alt="Priya Patel" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;"> -->
+              <div class="author-info">
+                <h4>Priya Patel</h4>
+                <p>Electronics Store Owner, Bangalore</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="testimonial-card">
+            <div class="quote"><i class="fas fa-quote-left"></i></div>
+            <p class="testimonial-text">"My accountant loves the Excel exports, and I love seeing exactly how my business is performing at any moment. Setup was surprisingly easy and customer support has been exceptional."</p>
+            <div class="testimonial-author">
+              <!-- <img src="/images/testimonial3.jpg" alt="Anand Gupta" onerror="this.src='/api/placeholder/60/60'; this.onerror=null;"> -->
+              <div class="author-info">
+                <h4>Anand Gupta</h4>
+                <p>Grocery Chain Owner, Delhi</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ────────── Price Comparison ────────── -->
+    <section class="pricing">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-tag">Value Proposition</span>
+          <h2>SalesFlow vs. traditional solutions</h2>
+          <p class="section-subtitle">See why thousands of businesses are making the switch</p>
+        </div>
+        
+        <div class="comparison-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>Traditional POS</th>
+                <th>Spreadsheets</th>
+                <th>SalesFlow</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Real-time profit tracking</td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-check"></i></td>
+              </tr>
+              <tr>
+                <td>FIFO batch management</td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-check"></i></td>
+              </tr>
+              <tr>
+                <td>Staff attendance</td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-check"></i></td>
+                <td><i class="fas fa-check"></i></td>
+              </tr>
+              <tr>
+                <td>One-click reporting</td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-check"></i></td>
+              </tr>
+              <tr>
+                <td>Mobile friendly</td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-times"></i></td>
+                <td><i class="fas fa-check"></i></td>
+              </tr>
+              <tr>
+                <td>Setup time</td>
+                <td>Days or weeks</td>
+                <td>Hours</td>
+                <td>Minutes</td>
+              </tr>
+              <tr>
+                <td>Monthly cost</td>
+                <td>₹10,000+</td>
+                <td>Low/DIY</td>
+                <td>Starting ₹999</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    
+
+
+    <!-- ────────── Call to Action ────────── -->
+    <section class="cta-banner">
+      <div class="container">
+        <div class="cta-content">
+          <h2>Stop guessing. Start knowing.</h2>
+          <p>Join 500+ successful businesses that have transformed their operations with SalesFlow.</p>
+          <a href="/register" class="btn big primary">
+            Start your free 30-day trial <i class="fas fa-arrow-right"></i>
+          </a>
+          <div class="cta-features">
+          
+            <span><i class="fas fa-mobile-alt"></i> Works on any device</span>
+            <span><i class="fas fa-headset"></i> 24×7 support</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  
+    <!-- ────────── Footer ────────── -->
+    <footer class="site-footer">
+      <div class="container">
+
+        <!-- Footer “mini-nav” -->
+        <nav class="footer-nav">
+          <a href="/">SalesFlow</a>
+          <a href="/Privacy">Privacy</a>
+          <a href="/pricing">Pricing</a>
+          <a href="/customerservice">Contact</a>
+          <a href="/terms-and-conditions">Terms & Conditions</a>
+        </nav>
+
+        <div class="footer-content">
+          <div class="footer-column">
+            
+            
+            <div class="social-links">
+              <a href="#"><i class="fab fa-facebook-f"></i></a>
+              <a href="#"><i class="fab fa-twitter"></i></a>
+              <a href="#"><i class="fab fa-instagram"></i></a>
+            </div>
+          </div>
+          
+        </div>
+
+        <div class="footer-bottom">
+          <p>&copy; <%= new Date().getFullYear() %> SalesFlow. All rights reserved.</p>
+        </div>
+
+      </div>
+    </footer>
+
+
+    <!-- ────────── Javascript ────────── -->
+    <script>
+      // Mobile menu toggle
+      document.querySelector('.menu-toggle').addEventListener('click', function() {
+        document.querySelector('.nav-links').classList.toggle('active');
       });
-    });
-  </script>
-</body>
-</html>
+      
+      // FAQ accordions
+      document.querySelectorAll('.faq-item h3').forEach(item => {
+        item.addEventListener('click', event => {
+          const parent = event.target.closest('.faq-item');
+          parent.classList.toggle('active');
+          
+          // Toggle icon
+          const icon = item.querySelector('i');
+          if (parent.classList.contains('active')) {
+            icon.classList.remove('fa-plus');
+            icon.classList.add('fa-minus');
+          } else {
+            icon.classList.remove('fa-minus');
+            icon.classList.add('fa-plus');
+          }
+        });
+      });
+    </script>
+  </body>
+  </html>

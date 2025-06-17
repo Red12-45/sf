@@ -2,23 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
   <title>Add New Product / Stock Batch</title>
+
+  <!-- Google Fonts & Font Awesome -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <!-- ── Add Font Awesome for sidebar icons ── -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 
   <link rel="stylesheet" href="/css/addProduct.css?v=<%= v %>">
-
   <style>.hidden{display:none}</style>
 </head>
+
 <body>
-  <div class="page-wrapper">
- <!-- Sidebar -->
+<div class="page-wrapper">
+  <!-- ─── Sidebar (unchanged markup) ─── -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <i class="fas fa-chart-line"></i>
@@ -28,300 +28,293 @@
       <div class="sidebar-section">
         <div class="sidebar-heading">Dashboard</div>
         <ul class="sidebar-menu">
-          <li class="sidebar-item"><a href="/" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a></li>
-          <li class="sidebar-item"><a href="/sales" class="sidebar-link active"><i class="fas fa-shopping-cart"></i> Sales Report</a></li>
-          <li class="sidebar-item"><a href="/profit" class="sidebar-link"><i class="fas fa-chart-bar"></i> Profit Report</a></li>
-          <li class="sidebar-item"><a href="/performance" class="sidebar-link"><i class="fas fa-rocket"></i> Performance</a></li>
-          <li class="sidebar-item"><a href="/stats" class="sidebar-link"><i class="fas fa-chart-pie"></i> Stats</a></li>
-          <li class="sidebar-item"><a href="/expense" class="sidebar-link"><i class="fas fa-money-bill-wave"></i> Expenses</a></li>
+          <li class="sidebar-item"><a href="/"             class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a></li>
+          <li class="sidebar-item"><a href="/sales"        class="sidebar-link active"><i class="fas fa-shopping-cart"></i> Sales Report</a></li>
+          <li class="sidebar-item"><a href="/profit"       class="sidebar-link"><i class="fas fa-chart-bar"></i> Profit Report</a></li>
+          <li class="sidebar-item"><a href="/performance"  class="sidebar-link"><i class="fas fa-rocket"></i> Performance</a></li>
+          <li class="sidebar-item"><a href="/stats"        class="sidebar-link"><i class="fas fa-chart-pie"></i> Stats</a></li>
+          <li class="sidebar-item"><a href="/expense"      class="sidebar-link"><i class="fas fa-money-bill-wave"></i> Expenses</a></li>
         </ul>
       </div>
+
       <div class="sidebar-section">
         <div class="sidebar-heading">Products</div>
         <ul class="sidebar-menu">
-          <li class="sidebar-item"><a href="/add-product" class="sidebar-link"><i class="fas fa-plus-circle"></i> Add New Product</a></li>
-          <li class="sidebar-item"><a href="/view-products" class="sidebar-link"><i class="fas fa-boxes"></i> View/Edit Products</a></li>
+          <li class="sidebar-item"><a href="/add-product"  class="sidebar-link"><i class="fas fa-plus-circle"></i> Add New Product</a></li>
+          <li class="sidebar-item"><a href="/view-products"class="sidebar-link"><i class="fas fa-boxes"></i> View/Edit Products</a></li>
         </ul>
       </div>
+
       <div class="sidebar-section">
         <div class="sidebar-heading">Settings</div>
         <ul class="sidebar-menu">
           <li class="sidebar-item"><a href="/profile" class="sidebar-link"><i class="fas fa-user"></i> Profile</a></li>
-          <li class="sidebar-item"><a href="/logout" class="sidebar-link"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+          <li class="sidebar-item"><a href="/logout"  class="sidebar-link"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
       </div>
     </div>
   </div>
-    <!-- Main Content -->
-    <main class="content"> 
-      <header class="page-header"><h1>Add New Product / Stock Batch</h1></header>
 
-      <% if (success) { %>
-  <div class="success-message">Product added/updated successfully!</div>
-<% } %>
-<% if (errorMessage) { %>
-  <div class="error-message"><%= errorMessage %></div>
-<% } %>
+  <!-- ─── Main content ─── -->
+  <main class="content">
+    <header class="page-header"><h1>Add New Product / Stock Batch</h1></header>
 
+    <% if (success)       { %><div class="success-message">Product added/updated successfully!</div><% } %>
+    <% if (errorMessage)  { %><div class="error-message"><%= errorMessage %></div><% } %>
 
-      <!-- Filters -->
-      <section class="filter-section">
-        <form method="GET" action="/add-product">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <!-- ─── Filters ─── -->
+    <section class="filter-section">
+      <form method="GET" action="/add-product">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-          <label for="categoryFilter">Filter by Category:</label>
-          <select name="category" id="categoryFilter">
-            <option value="" <%= selectedCategory===''?'selected':'' %>>All Categories</option>
-            <% categories.sort((a,b)=>a.localeCompare(b)).forEach(cat => { %>
-              <option value="<%= cat %>" <%= selectedCategory===cat?'selected':'' %>><%= cat %></option>
-            <% }) %>
-          </select>
+        <label for="categoryFilter">Filter by Category:</label>
+        <select name="category" id="categoryFilter">
+          <option value="" <%= selectedCategory===''?'selected':'' %>>All Categories</option>
+          <% categories.sort((a,b)=>a.localeCompare(b)).forEach(cat => { %>
+            <option value="<%= attr(cat) %>" <%= selectedCategory===cat?'selected':'' %>>
+              <%= cat %>
+            </option>
+          <% }) %>
+        </select>
 
-          <label for="sortOrder">Sort Order:</label>
-          <select name="sortOrder" id="sortOrder">
-            <option value="asc"  <%= sortOrder==='asc'?'selected':'' %>>A-Z</option>
-            <option value="desc" <%= sortOrder==='desc'?'selected':'' %>>Z-A</option>
-          </select>
+        <label for="sortOrder">Sort Order:</label>
+        <select name="sortOrder" id="sortOrder">
+          <option value="asc"  <%= sortOrder==='asc'?'selected':'' %>>A-Z</option>
+          <option value="desc" <%= sortOrder==='desc'?'selected':'' %>>Z-A</option>
+        </select>
 
-          <button type="submit">Apply Filters</button>
-        </form>
-      </section>
+        <button type="submit">Apply Filters</button>
+      </form>
+    </section>
 
-      <!-- Form -->
-      <section class="form-container">
-        <div class="form-section-header">Product Information</div>
+    <!-- ─── Product-form ─── -->
+    <section class="form-container">
+      <div class="form-section-header">Product Information</div>
 
-        <form action="/add-product"
-      method="POST"
-      onsubmit="return validateForm() && preventDuplicate(this)">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <!-- Existing Product Dropdown -->
+      <!-- **Changed**: removed inline onsubmit, gave the form an ID -->
+      <form id="addProductForm" action="/add-product" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+        <!-- Existing product dropdown -->
+        <div class="form-row">
+          <div class="form-group full-width">
+            <label for="existingProduct">Select Existing Product (or choose "Add New Product")</label>
+            <!-- **Changed**: removed inline onchange -->
+            <select id="existingProduct" name="existingProduct">
+              <option value="new">-- Add New Product --</option>
+              <% existingProducts.forEach(prod => { %>
+                <option value="<%= attr(prod.id) %>"><%= prod.name %></option>
+              <% }) %>
+            </select>
+          </div>
+        </div>
+
+        <!-- New-product block -->
+        <div id="newProductFields" class="hidden">
           <div class="form-row">
-            <div class="form-group full-width">
-              <label for="existingProduct">Select Existing Product (or choose "Add New Product")</label>
-              <select id="existingProduct" name="existingProduct" onchange="toggleNewProductFields()">
-                <option value="new">-- Add New Product --</option>
-                <% existingProducts.forEach(prod => { %>
-                  <option value="<%= prod.id %>"><%= prod.name %></option>
+            <div class="form-group">
+              <label for="productName">Product Name</label>
+              <input type="text" id="productName" name="productName"
+                     placeholder="Enter product name" maxlength="70">
+            </div>
+          </div>
+
+          <!-- Category -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="selectedCategory">Choose Category</label>
+              <select id="selectedCategory" name="selectedCategory">
+                <option value="">-- Select Category --</option>
+                <% categories.forEach(cat => { %>
+                  <option value="<%= attr(cat) %>"><%= cat %></option>
                 <% }) %>
               </select>
             </div>
-          </div>
 
-          <!-- New Product Fields -->
-          <div id="newProductFields" class="hidden">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="productName">Product Name</label>
-                <input type="text" id="productName" name="productName" placeholder="Enter product name" maxlength="70">
-              </div>
-            </div>
-
-            <!-- Category -->
-            <div class="form-row">
-              <div class="form-group">
-                <label for="selectedCategory">Choose Category</label>
-                <select id="selectedCategory" name="selectedCategory">
-                  <option value="">-- Select Category --</option>
-                  <% categories.forEach(cat => { %>
-                    <option value="<%= cat %>"><%= cat %></option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="newCategory">Or Create Category</label>
-                <input type="text" id="newCategory" name="newCategory" placeholder="Create a new category" maxlength="30">
-              </div>
-            </div>
-
-            <!-- Unit -->
-            <div class="form-row">
-              <div class="form-group">
-                <label for="selectedUnit">Choose Unit</label>
-                <select id="selectedUnit" name="selectedUnit">
-                  <option value="">-- Select Unit --</option>
-                  <% units.forEach(u => { %>
-                    <option value="<%= u %>"><%= u %></option>
-                  <% }) %>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="newUnit">Or Create Unit</label>
-                <input type="text" id="newUnit" name="newUnit" placeholder="e.g. kg, pcs, m" maxlength="25">
-              </div>
+            <div class="form-group">
+              <label for="newCategory">Or Create Category</label>
+              <input type="text" id="newCategory" name="newCategory"
+                     placeholder="Create a new category" maxlength="30">
             </div>
           </div>
 
-         <!-- Pricing, Tax & Quantity -->
-<div class="form-row">
-  <!-- Purchase price -->
-  <div class="form-group">
-    <label for="wholesalePrice" class="required">Purchase Price</label>
-    <div class="input-group">
-      <span class="input-group-prefix">₹</span>
-      <input type="number" step="0.01" min="0.01"
-             id="wholesalePrice" name="wholesalePrice"
-             required placeholder="0.00" class="input-with-prefix">
-    </div>
-  </div>
-
-  <!-- Retail price (TOTAL, tax-inclusive) -->
-  <div class="form-group">
-    <label for="retailPrice" class="required">Retail Price</label>
-    <div class="input-group">
-      <span class="input-group-prefix">₹</span>
-      <input type="number" step="0.01"  min="0.01"
-             id="retailPrice" name="retailPrice"
-             required placeholder="0.00" class="input-with-prefix">
-    </div>
-  </div>
-
-  <!-- NEW: optional inclusive GST% -->
-  <div class="form-group">
-    <label for="inclusiveTax">Inclusive&nbsp;Tax&nbsp;% (optional)</label>
-    <input type="number" step="0.01" min="0" max="100"
-           id="inclusiveTax" name="inclusiveTax"
-           placeholder="e.g. 18">
-  </div>
-</div>
-
-
+          <!-- Unit -->
           <div class="form-row">
             <div class="form-group">
-              <label for="quantity" class="required">Quantity Received</label>
-              <input type="number" step="0.01" min="0.01" id="quantity" name="quantity" required placeholder="0">
+              <label for="selectedUnit">Choose Unit</label>
+              <select id="selectedUnit" name="selectedUnit">
+                <option value="">-- Select Unit --</option>
+                <% units.forEach(u => { %>
+                  <option value="<%= attr(u) %>"><%= u %></option>
+                <% }) %>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="newUnit">Or Create Unit</label>
+              <input type="text" id="newUnit" name="newUnit"
+                     placeholder="e.g. kg, pcs, m" maxlength="25">
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing / tax / qty -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="wholesalePrice" class="required">Purchase Price</label>
+            <div class="input-group">
+              <span class="input-group-prefix">₹</span>
+              <input type="number" step="0.01" min="0.01"
+                     id="wholesalePrice" name="wholesalePrice"
+                     required placeholder="0.00" class="input-with-prefix">
             </div>
           </div>
 
-          <button type="submit">Add Product / Stock</button>
-        </form>
-      </section>
-    </main>
-  </div>
+          <div class="form-group">
+            <label for="retailPrice" class="required">Retail Price</label>
+            <div class="input-group">
+              <span class="input-group-prefix">₹</span>
+              <input type="number" step="0.01" min="0.01"
+                     id="retailPrice" name="retailPrice"
+                     required placeholder="0.00" class="input-with-prefix">
+            </div>
+          </div>
 
-  <script>
-    function toggleNewProductFields() {
-  const sel     = document.getElementById('existingProduct');
-  const wrapper = document.getElementById('newProductFields');
-  const inputs  = wrapper.querySelectorAll('input, select');
-  if (sel.value === 'new') {
-    wrapper.classList.remove('hidden');
-    inputs.forEach(i => {
-      i.disabled = false;
-      if (i.id === 'productName') i.required = true;
-    });
-  } else {
-    wrapper.classList.add('hidden');
-    inputs.forEach(i => {
-      i.disabled = true;
-      if (i.id === 'productName') i.required = false;
-    });
-  }
-}
-document.addEventListener('DOMContentLoaded', toggleNewProductFields);
-window.addEventListener('pageshow',           toggleNewProductFields);
+          <div class="form-group">
+            <label for="inclusiveTax">Inclusive&nbsp;Tax&nbsp;% (optional)</label>
+            <input type="number" step="0.01" min="0" max="100"
+                   id="inclusiveTax" name="inclusiveTax" placeholder="e.g. 18">
+          </div>
+        </div>
 
+        <div class="form-row">
+          <div class="form-group">
+            <label for="quantity" class="required">Quantity Received</label>
+            <input type="number" step="0.01" min="0.01" id="quantity"
+                   name="quantity" required placeholder="0">
+          </div>
+        </div>
 
-  </script>
+        <button type="submit">Add Product / Stock</button>
+      </form>
+    </section>
+  </main>
+</div>
 
-  <!-- Format integers to two decimals on blur -->
-  <script>
-
-
-    ['wholesalePrice','retailPrice','quantity'].forEach(id => {
-  const el = document.getElementById(id);
-  el.addEventListener('blur', function () {
-    const val = this.value.trim();
-    if (!val) return;                    // ← ignore empty
-    const num = parseFloat(val);
-    if (Number.isFinite(num)) this.value = num.toFixed(2);
-  });
-});
-
-
-  </script>
-
-  <!-- Title-case Product Name (only words starting with lowercase get transformed) -->
-  <script>
-    function titleCaseProductName() {
-      const input = document.getElementById('productName');
-      if (!input) return;
-      const words = input.value.trim().split(/\s+/).map(word => {
-        if (/^[a-z]/.test(word)) {
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-        }
-        return word;
-      });
-      input.value = words.join(' ');
+<!-- ──────────────────────────────────────────────
+     Inline JS – every block now carries the nonce,
+     and all DOM events are wired up _here_ instead
+     of unsafe inline attributes.
+────────────────────────────────────────────── -->
+<script nonce="<%= cspNonce %>">
+  /* Toggle new-product fieldset */
+  function toggleNewProductFields () {
+    const sel     = document.getElementById('existingProduct');
+    const wrapper = document.getElementById('newProductFields');
+    const inputs  = wrapper.querySelectorAll('input, select');
+    if (sel.value === 'new') {
+      wrapper.classList.remove('hidden');
+      inputs.forEach(i => { i.disabled = false; if (i.id === 'productName') i.required = true; });
+    } else {
+      wrapper.classList.add('hidden');
+      inputs.forEach(i => { i.disabled = true; if (i.id === 'productName') i.required = false; });
     }
-    document.addEventListener('DOMContentLoaded', () => {
-  const prodInput = document.getElementById('productName');
-  if (!prodInput) return;
-  prodInput.addEventListener('blur',  titleCaseProductName);
-  prodInput.addEventListener('paste', () => {
-    setTimeout(titleCaseProductName, 0);
-  });
-   prodInput.addEventListener('input', () => {
-    titleCaseProductName();
-  });
-});
+  }
+  document.addEventListener('DOMContentLoaded', toggleNewProductFields);
+  window.addEventListener('pageshow',           toggleNewProductFields);
+  document.getElementById('existingProduct')
+          .addEventListener('change', toggleNewProductFields);
+</script>
 
-  </script>
+<script nonce="<%= cspNonce %>">
+  /* Price/qty blur → fix to two decimals */
+  ['wholesalePrice','retailPrice','quantity'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener('blur', function () {
+      const val = this.value.trim();
+      if (!val) return;
+      const num = parseFloat(val);
+      if (Number.isFinite(num)) this.value = num.toFixed(2);
+    });
+  });
+</script>
 
-  <!-- Validation for Category & Unit -->
-  <script>
-    function preventDuplicate(form) {
+<script nonce="<%= cspNonce %>">
+  /* Title-case helper */
+  function titleCaseProductName () {
+    const input = document.getElementById('productName');
+    if (!input) return;
+    const words = input.value.trim().split(/\s+/).map(w =>
+      /^[a-z]/.test(w) ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w
+    );
+    input.value = words.join(' ');
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const p = document.getElementById('productName');
+    if (!p) return;
+    p.addEventListener('blur',  titleCaseProductName);
+    p.addEventListener('paste', () => setTimeout(titleCaseProductName, 0));
+    p.addEventListener('input', titleCaseProductName);
+  });
+</script>
+
+<script nonce="<%= cspNonce %>">
+  /* Validation + duplicate-submit guard */
+  function preventDuplicate (form) {
     const btn = form.querySelector('button[type="submit"]');
-    if (!btn) return true;                 // safety-net
-    if (btn.dataset.submitted === 'yes') { // already pressed once
-      return false;                        // block duplicate submit
+    if (!btn) return true;
+    if (btn.dataset.submitted === 'yes') return false;
+    btn.dataset.submitted = 'yes';
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    return true;
+  }
+  window.addEventListener('error', () => {
+    const btn = document.querySelector('button[type="submit"][disabled]');
+    if (btn) {
+      btn.disabled = false;
+      btn.dataset.submitted = 'no';
+      btn.textContent = 'Add Product / Stock';
     }
-    btn.dataset.submitted = 'yes';         // mark as used
-    btn.disabled = true;                   // grey it out
-    btn.textContent = 'Submitting…';       // optional: user feedback
-    return true;                           // allow the *first* submit
+  });
+
+  function validateForm () {
+    const existing = document.getElementById('existingProduct').value;
+    if (existing === 'new') {
+      const cSel = document.getElementById('selectedCategory').value.trim();
+      const cNew = document.getElementById('newCategory').value.trim();
+      if (!cSel && !cNew) {
+        alert('Please select an existing category or create a new one.');
+        return false;
+      }
+      const uSel = document.getElementById('selectedUnit').value.trim();
+      const uNew = document.getElementById('newUnit').value.trim();
+      if (!uSel && !uNew) {
+        alert('Please select an existing unit or create a new one.');
+        return false;
+      }
+    }
+    const wp  = +parseFloat(document.getElementById('wholesalePrice').value);
+    const rp  = +parseFloat(document.getElementById('retailPrice').value);
+    const qty = +parseFloat(document.getElementById('quantity').value);
+    if (!Number.isFinite(wp) || wp <= 0 ||
+        !Number.isFinite(rp) || rp <= 0 ||
+        !Number.isFinite(qty) || qty <= 0) {
+      alert('Prices and quantity must all be greater than 0.');
+      return false;
+    }
+    return true;
   }
 
-  // Re-enable submit on any client-side exception
-window.addEventListener('error', () => {
-  const btn = document.querySelector('button[type="submit"][disabled]');
-  if (btn) {
-    btn.disabled = false;
-    btn.dataset.submitted = 'no';
-    btn.textContent = 'Add Product / Stock';
-  }
-});
+  /* wire-up submit listener (replaces inline onsubmit) */
+  document.getElementById('addProductForm')
+          .addEventListener('submit', function (e) {
+    if (!(validateForm() && preventDuplicate(this))) e.preventDefault();
+  });
+</script>
 
-    function validateForm() {
-      const existing = document.getElementById('existingProduct').value;
-      if (existing === 'new') {
-        const selectedCat = document.getElementById('selectedCategory').value.trim();
-        const newCat = document.getElementById('newCategory').value.trim();
-        if (!selectedCat && !newCat) {
-          alert('Please select an existing category or create a new one.');
-          return false;
-        }
-        const selectedUnit = document.getElementById('selectedUnit').value.trim();
-        const newUnit = document.getElementById('newUnit').value.trim();
-        if (!selectedUnit && !newUnit) {
-          alert('Please select an existing unit or create a new one.');
-          return false;
-        }
-     }
-const wp  = +parseFloat(document.getElementById('wholesalePrice').value);
-const rp  = +parseFloat(document.getElementById('retailPrice').value);
-const qty = +parseFloat(document.getElementById('quantity').value);
-if (!Number.isFinite(wp) || wp <= 0 ||
-    !Number.isFinite(rp) || rp <= 0 ||
-    !Number.isFinite(qty) || qty <= 0) {
-  alert('Prices and quantity must all be greater than 0.');
-  return false;
-}
-return true;   // everything OK ─ let the form submit
-}
-  </script>
-
-  <script src="/js/firebasePersistence.js?v=<%= v %>" type="module"></script>
-  <script type="module" src="/js/firebase-appcheck.js?v=<%= v %>"></script>
+<!-- Firebase modules (carry the nonce as well) -->
+<script nonce="<%= cspNonce %>" type="module" src="/js/firebasePersistence.js?v=<%= v %>"></script>
+<script nonce="<%= cspNonce %>" type="module" src="/js/firebase-appcheck.js?v=<%= v %>"></script>
 </body>
 </html>

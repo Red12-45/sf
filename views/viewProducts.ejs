@@ -145,46 +145,49 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
 
             <!-- ───────  HEADER WITH “+” BUTTONS  ─────── -->
             <thead>
-              <tr>
-                <th class="expand-column"></th>
-                <th>Serial No.</th>
-                <th>Product Name</th>
+  <tr>
+    <th class="expand-column"></th>
+    <th>Serial No.</th>
+    <th>Product Name</th>
 
-                <th>
-                  Wholesale&nbsp;Price
-                  <button class="sum-btn" data-col="wholesale" title="Show total">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </th>
+    <th>
+      Wholesale&nbsp;Price
+      <button class="sum-btn" data-col="wholesale" title="Show total">
+        <i class="fas fa-plus"></i>
+      </button>
+    </th>
 
-                <th>
-                  Retail&nbsp;Price
-                  <button class="sum-btn" data-col="retail" title="Show total">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </th>
+    <th>
+      Retail&nbsp;Price
+      <button class="sum-btn" data-col="retail" title="Show total">
+        <i class="fas fa-plus"></i>
+      </button>
+    </th>
 
-                <th>Quantity</th>
-                <th>Unit</th>
+    <th>Quantity</th>
+    <th>Unit</th>
+    <!-- NEW column -->
+    <th>Tax&nbsp;%</th>
 
-                <th>
-                  Profit&nbsp;/Unit
-                  <button class="sum-btn" data-col="profit" title="Show total">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </th>
+    <th>
+      Profit&nbsp;/Unit
+      <button class="sum-btn" data-col="profit" title="Show total">
+        <i class="fas fa-plus"></i>
+      </button>
+    </th>
 
-                <th>
-                  Avg&nbsp;/Total&nbsp;Profit
-                  <button class="sum-btn" data-col="totalprofit" title="Show total">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </th>
+    <th>
+      Avg&nbsp;/Total&nbsp;Profit
+      <button class="sum-btn" data-col="totalprofit" title="Show total">
+        <i class="fas fa-plus"></i>
+      </button>
+    </th>
 
-                <th>Category</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+    <th>Category</th>
+    <th>Actions</th>
+  </tr>
+</thead>
+
 
             <!-- ───────  BODY  ─────── -->
             <tbody>
@@ -223,11 +226,18 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
                   <% if (product.quantity<=10) { %><span class="stock-badge">Low</span><% } %>
                 </td>
 
-                <td class="unit-cell"><%= product.unit ? product.unit : '-' %></td>
+             <td class="unit-cell"><%= product.unit ? product.unit : '-' %></td>
 
-                <td class="profit-cell product-profit-cell">
-                  <span class="currency">₹</span><%= Number(product.profitMargin).toFixed(2) %>
-                </td>
+<!-- NEW Tax % cell -->
+<td class="tax-cell product-tax-cell">
+  <%= (product.inclusiveTax !== undefined)
+        ? Number(product.inclusiveTax).toFixed(2) + '%' 
+        : '-' %>
+</td>
+
+<td class="profit-cell product-profit-cell">
+  <span class="currency">₹</span><%= Number(product.profitMargin).toFixed(2) %>
+</td>
 
                 <td class="avg-profit-cell product-avg-profit-cell">
                   <span class="currency">₹</span><%= avgProfit.toFixed(2) %>
@@ -239,8 +249,9 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
 
                 <td class="actions-cell">
   <% if (canDelete && product.quantity===0 && (!product.batches || !product.batches.length)) { %>
-    <form action="/delete-product/<%= product.id %>" method="POST"
-          class="delete-product-form" data-product-id="<%= product.id %>">
+   <form action="/delete-product/<%= encodeURIComponent(product.id) %>" method="POST"
+      class="delete-product-form" data-product-id="<%= encodeURIComponent(product.id) %>">
+
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
     </form>
@@ -254,7 +265,8 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
               <!--  Collapsible batch rows  -->
               <% if (product.batches && product.batches.length) { %>
                 <tr class="batches-container" id="batches-<%= product.id %>">
-                  <td colspan="11" class="batches-cell">
+                  <td colspan="12" class="batches-cell">
+
                     <div class="batches-content">
                       <h4 class="batches-title">
                         <i class="fas fa-layer-group"></i>
@@ -264,18 +276,20 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
                       <div class="batch-table-wrapper">
                         <table class="batch-table">
                           <thead>
-                            <tr>
-                              <th>Batch Date</th>
-                              <th>Time Added</th>
-                              <th>Purchase Price</th>
-                              <th>Retail Price</th>
-                              <th>Profit /Unit</th>
-                              <th>Quantity</th>
-                              <th>Unit</th>
-                              <th>Total Profit</th>
-                              <th>Remaining</th>
-                              <th>Actions</th>
-                            </tr>
+                             <tr>
+    <th>Batch Date</th>
+    <th>Time Added</th>
+    <th>Purchase Price</th>
+    <th>Retail Price</th>
+    <th>Profit /Unit</th>
+    <th>Quantity</th>
+    <th>Unit</th>
+    <!-- NEW column -->
+    <th>Tax&nbsp;%</th>
+    <th>Total Profit</th>
+    <th>Remaining</th>
+    <th>Actions</th>
+  </tr>
                           </thead>
                           <tbody>
                             <% product.batches.forEach(function (batch) {
@@ -317,11 +331,21 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
                                    <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
                                 </td>
 
-                                <td><%= batch.unit ? batch.unit : (product.unit || '-') %></td>
+                               <td><%= batch.unit ? batch.unit : (product.unit || '-') %></td>
 
-                                <td class="price-cell total-profit-cell">
-                                  <span class="currency">₹</span><%= batchTotalProfit.toFixed(2) %>
-                                </td>
+<!-- NEW Tax % cell -->
+<td class="batch-tax-cell">
+  <%= (batch.inclusiveTax !== undefined)
+        ? Number(batch.inclusiveTax).toFixed(2) + '%'
+        : (product.inclusiveTax !== undefined
+              ? Number(product.inclusiveTax).toFixed(2) + '%'
+              : '-') %>
+</td>
+
+<td class="price-cell total-profit-cell">
+  <span class="currency">₹</span><%= batchTotalProfit.toFixed(2) %>
+</td>
+
 
                                 <td class="remaining-cell <%= batch.remainingQuantity===0 ? 'empty' : '' %>">
                                   <%= Number(batch.remainingQuantity).toFixed(2) %>
@@ -332,12 +356,14 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
 
                                 <td>
   <% if (canEdit) { %>
-    <a href="/edit-stock-batch/<%= batch.id %>" class="edit-button"
+ <a href="/edit-stock-batch/<%= encodeURIComponent(batch.id) %>" class="edit-button"
+
        title="Edit this stock batch"><i class="fas fa-edit"></i></a>
   <% } %>
 
   <% if (canDelete) { %>
-    <form action="/delete-stock-batch/<%= batch.id %>" method="POST"
+ <form action="/delete-stock-batch/<%= encodeURIComponent(batch.id) %>" method="POST"
+
           class="delete-batch-form" data-product-id="<%= product.id %>" style="display:inline;">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <button type="submit" class="delete-button"><i class="fas fa-trash"></i></button>
@@ -365,17 +391,43 @@ const canDelete = !(blockedActions['/view-products'] || []).includes('delete');
 
   <!-- ──────────  SCRIPTS  ────────── -->
 
+
+  <!-- ── XSS-escape helper: must be loaded before any other inline JS ── -->
+<script>
+  function escapeHtml (str = '') {
+    return String(str)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+</script>
+
   <!--  Make product/batch data available for totals  -->
-  <script>
+<!-- ── safe runtime constants ── -->
+<script>
   const csrfToken  = document
         .querySelector('#filter-form input[name="_csrf"]').value;
-
-  /* >>> add these two lines <<< */
   const CAN_EDIT   = <%= canEdit   ? 'true' : 'false' %>;
   const CAN_DELETE = <%= canDelete ? 'true' : 'false' %>;
-
-  const PRODUCTS   = <%- JSON.stringify(products) %>;
 </script>
+
+<!-- ── products payload in an inert <script type="application/json"> ── -->
+<script  type="application/json"  id="products-json">
+  <%= JSON.stringify(products)
+        .replace(/</g,  '\\u003c')   /* stop </script> break-outs   */
+        .replace(/-->/g,'--\\>')     /* stop HTML comment closes    */
+        .replace(/\u2028|\u2029/g,'')/* strip JS line-sep chars     */ %>
+</script>
+
+<!-- ── parse it right back into JS land ── -->
+<script>
+  const PRODUCTS = JSON.parse(
+    document.getElementById('products-json').textContent
+  );
+</script>
+
 
   <!--  NEW  total-calculator  -->
   <script>
@@ -528,18 +580,20 @@ document.addEventListener('submit', async e => {
       prodRow.querySelector('.expand-cell').innerHTML = '';
 
       /* 2️⃣  switch “-” to a live trash button if allowed */
-      if (CAN_DELETE && p.quantity === 0) {
-        actionsCell.innerHTML = `
-          <form action="/delete-product/${p.id}" method="POST"
-                class="delete-product-form" data-product-id="${p.id}">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <button type="submit" class="delete-button">
-              <i class="fas fa-trash"></i>
-            </button>
-          </form>`;
-      } else {
-        actionsCell.innerHTML = '<span>-</span>';
-      }
+    if (CAN_DELETE && p.quantity === 0) {
+  const safePid = encodeURIComponent(p.id);   // ← escape once, reuse
+  actionsCell.innerHTML = `
+    <form action="/delete-product/${safePid}" method="POST"
+          class="delete-product-form" data-product-id="${safePid}">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="delete-button">
+        <i class="fas fa-trash"></i>
+      </button>
+    </form>`;
+} else {
+  actionsCell.innerHTML = '<span>-</span>';
+}
+
     }
   }
 });
