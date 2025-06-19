@@ -5,20 +5,53 @@
 <title>Tax Invoice – <%= invoiceNo %></title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/css/invoice.css?v=<%= v %>">
-<script>window.addEventListener('load',()=>window.print());</script>
+<style>
+/* ─── “Print” button (screen only) ─── */
+@media screen {
+  .print-btn{
+    position:absolute;
+    top:1rem; right:1rem;
+    padding:0.4rem 0.8rem;
+    font-size:0.9rem;
+    border:none; border-radius:4px;
+    background:#3a7bd5; color:#fff;
+    cursor:pointer;
+  }
+  .print-btn:hover{ background:#2c5282; }
+}
+@media print { .print-btn{ display:none; } }
+</style>
+
+<script nonce="<%= cspNonce %>">
+  /* auto-open dialog on first load */
+  window.addEventListener('load', () => window.print());
+
+  /* manual re-print */
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('printBtn');
+    if (btn) btn.addEventListener('click', () => window.print());
+  });
+</script>
+
 </head>
 <body>
 
 <section class="invoice">
-  <header>
-    <h1><%= shop.businessName || 'Your Business Name' %></h1>
-    <p>
-      <% if (shop.address) { %><%= shop.address %><br><% } %>
-      <% if (shop.phone)   { %>Phone: <%= shop.phone %><br><% } %>
-      <% if (shop.email)   { %>Email: <%= shop.email %><br><% } %>
-    </p>
-    <h2>Tax Invoice</h2>
-  </header>
+<header>
+  <h1><%= shop.businessName || 'Your Business Name' %></h1>
+  <p>
+    <% if (shop.address)   { %><%= shop.address %><br><% } %>
+    <% if (shop.phone)     { %>Phone: <%= shop.phone %><br><% } %>
+    <% if (shop.email)     { %>Email: <%= shop.email %><br><% } %>
+    <% if (shop.gstNumber) { %>GSTIN: <%= shop.gstNumber %><br><% } %>
+  </p>
+  <h2>Tax Invoice</h2>
+
+  <!-- Screen-only “Print” button -->
+  <button class="print-btn" id="printBtn">Print</button>
+
+</header>
+
 
   <div class="invoice-meta">
     <div><strong>Invoice #</strong> <%= invoiceNo %></div>

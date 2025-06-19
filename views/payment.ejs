@@ -1,60 +1,58 @@
-<!-- payment.ejs -->
+<!-- views/payment.ejs  ✅ FULL UPDATED FILE -->
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
   <title>Complete Payment</title>
-  <!-- Include Razorpay Checkout script -->
+  <!-- Razorpay Checkout -->
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
-  <% if (order) { %>
-    <!-- Hidden form to handle payment success callback -->
-    <form id="paymentForm" action="/payment-success" method="POST" style="display:none;">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <!-- Pass the subscription plan (Monthly, Half-Yearly, Yearly) -->
-      <input type="hidden" name="plan" value="<%= plan %>">
-    </form>
+<% if (order) { %>
 
-    <script>
-      // Define the Razorpay options only if an order exists
-      var options = {
-    "key": "<%= process.env.RAZORPAY_KEY_ID %>",
-    "amount": "<%= order.amount %>",
-    "currency": "<%= order.currency %>",
-    "name": "SalesFlow",
-    "description": "<%= plan %> Subscription",
-    "order_id": "<%= order.id %>",
-    "handler": function (response) {
-      document.getElementById('paymentForm').submit();
-    },
-    "prefill": {
-      "name": "<%= user.name %>",
-      "email": "<%= user.email %>"
-    },
-    "theme": {
-      "color": "#3399cc"
-    },
-    "modal": {
-      "ondismiss": function () {
-        // Redirect user if they close the Razorpay popup
-        window.location.href = "/"; // or use "/" to redirect to home
+  <!-- Hidden form (fields are populated by the handler) -->
+  <form id="paymentForm" action="/payment-success" method="POST" style="display:none;">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="razorpay_payment_id">
+    <input type="hidden" name="razorpay_order_id">
+    <input type="hidden" name="razorpay_signature">
+  </form>
+
+  <script>
+    const options = {
+      key       : "<%= process.env.RAZORPAY_KEY_ID %>",
+      amount    : "<%= order.amount %>",
+      currency  : "<%= order.currency %>",
+      name      : "SalesFlow",
+      description : "Subscription payment",
+      order_id  : "<%= order.id %>",
+
+      handler : function (response) {
+        const f = document.getElementById('paymentForm');
+        f.razorpay_payment_id.value = response.razorpay_payment_id;
+        f.razorpay_order_id.value   = response.razorpay_order_id;
+        f.razorpay_signature.value  = response.razorpay_signature;
+        f.submit();
+      },
+
+      prefill : {
+        name  : "<%= user.name %>",
+        email : "<%= user.email %>"
+      },
+      theme   : { color : "#3399cc" },
+      modal   : {
+        ondismiss : () => window.location.href = "/"
       }
-    }
-  };
+    };
 
-  var rzp1 = new Razorpay(options);
+    window.onload = () => new Razorpay(options).open();
+  </script>
 
-  window.onload = function () {
-    rzp1.open();
-  };
-    </script>
-  <% } else { %>
-    <!-- Display a message if no active order exists -->
-    <h2>Your subscription has expired or is not active.</h2>
-    <p>Please <a href="/pricing">choose a subscription plan</a> to continue using SalesFlow.</p>
-  <% } %>
+<% } else { %>
+  <h2>Your subscription has expired or is not active.</h2>
+  <p>Please <a href="/pricing">choose a subscription plan</a> to continue using SalesFlow.</p>
+<% } %>
 </body>
 <script src="/js/firebasePersistence.js" type="module"></script>
 </html>

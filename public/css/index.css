@@ -1240,3 +1240,20 @@ button[disabled] { opacity: .6; cursor: not-allowed; }
 }
 /* btn-lock = temporary disabled state for invoice buttons */
 .btn-lock { opacity: 0.6; }
+/* ─── remove the underline from the two invoice links in the Action column ─── */
+#salesTable td a,
+#salesTable td a:visited,
+#salesTable td a:hover {
+  text-decoration: none;   /* no underline at rest or on hover */
+  color: inherit;          /* keep the icon’s original colour */
+}
+/* ── Invoice links in the Action column ───────────────────────────── */
+#salesTable td a,                   /* default state                */
+#salesTable td a:visited {          /* visited state (same colour)  */
+  text-decoration: none;            /* keep the underline gone      */
+  color: var(--primary-color);      /* 🔵 your brand blue (#4361ee) */
+}
+
+#salesTable td a:hover {            /* hover / focus                */
+  color: var(--primary-light);      /* slightly lighter blue        */
+}

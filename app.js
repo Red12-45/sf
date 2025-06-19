@@ -841,48 +841,62 @@ app.get('/register', (req, res) => {
 app.post(
   '/register',
   [
-    body('name')
-      .isLength({ min: 2, max: 60 })
-      .withMessage('Name must be at least 2 characters.')
-      .trim().escape(),
+  body('name')
+    .isLength({ min: 2, max: 60 })
+    .withMessage('Name must be at least 2 characters.')
+    .trim().escape(),
 
-    body('email')
-      .isEmail()
-      .withMessage('Invalid email address.')
-      .normalizeEmail(),
+  body('email')
+    .isEmail()
+    .withMessage('Invalid email address.')
+    .normalizeEmail(),
 
-    body('phone')
-      .optional({ checkFalsy: true })
-      .isMobilePhone('en-IN')
-      .withMessage('Invalid Indian phone number.')
-      .trim().escape(),
+  body('phone')
+    .optional({ checkFalsy: true })
+    .isMobilePhone('en-IN')
+    .withMessage('Invalid Indian phone number.')
+    .trim().escape(),
 
-    body('address')
-      .isLength({ max: 200 })
-      .withMessage('Address too long.')
-      .trim().escape(),
+  body('address')
+    .isLength({ max: 200 })
+    .withMessage('Address too long.')
+    .trim().escape(),
 
-    body('location')
-      .optional({ checkFalsy: true })
-      .trim().escape(),
+  body('location')
+    .optional({ checkFalsy: true })
+    .trim().escape(),
 
-    body('password')
-      .isStrongPassword({
-        minLength: 8, minLowercase: 1,
-        minUppercase: 1, minNumbers: 1, minSymbols: 1
-      })
-      .withMessage('Password must be 8 chars incl. upper, lower, number & symbol.'),
+  /* ─── NEW – optional GST Number (15-char GSTIN) ─── */
+  body('gstNumber')
+    .optional({ checkFalsy: true })
+    .matches(/^[0-9A-Z]{15}$/)
+    .withMessage('GST number must be 15 characters (digits/A-Z).'),
 
-    body('confirmPassword')
-      .custom((val, { req }) => {
-        if (val !== req.body.password)
-          throw new Error('Passwords do not match');
-        return true;
-      })
-  ],
+  body('password')
+    .isStrongPassword({
+      minLength : 8,
+      minLowercase: 1,
+      minUppercase: 1,
+      minNumbers  : 1,
+      minSymbols  : 1
+    })
+    .withMessage('Password must be 8 chars incl. upper, lower, number & symbol.'),
+
+  body('confirmPassword')
+    .custom((val, { req }) => {
+      if (val !== req.body.password)
+        throw new Error('Passwords do not match');
+      return true;
+    })
+],
+
   async (req, res) => {
     const errors = validationResult(req);
-    const { name, email, phone, address, location, businessName, password } = req.body;
+    const {
+  name, email, phone, address, location,
+  businessName, gstNumber = '', password
+} = req.body;
+
     const oldInput = { name, email, phone, address, location, businessName  };
 
     if (!errors.isEmpty()) {
@@ -906,17 +920,20 @@ app.post(
 
           // 1️⃣ Hash password and create user
       const hashed = await bcrypt.hash(password, 10);
-      const userRef = await db.collection('users').add({
-        name,
-        email: normalizedEmail,
-        phone,
-        address,
-        location,
-        businessName,        // ← added
-        password: hashed,
-        isMaster: true,
-        createdAt: new Date()
-      });
+      const userData = {
+  name,
+  email        : normalizedEmail,
+  phone,
+  address,
+  location,
+  businessName,
+  ...(gstNumber && { gstNumber: gstNumber.trim().toUpperCase() }), // ✅ optional
+  password     : hashed,
+  isMaster     : true,
+  createdAt    : new Date()
+};
+
+const userRef = await db.collection('users').add(userData);
 
 
       // 2️⃣ Set accountId AND a 30-day trial expiry
@@ -2721,75 +2738,122 @@ app.get('/pricing', (req, res) => {
 });
 
 
-// GET /subscribe/monthly
+/* ───── GET /subscribe/monthly  (secure) ───── */
 app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
-  const amount  = 499  * 100;
-  const currency= 'INR';
-  const receipt = `receipt_monthly_${Date.now()}`;
+  const amount   = 499 * 100;            // ₹499 → paise
+  const currency = 'INR';
+  const receipt  = `receipt_monthly_${Date.now()}`;
+
   try {
     const order = await razorpay.orders.create({ amount, currency, receipt });
-    res.render('payment', { order, plan:'Monthly', amount:400, user:req.session.user });
+
+    /* 🔐 Persist order – plan lives server-side only */
+    await db.collection('paymentOrders').doc(order.id).set({
+      userId : req.session.user.id,
+      plan   : 'Monthly',
+      days   : 30,
+      amount,
+      currency,
+      paid   : false,
+      createdAt : new Date()
+    });
+
+    /* No plan variable sent to client anymore */
+    res.render('payment', { order, user: req.session.user });
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
 
-// GET /subscribe/half-yearly
+/* ───── GET /subscribe/half-yearly  (secure) ───── */
 app.get('/subscribe/half-yearly', isAuthenticated, async (req, res) => {
-  const amount  = 2699 * 100;
-  const currency= 'INR';
-  const receipt = `receipt_halfyearly_${Date.now()}`;
+  const amount   = 2699 * 100;
+  const currency = 'INR';
+  const receipt  = `receipt_halfyearly_${Date.now()}`;
+
   try {
     const order = await razorpay.orders.create({ amount, currency, receipt });
-    res.render('payment',{ order, plan:'Half-Yearly', amount:4599, user:req.session.user });
+
+    await db.collection('paymentOrders').doc(order.id).set({
+      userId : req.session.user.id,
+      plan   : 'Half-Yearly',
+      days   : 182,
+      amount,
+      currency,
+      paid   : false,
+      createdAt : new Date()
+    });
+
+    res.render('payment', { order, user: req.session.user });
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
 
-// GET /subscribe/yearly
+
+/* ───── GET /subscribe/yearly  (secure) ───── */
 app.get('/subscribe/yearly', isAuthenticated, async (req, res) => {
-  const amount  = 4799 * 100;
-  const currency= 'INR';
-  const receipt = `receipt_yearly_${Date.now()}`;
+  const amount   = 4799 * 100;
+  const currency = 'INR';
+  const receipt  = `receipt_yearly_${Date.now()}`;
+
   try {
     const order = await razorpay.orders.create({ amount, currency, receipt });
-    res.render('payment',{ order, plan:'Yearly', amount:8599, user:req.session.user });
+
+    await db.collection('paymentOrders').doc(order.id).set({
+      userId : req.session.user.id,
+      plan   : 'Yearly',
+      days   : 365,
+      amount,
+      currency,
+      paid   : false,
+      createdAt : new Date()
+    });
+
+    res.render('payment', { order, user: req.session.user });
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
 
-// POST /payment-success  (🔒 signature-verified)
+
+/* ───── POST /payment-success  (hardened) ───── */
 app.post('/payment-success', isAuthenticated, async (req, res) => {
   try {
-    /* Razorpay posts these three fields from the client SDK */
     const {
       razorpay_payment_id,
       razorpay_order_id,
-      razorpay_signature,
-      plan
+      razorpay_signature
     } = req.body;
 
-    /* 1️⃣  Signature validation */
-    const shasum  = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
+    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature)
+      return res.status(400).send('Missing payment details');
+
+    /* 1️⃣  Verify HMAC signature */
+    const shasum = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
     shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    const digest  = shasum.digest('hex');
-
-    if (digest !== razorpay_signature) {
+    if (shasum.digest('hex') !== razorpay_signature)
       return res.status(400).send('Payment signature invalid – request denied.');
-    }
 
-    /* 2️⃣  Plan → days mapping */
-    const days = ({
-      'Monthly'      :  30,
-      'Half-Yearly'  : 182,
-      'Yearly'       : 365
-    })[plan] || 0;
-    if (!days) return res.status(400).send('Invalid plan');
+    /* 2️⃣  Fetch the order we saved during /subscribe/* */
+    const orderRef = db.collection('paymentOrders').doc(razorpay_order_id);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists)
+      return res.status(400).send('Order not recognised');
 
-    /* 3️⃣  Extend subscription for the *master* account only  */
-    const now      = new Date();
+    const order = orderSnap.data();
+    if (order.paid)
+      return res.status(400).send('Order already processed');
+    if (order.userId !== req.session.user.id)
+      return res.status(403).send('Order does not belong to current user');
+
+    /* 3️⃣  OPTIONAL – you can call Razorpay Orders API here to
+           verify that order.status === 'paid' & amount === order.amount */
+
+    /* 4️⃣  Extend subscription */
+    const days = order.days;                     // 30 / 182 / 365
+    const now  = new Date();
+
     const userRef  = db.collection('users').doc(req.session.user.id);
     const userSnap = await userRef.get();
     const curExp   = userSnap.data().subscriptionExpiry
@@ -2797,11 +2861,18 @@ app.post('/payment-success', isAuthenticated, async (req, res) => {
                                    ? userSnap.data().subscriptionExpiry.toDate()
                                    : userSnap.data().subscriptionExpiry)
                       : now;
-    const newExp   = (curExp > now ? curExp : now);
+    const newExp = curExp > now ? curExp : now;
     newExp.setDate(newExp.getDate() + days);
 
     await userRef.update({ subscriptionExpiry: newExp });
     req.session.user.subscriptionExpiry = newExp;
+
+    /* 5️⃣  Mark order consumed */
+    await orderRef.update({
+      paid       : true,
+      paymentId  : razorpay_payment_id,
+      paidAt     : new Date()
+    });
 
     res.redirect('/');
   } catch (e) {
@@ -2842,12 +2913,14 @@ app.get('/profile', isAuthenticated, requireMaster, async (req, res) => {
 app.post('/profile', isAuthenticated, requireMaster, async (req, res) => {
   try {
     const {
-      name         = '',
-      businessName = '',
-      phone        = '',
-      address      = '',
-      location     = ''
-    } = req.body;
+  name         = '',
+  businessName = '',
+  phone        = '',
+  address      = '',
+  location     = '',
+  gstNumber    = ''
+} = req.body;
+
 
     /* simple length validations (mirrors registration rules) */
     if (name.trim().length < 2)
@@ -2855,16 +2928,21 @@ app.post('/profile', isAuthenticated, requireMaster, async (req, res) => {
 
     if (businessName.length > 80 || address.length > 200)
       return res.redirect('/profile?error=Field%20length%20limit%20exceeded');
+    if (gstNumber && !/^[0-9A-Z]{15}$/.test(gstNumber.trim()))
+  return res.redirect('/profile?error=Invalid%20GST%20number%20format');
+
 
     /* update Firestore */
     const update = {
-      name       : name.trim(),
-      businessName: businessName.trim(),
-      phone      : phone.trim(),
-      address    : address.trim(),
-      location   : location.trim(),
-      updatedAt  : new Date()
-    };
+  name        : name.trim(),
+  businessName: businessName.trim(),
+  phone       : phone.trim(),
+  address     : address.trim(),
+  location    : location.trim(),
+  ...(gstNumber.trim() && { gstNumber: gstNumber.trim().toUpperCase() }),
+  updatedAt   : new Date()
+};
+
     await db.collection('users').doc(req.session.user.id).update(update);
 
     /* keep session in sync so header shows new name immediately */

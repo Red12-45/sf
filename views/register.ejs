@@ -82,7 +82,16 @@
             placeholder="Enter your business name"
             value="<%= oldInput?.businessName || '' %>">
         </div>
-
+<!-- GST Number (Optional) -->
+<div class="form-group">
+  <label for="gstNumber"><i class="fas fa-receipt"></i> GST Number&nbsp;<span style="font-weight:normal">(optional)</span></label>
+  <input
+    id="gstNumber" name="gstNumber" type="text" maxlength="15"
+    placeholder="15-character GSTIN (optional)"
+    pattern="^[0-9A-Z]{15}$"
+    title="Exact 15 characters: digits &amp; uppercase letters"
+    value="<%= oldInput?.gstNumber || '' %>">
+</div>
         <!-- Password -->
         <div class="form-group">
           <label for="password"><i class="fas fa-lock"></i> Password</label>

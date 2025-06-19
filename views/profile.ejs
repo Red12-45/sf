@@ -503,6 +503,7 @@ main {
 .field-group:nth-child(4) { animation-delay: 0.4s; }
 .field-group:nth-child(5) { animation-delay: 0.5s; }
 .field-group:nth-child(6) { animation-delay: 0.6s; }
+.field-group:nth-child(7) { animation-delay: 0.7s; }
 
 /* Focus styles for accessibility */
 .edit-btn:focus-visible,
@@ -571,16 +572,35 @@ input:focus-visible {
         </div>
       </div>
 
-      <div class="field-group">
-        <label for="businessName">Business Name</label>
-        <div class="input-wrapper">
-          <input type="text" id="businessName" name="businessName"
-                 value="<%= user.businessName || '' %>" maxlength="80" readonly>
-          <button type="button" class="edit-btn" data-field="businessName">
-            <i class="fas fa-edit"></i>
-          </button>
-        </div>
-      </div>
+      <!-- Business Name -->
+<div class="field-group">
+  <label for="businessName">Business Name</label>
+  <div class="input-wrapper">
+    <input type="text" id="businessName" name="businessName"
+           value="<%= user.businessName || '' %>" maxlength="80" readonly>
+    <button type="button" class="edit-btn" data-field="businessName">
+      <i class="fas fa-edit"></i>
+    </button>
+  </div>
+</div>
+
+<!-- GST Number (optional) -->
+<div class="field-group">
+  <label for="gstNumber">GST Number <span style="font-weight:normal">(optional)</span></label>
+  <div class="input-wrapper">
+    <input type="text" id="gstNumber" name="gstNumber"
+           value="<%= user.gstNumber || '' %>"
+           maxlength="15"
+           pattern="^[0-9A-Z]{15}$"
+           title="Exact 15 characters: digits & uppercase letters"
+           readonly>
+    <button type="button" class="edit-btn" data-field="gstNumber">
+      <i class="fas fa-edit"></i>
+    </button>
+  </div>
+</div>
+
+
 
       <div class="field-group">
         <label for="email">Email Address</label>

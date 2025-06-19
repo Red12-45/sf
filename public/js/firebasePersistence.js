@@ -9,26 +9,29 @@
    ❖ Realtime listener renamed to `onSnapshotLive`.
    ❖ Unlimited multi‑tab persistent cache retained.
    =========================================================== */
+/* ----------  Firebase v11.9.1  ---------- */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  CACHE_SIZE_UNLIMITED,
 
-   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js';
-   import {
-     initializeFirestore,
-     persistentLocalCache,
-     persistentMultipleTabManager,
-     CACHE_SIZE_UNLIMITED,
-     /* ── read ops – network versions aliased so we can override names ── */
-     doc,
-     getDoc              as getDocOnline,
-     getDocs             as getDocsOnline,
-     getDocFromCache,
-     getDocsFromCache,
-     collection, query, where, orderBy, limit,
-     onSnapshot,
-     /* ── write ops ── */
-     setDoc, addDoc, updateDoc, deleteDoc,
-     /* ── cache maintenance ── */
-     clearIndexedDbPersistence, terminate
-   } from 'https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js';
+  /* ── read ops – network versions aliased so we can override names ── */
+  getDoc              as getDocOnline,
+  getDocs             as getDocsOnline,
+  getDocFromCache,
+  getDocsFromCache,
+  collection, query, where, orderBy, limit,
+  onSnapshot,
+
+  /* ── write ops ── */
+  setDoc, addDoc, updateDoc, deleteDoc,
+
+  /* ── cache maintenance ── */
+  clearIndexedDbPersistence, terminate
+} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+
    
    /* ---------- PUBLIC CONFIG (safe to expose) ---------------- */
    export const firebaseConfig = {
