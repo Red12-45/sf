@@ -5,40 +5,724 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
   <title>Your Profile</title>
-  <!-- Include Font Awesome CDN -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Enhanced CSS -->
   <link rel="stylesheet" href="/css/profile.css?v=<%= v %>">
 </head>
+<style>
+  /* Reset & Global Settings */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --primary-color: #3a7bd5;
+  --primary-light: #6faae7;
+  --primary-dark: #2c5282;
+  --secondary-color: #2dd4bf;
+  --accent-color: #f59e0b;
+  --success-color: #10b981;
+  --error-color: #ef4444;
+  --warning-color: #f59e0b;
+  --dark-bg: #1e293b;
+  --light-bg: #f8fafc;
+  --card-bg: #ffffff;
+  --text-dark: #1e293b;
+  --text-light: #64748b;
+  --text-muted: #94a3b8;
+  --text-white: #f8fafc;
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  color: var(--text-dark);
+  line-height: 1.6;
+  min-height: 100vh;
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(58, 123, 213, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(45, 212, 191, 0.08) 0%, transparent 50%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Header and Navigation */
+header {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%);
+  padding: 1rem 2rem;
+  width: 100%;
+  color: var(--text-white);
+  box-shadow: var(--shadow-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+nav {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+}
+
+nav a {
+  color: var(--text-white);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  white-space: nowrap;
+}
+
+nav a:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+nav a i {
+  font-size: 0.9rem;
+}
+
+/* Main content */
+main {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+/* Alert Messages */
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+  animation: slideIn 0.3s ease-out;
+}
+
+.alert.success {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: var(--success-color);
+  border: 1px solid #a7f3d0;
+}
+
+.alert.error {
+  background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+  color: var(--error-color);
+  border: 1px solid #fca5a5;
+}
+
+.alert i {
+  font-size: 1.1rem;
+}
+
+/* Profile Header */
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, var(--card-bg) 0%, #f8fafc 100%);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light);
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2.5rem;
+  box-shadow: var(--shadow-lg);
+}
+
+.profile-title h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 0.25rem;
+}
+
+.profile-title p {
+  color: var(--text-light);
+  font-size: 1rem;
+}
+
+/* Profile Details Form */
+.profile-details {
+  background: var(--card-bg);
+  border-radius: var(--radius-xl);
+  padding: 2.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-light);
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.profile-details::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+}
+
+.profile-details:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+/* Field Groups */
+.field-group {
+  margin-bottom: 2rem;
+}
+
+.field-group:last-of-type {
+  margin-bottom: 2.5rem;
+}
+
+.field-group label {
+  display: block;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.input-wrapper input {
+  flex: 1;
+  padding: 0.875rem 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  font-size: 1rem;
+  font-family: inherit;
+  transition: var(--transition);
+  background: var(--card-bg);
+  color: var(--text-dark);
+}
+
+.input-wrapper input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.1);
+  transform: translateY(-1px);
+}
+
+.input-wrapper input:disabled {
+  background: var(--border-light);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.input-wrapper input[readonly] {
+  background: var(--light-bg);
+  border-color: var(--border-light);
+}
+
+.input-wrapper input[readonly]:not(:disabled):hover {
+  border-color: var(--border-color);
+}
+
+/* Edit Buttons */
+.edit-btn {
+  padding: 0.75rem;
+  border: 2px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-light);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.edit-btn:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.edit-btn.save-field {
+  background: var(--success-color);
+  color: white;
+  border-color: var(--success-color);
+}
+
+.edit-btn.save-field:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+/* Info Badges */
+.info-badge {
+  padding: 0.5rem 0.875rem;
+  background: linear-gradient(135deg, var(--border-light) 0%, #e2e8f0 100%);
+  color: var(--text-muted);
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-color);
+}
+
+.subscription-badge {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: var(--success-color);
+  border-color: #a7f3d0;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-light);
+}
+
+.save-btn, .cancel-btn {
+  padding: 0.875rem 1.5rem;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  font-family: inherit;
+}
+
+.save-btn {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+.save-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%);
+}
+
+.save-btn:disabled {
+  background: var(--text-muted);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.cancel-btn {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  color: var(--text-dark);
+  border: 2px solid var(--border-color);
+}
+
+.cancel-btn:hover {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  header {
+    padding: 1rem;
+  }
+  
+  nav {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  nav a {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+  }
+  
+  main {
+    margin: 1rem auto;
+    padding: 0 1rem;
+  }
+  
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    padding: 1.5rem;
+  }
+  
+  .profile-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 2rem;
+  }
+  
+  .profile-title h1 {
+    font-size: 1.5rem;
+  }
+  
+  .profile-details {
+    padding: 1.5rem;
+  }
+  
+  .input-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  
+  .edit-btn {
+    align-self: flex-end;
+    width: auto;
+    padding: 0.5rem 1rem;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .save-btn, .cancel-btn {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-details {
+    padding: 1rem;
+  }
+  
+  .field-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .input-wrapper input {
+    padding: 0.75rem;
+  }
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-details {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.field-group {
+  animation: fadeIn 0.6s ease-out backwards;
+}
+
+.field-group:nth-child(1) { animation-delay: 0.1s; }
+.field-group:nth-child(2) { animation-delay: 0.2s; }
+.field-group:nth-child(3) { animation-delay: 0.3s; }
+.field-group:nth-child(4) { animation-delay: 0.4s; }
+.field-group:nth-child(5) { animation-delay: 0.5s; }
+.field-group:nth-child(6) { animation-delay: 0.6s; }
+
+/* Focus styles for accessibility */
+.edit-btn:focus-visible,
+.save-btn:focus-visible,
+.cancel-btn:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+input:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+</style>
 <body>
   <header>
     <nav>
       <a href="/"><i class="fa fa-home"></i> Dashboard</a>
       <% if (user.isMaster) { %>
-        <a href="/create-user"><i class="fas fa-pencil-alt"></i> Create Users</a>
-        <a href="/permission"><i class="fas fa-lock"></i> Permissions</a>
+        <a href="/create-user"><i class="fas fa-user-plus"></i> Create Users</a>
+        <a href="/permission"><i class="fas fa-shield-alt"></i> Permissions</a>
       <% } %>
-      <a href="/billing"><i class="fa fa-money-bill-wave"></i> Billing</a>
+      <a href="/billing"><i class="fa fa-credit-card"></i> Billing</a>
       <a href="/logout"><i class="fa fa-sign-out-alt"></i> Logout</a>
     </nav>
   </header>
+
   <main>
-    <section class="profile-details">
-      <p><strong>Full Name:</strong> <%= user.name %></p>
-      <p><strong>Business Name:</strong> <%= user.businessName %></p>
-      <p><strong>Email Address:</strong> <%= user.email %></p>
-      <p><strong>Phone Number:</strong> <%= user.phone %></p>
-      <p><strong>Address:</strong> <%= user.address %></p>
-      <p><strong>Location:</strong> <%= user.location %></p>
+    <!-- Flash messages -->
+    <% if (success) { %>
+      <div class="alert success">
+        <i class="fa fa-check-circle"></i> 
+        <span>Profile updated successfully!</span>
+      </div>
+    <% } %>
+    <% if (errorMessage) { %>
+      <div class="alert error">
+        <i class="fa fa-exclamation-triangle"></i> 
+        <span><%= errorMessage %></span>
+      </div>
+    <% } %>
+
+    <!-- Profile Header -->
+    <div class="profile-header">
+      <div class="profile-avatar">
+        <i class="fas fa-user-circle"></i>
+      </div>
+      <div class="profile-title">
+        <h1>Profile Settings</h1>
+        <p>Manage your account information and preferences</p>
+      </div>
+    </div>
+
+    <!-- Profile Form -->
+    <form class="profile-details" action="/profile" method="POST" autocomplete="off">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <div class="field-group">
+        <label for="name">Full Name</label>
+        <div class="input-wrapper">
+          <input type="text" id="name" name="name" value="<%= user.name %>"
+                 required minlength="2" maxlength="60" readonly>
+          <button type="button" class="edit-btn" data-field="name">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="businessName">Business Name</label>
+        <div class="input-wrapper">
+          <input type="text" id="businessName" name="businessName"
+                 value="<%= user.businessName || '' %>" maxlength="80" readonly>
+          <button type="button" class="edit-btn" data-field="businessName">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="email">Email Address</label>
+        <div class="input-wrapper">
+          <input type="email" id="email" value="<%= user.email %>" disabled>
+          <span class="info-badge">
+            <i class="fas fa-lock"></i> Protected
+          </span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="phone">Phone Number</label>
+        <div class="input-wrapper">
+          <input type="tel" id="phone" name="phone" value="<%= user.phone || '' %>" 
+                 maxlength="20" readonly>
+          <button type="button" class="edit-btn" data-field="phone">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="address">Address</label>
+        <div class="input-wrapper">
+          <input type="text" id="address" name="address" value="<%= user.address || '' %>" 
+                 maxlength="200" readonly>
+          <button type="button" class="edit-btn" data-field="address">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="location">Location</label>
+        <div class="input-wrapper">
+          <input type="text" id="location" name="location" value="<%= user.location || '' %>" 
+                 maxlength="80" readonly>
+          <button type="button" class="edit-btn" data-field="location">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+      </div>
+
       <% if (user.subscriptionExpiry) { %>
-        <p>
-          <strong>Subscription Expiry:</strong>
-          <%= new Date(user.subscriptionExpiry).toLocaleDateString() %>
-        </p>
+        <div class="field-group">
+          <label for="subscription">Subscription Expiry</label>
+          <div class="input-wrapper">
+            <input type="text" id="subscription"
+                   value="<%= new Date(user.subscriptionExpiry).toLocaleDateString() %>"
+                   disabled>
+            <span class="info-badge subscription-badge">
+              <i class="fas fa-calendar-alt"></i> 
+              <%= new Date(user.subscriptionExpiry) > new Date() ? 'Active' : 'Expired' %>
+            </span>
+          </div>
+        </div>
       <% } %>
-      
-    </section>
+
+      <div class="form-actions">
+        <button type="submit" class="save-btn" id="saveBtn" disabled>
+          <i class="fas fa-save"></i> Save Changes
+        </button>
+        <button type="button" class="cancel-btn" id="cancelBtn" style="display: none;">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+      </div>
+    </form>
   </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const editButtons = document.querySelectorAll('.edit-btn');
+      const saveBtn = document.getElementById('saveBtn');
+      const cancelBtn = document.getElementById('cancelBtn');
+      const form = document.querySelector('.profile-details');
+      let originalValues = {};
+      let editingFields = new Set();
+
+      // Store original values
+      form.querySelectorAll('input[name]').forEach(input => {
+        originalValues[input.name] = input.value;
+      });
+
+      editButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          const fieldName = this.dataset.field;
+          const input = document.getElementById(fieldName);
+          
+          if (input.readOnly) {
+            // Enable editing
+            input.readOnly = false;
+            input.focus();
+            input.select();
+            this.innerHTML = '<i class="fas fa-check"></i>';
+            this.classList.add('save-field');
+            editingFields.add(fieldName);
+          } else {
+            // Save field
+            input.readOnly = true;
+            this.innerHTML = '<i class="fas fa-edit"></i>';
+            this.classList.remove('save-field');
+            editingFields.delete(fieldName);
+          }
+
+          updateButtons();
+        });
+      });
+
+      cancelBtn.addEventListener('click', function() {
+        // Restore original values
+        form.querySelectorAll('input[name]').forEach(input => {
+          if (originalValues.hasOwnProperty(input.name)) {
+            input.value = originalValues[input.name];
+            input.readOnly = true;
+          }
+        });
+
+        // Reset edit buttons
+        editButtons.forEach(button => {
+          button.innerHTML = '<i class="fas fa-edit"></i>';
+          button.classList.remove('save-field');
+        });
+
+        editingFields.clear();
+        updateButtons();
+      });
+
+      function updateButtons() {
+        const hasChanges = Array.from(form.querySelectorAll('input[name]')).some(input => 
+          originalValues[input.name] !== input.value
+        );
+
+        saveBtn.disabled = !hasChanges;
+        cancelBtn.style.display = hasChanges ? 'inline-flex' : 'none';
+      }
+
+      // Check for changes on input
+      form.addEventListener('input', updateButtons);
+    });
+  </script>
+
   <script src="/js/firebasePersistence.js" type="module"></script>
 </body>
-<script src="/js/firebasePersistence.js" type="module"></script>
 </html>

@@ -753,32 +753,37 @@ const restrictAction = (routeId, action) => (req, res, next) => {
   next();
 };
 
-/* ─────────── Invoice sequencing ───────────
-   Keeps an atomic counter in  Firestore:
-   counters/{accountId}  { invoiceSeq: N }
-   Returns strings like  INV-000123
-─────────────────────────────────────────── */
 async function getNextInvoiceNo(accountId) {
   const ctrRef = db.collection('counters').doc(accountId);
+
   return db.runTransaction(async tx => {
+
+    /* 1️⃣  Read the current counter (0 when brand-new account) */
     const snap = await tx.get(ctrRef);
-    const seq  = snap.exists && typeof snap.data().invoiceSeq === 'number'
-                   ? snap.data().invoiceSeq + 1
-                   : 1;
-    tx.set(ctrRef, { invoiceSeq: seq }, { merge: true });
-    return 'INV-' + String(seq).padStart(6, '0');
+    let seq = (snap.exists && typeof snap.data().invoiceSeq === 'number')
+                ? snap.data().invoiceSeq          // ← do **not** +1 yet
+                : 0;
+
+    /* 2️⃣  Search forward until we hit the first unused number   */
+    /*     Real-world loops ≈0–2 so this stays very fast.         */
+    while (true) {
+      if (seq === 0) seq = 1;                       // bootstrap on first run
+      const candidate = 'INV-' + String(seq).padStart(6, '0');
+
+      const dupSnap = await db.collection('sales')
+                              .where('accountId','==',accountId)
+                              .where('invoiceNo','==',candidate)
+                              .limit(1).get();
+
+      if (dupSnap.empty) {                          // ✅ free → lock & return
+        tx.set(ctrRef, { invoiceSeq: seq }, { merge:true });
+        return candidate;
+      }
+
+      seq++;                                        // already used → try next
+    }
   });
 }
-
-/* ─────────── Start / finish invoice “session” ─────────── */
-app.get('/invoice/start', isAuthenticated, async (req, res) => {
-  if (!req.session.currentInvoiceNo) {
-    req.session.currentInvoiceNo =
-      await getNextInvoiceNo(req.session.user.accountId);
-  }
-  res.redirect('/dashboard');
-});
-
 
 app.post('/api/invoice/start', isAuthenticated, async (req, res) => {
   try {
@@ -2718,7 +2723,7 @@ app.get('/pricing', (req, res) => {
 
 // GET /subscribe/monthly
 app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
-  const amount  = 400  * 100;
+  const amount  = 499  * 100;
   const currency= 'INR';
   const receipt = `receipt_monthly_${Date.now()}`;
   try {
@@ -2731,7 +2736,7 @@ app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
 
 // GET /subscribe/half-yearly
 app.get('/subscribe/half-yearly', isAuthenticated, async (req, res) => {
-  const amount  = 4599 * 100;
+  const amount  = 2699 * 100;
   const currency= 'INR';
   const receipt = `receipt_halfyearly_${Date.now()}`;
   try {
@@ -2744,7 +2749,7 @@ app.get('/subscribe/half-yearly', isAuthenticated, async (req, res) => {
 
 // GET /subscribe/yearly
 app.get('/subscribe/yearly', isAuthenticated, async (req, res) => {
-  const amount  = 8599 * 100;
+  const amount  = 4799 * 100;
   const currency= 'INR';
   const receipt = `receipt_yearly_${Date.now()}`;
   try {
@@ -2809,21 +2814,74 @@ app.post('/payment-success', isAuthenticated, async (req, res) => {
 
 /* ─────────── PROFILE & BILLING (Master Only) ─────────── */
 // GET /profile
+/* ─────────── GET /profile – editable version ─────────── */
 app.get('/profile', isAuthenticated, requireMaster, async (req, res) => {
   try {
     const doc = await db.collection('users').doc(req.session.user.id).get();
     if (!doc.exists) return res.status(404).send('User not found');
+
     const userData = doc.data();
     if (userData.subscriptionExpiry) {
       userData.subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function')
         ? userData.subscriptionExpiry.toDate()
         : new Date(userData.subscriptionExpiry);
     }
-    res.render('profile', { user: userData });
+
+    res.render('profile', {
+      user        : userData,
+      csrfToken   : req.csrfToken(),
+      success     : req.query.success || false,
+      errorMessage: null
+    });
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
+
+/* ─────────── POST /profile – save edits ─────────── */
+app.post('/profile', isAuthenticated, requireMaster, async (req, res) => {
+  try {
+    const {
+      name         = '',
+      businessName = '',
+      phone        = '',
+      address      = '',
+      location     = ''
+    } = req.body;
+
+    /* simple length validations (mirrors registration rules) */
+    if (name.trim().length < 2)
+      return res.redirect('/profile?error=Name%20must%20be%20at%20least%202%20characters');
+
+    if (businessName.length > 80 || address.length > 200)
+      return res.redirect('/profile?error=Field%20length%20limit%20exceeded');
+
+    /* update Firestore */
+    const update = {
+      name       : name.trim(),
+      businessName: businessName.trim(),
+      phone      : phone.trim(),
+      address    : address.trim(),
+      location   : location.trim(),
+      updatedAt  : new Date()
+    };
+    await db.collection('users').doc(req.session.user.id).update(update);
+
+    /* keep session in sync so header shows new name immediately */
+    Object.assign(req.session.user, update);
+
+    res.redirect('/profile?success=1');
+  } catch (e) {
+    console.error('/profile POST error:', e);
+    res.status(500).render('profile', {
+      user        : req.body,
+      csrfToken   : req.csrfToken(),
+      success     : false,
+      errorMessage: 'Something went wrong. Please try again.'
+    });
+  }
+});
+
 
 // GET /billing
 app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
