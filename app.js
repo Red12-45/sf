@@ -3969,47 +3969,69 @@ app.get(
 
 
 
-/* ─────────── START THE SERVER ─────────── */
+//* ─────────── START THE SERVER (memory-aware) ─────────── */
 const PORT = process.env.PORT || 3000;
-const CPUS = parseInt(process.env.WEB_CONCURRENCY || os.cpus().length, 10);
 
-if (cluster.isPrimary) {
-  logger.info(`🛡  Master ${process.pid} forking ${CPUS} workers…`);
+/* ── Compute a safe worker count ──────────────────────────────────────────
+   • Render dynos = 512 MiB RAM by default (exposed in RENDER_MEMORY_LIMIT_MIB)
+   • 1 worker of this app ≈ 70 MiB RSS (measured).
+   • Keep a 25 % head-room → usable = 0.75 × memLimit.
+   • workers = min(CPU cores, floor(usable / 70 MiB)).
+   • You can still hard-set WEB_CONCURRENCY in the Render dashboard.
+   ---------------------------------------------------------------------- */
+const MB                = 1024 * 1024;
+const memLimitMiB       = parseInt(process.env.RENDER_MEMORY_LIMIT_MIB || 512, 10);
+const approxPerWorkerMiB= 70;                       // tweak if profiling changes
+const maxByRam          = Math.floor((memLimitMiB * 0.75) / approxPerWorkerMiB) || 1;
+const cpuCount          = os.cpus().length;
+
+const CPUS = Math.max(
+  1,
+  parseInt(process.env.WEB_CONCURRENCY || Math.min(cpuCount, maxByRam), 10)
+);
+
+/* ────────── MODE A – cluster (≥2 workers) ────────── */
+if (CPUS > 1 && cluster.isPrimary) {
+  logger.info(`🛡  Master ${process.pid} starting ${CPUS} worker(s)…`);
 
   for (let i = 0; i < CPUS; i++) cluster.fork();
 
-  /* respawn crashed workers (simple policy) */
+  /* simple respawn – keeps the dyno alive */
   cluster.on('exit', (worker, code, signal) => {
     logger.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
     cluster.fork();
   });
 
+/* ────────── MODE B – single-process fallback ────────── */
 } else {
+  if (cluster.isPrimary) {
+    logger.info('ℹ️  Running in single-process mode (memory-safe)');
+  }
+
   const server = http.createServer(app).listen(PORT, () => {
-    logger.info(`✅  Worker ${process.pid} listening on :${PORT}`);
+    logger.info(`✅  PID ${process.pid} listening on :${PORT}`);
   });
 
   /* ─── graceful shutdown + hard-kill safeguard ─── */
-  let killTimer = null;                         // will be set in graceful()
+  let killTimer = null;
 
   const graceful = async (reason) => {
-    if (killTimer) return;                      // already running – ignore dupe
-    logger.warn(`⏳  Worker ${process.pid} shutting down – ${reason}`);
+    if (killTimer) return;                       // already running – ignore duplicate
+    logger.warn(`⏳  PID ${process.pid} shutting down – ${reason}`);
 
-    // begin last-chance timer (30 s)
     killTimer = setTimeout(() => {
-      logger.error('❌  Force-killing stuck worker (grace period elapsed)');
+      logger.error('❌  Force-killing stuck process (grace period elapsed)');
       process.exit(1);
     }, 30_000).unref();
 
-    server.close(() => console.log('HTTP closed'));
+    server.close(() => logger.info('HTTP closed'));
 
     await Promise.allSettled([
       redisClient.quit().catch(() => {}),
       admin.app().delete().catch(() => {})
     ]);
 
-    clearTimeout(killTimer);                    // shutdown finished in time
+    clearTimeout(killTimer);
     process.exit(0);
   };
 
@@ -4021,5 +4043,3 @@ if (cluster.isPrimary) {
       graceful('uncaughtException');
     });
 }
-
-
