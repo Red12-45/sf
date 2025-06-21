@@ -448,8 +448,79 @@ const getUnits = async accountId => {
   return uniq;
 };
 
+/* ────────────────────────────────────────────────────────────────
+   ensureRecurringSnapshot(accountId, month)      ★ UPDATED 2025-06-21 ★
+   • Creates a snapshot row for every template that *should* exist
+     in the given month **but is missing**.
+   • A template that carries   removalMonth: 'YYYY-MM'
+     is considered “retired” from that month onwards.
+   ----------------------------------------------------------------*/
+async function ensureRecurringSnapshot(accountId, month) {
+  /* 0️⃣  Build a set of templateIds that are already snapshotted */
+  const existingSnap = await db.collection('recurringMonthly')
+                               .where('accountId', '==', accountId)
+                               .where('month',      '==', month)
+                               .get();
+  const have = new Set(existingSnap.docs.map(d => d.data().templateId));
+
+  /* 1️⃣  Work out first day of NEXT month (for “future” filter) */
+  const [y, m] = month.split('-');
+  let nextM = parseInt(m, 10) + 1,
+      nextY = parseInt(y, 10);
+  if (nextM > 12) { nextM = 1; nextY++; }
+  const nextMonthStart = new Date(
+    `${nextY}-${String(nextM).padStart(2, '0')}-01T00:00:00Z`
+  );
+
+  /* 2️⃣  Pull every master template for this account */
+  const tplSnap = await db.collection('recurringExpenses')
+                          .where('accountId', '==', accountId)
+                          .get();
+
+  const batch = db.batch();
+
+  tplSnap.docs.forEach(doc => {
+    const d = doc.data();
+
+    /* ── 🆕  Skip templates retired in, or before, this month ── */
+    if (d.removalMonth && d.removalMonth <= month) return;
+
+    /* Skip templates created AFTER this month finishes           */
+    const created = d.createdAt
+      ? (typeof d.createdAt.toDate === 'function'
+          ? d.createdAt.toDate()
+          : new Date(d.createdAt))
+      : new Date(0);
+    if (created >= nextMonthStart) return;
+
+    /* Skip if we already have a snapshot row for this template   */
+    if (have.has(doc.id)) return;
+
+    const id = `${accountId}_${month}_${doc.id}`;
+
+    batch.set(
+      db.collection('recurringMonthly').doc(id),
+      {
+        accountId,
+        month,
+        templateId   : doc.id,
+        expenseReason: d.expenseReason,
+        expenseCost  : d.defaultCost,
+        expenseStatus: 'Not Paid',   // every month starts fresh
+        createdAt    : new Date()
+      }
+    );
+  });
+
+  if (batch._ops?.length) await batch.commit();   // ← only when needed
+}
+
+
+
+
 
 /* ─────────── DAILY SUMMARY (used by Ajax & dashboard) ─────────── */
+
 async function computeDailySummary(accountId, saleDate) {
   /* 0. HOT-CACHE (30 s) – most dashboards reload within this */
   const ck = `dailySum_${accountId}_${saleDate}`;
@@ -536,6 +607,43 @@ async function computeDailySummary(accountId, saleDate) {
   return result;
 }
 
+/* ────────────────────────────────────────────────────────────────
+   computeMonthTotal(accountId, month)          ★ NEW 2025-06-21 ★
+   Returns the grand total (regular + recurring) for the month,
+   skipping rows whose status is “Not Paid”.
+   ----------------------------------------------------------------*/
+async function computeMonthTotal(accountId, month) {
+
+  const start = `${month}-01`;
+  const [y, m] = month.split('-');
+  let nextM = parseInt(m, 10) + 1, nextY = parseInt(y, 10);
+  if (nextM > 12) { nextM = 1; nextY++; }
+  const end = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+
+  /* 1️⃣  Pull every EXPENSE in the month */
+  const expSnap = await db.collection('expenses')
+    .where('accountId','==',accountId)
+    .where('saleDate',  '>=', start)
+    .where('saleDate',  '<',  end)
+    .get();
+
+  const expenseTotal = expSnap.docs
+    .filter(d => d.data().expenseStatus !== 'Not Paid')
+    .reduce((s,d)=> s + (+d.data().expenseCost || 0), 0);
+
+  /* 2️⃣  Pull this month’s RECURRING snapshot rows */
+  const recSnap = await db.collection('recurringMonthly')
+    .where('accountId','==',accountId)
+    .where('month',     '==', month)
+    .get();
+
+  const recTotal = recSnap.docs
+    .filter(d => d.data().expenseStatus !== 'Not Paid' && !d.data().deleted)
+    .reduce((s,d)=> s + (+d.data().expenseCost || 0), 0);
+
+  return +(expenseTotal + recTotal).toFixed(2);
+}
+
 
 
 /* ─────────── processSale (shared full-page + Ajax) ─────────── */
@@ -571,10 +679,12 @@ async function processSale(body, user) {
 
     /* 🔒 Sanitise free-text note (≤200 chars, no leading/trailing space) */
     extraInfo = extraInfo ? extraInfo.toString().substring(0, 200).trim() : '';
-
-
-    saleQuantity    = +parseFloat(saleQuantity);
-    const totalSale = +parseFloat(totalSaleInput);
+  saleQuantity = +parseFloat(saleQuantity);
+/* 🔒 hard stop – never allow zero or negative qty */
+if (!Number.isFinite(saleQuantity) || saleQuantity <= 0) {
+  throw new Error('Quantity must be greater than zero');
+}
+const totalSale = +parseFloat(totalSaleInput);
 
     /* ――― 1. Load product row ――― */
     const selectedProductId = (customProductId?.trim()) ? customProductId : productId;
@@ -618,12 +728,17 @@ async function processSale(body, user) {
     const totalProfit   = +(profitPerUnit * saleQuantity).toFixed(2);
 
     let outputTax = 0, inputTax = 0, gstPayable = 0;
-    if (product.inclusiveTax) {
-      const r = product.inclusiveTax;
-      outputTax  = +(totalSale      * r / (100 + r)).toFixed(2);
-      inputTax   = +(totalWholesale * r / (100 + r)).toFixed(2);
-      gstPayable = +(outputTax - inputTax).toFixed(2);
-    }
+if (typeof product.inclusiveTax === 'number') {
+  const r = product.inclusiveTax;
+  if (r > 0) {                                   // normal 5, 12, 18 … %
+    outputTax  = +(totalSale      * r / (100 + r)).toFixed(2);
+    inputTax   = +(totalWholesale * r / (100 + r)).toFixed(2);
+    gstPayable = +(outputTax - inputTax).toFixed(2);
+  } else {                                       // r === 0 ➜ exempt item
+    outputTax = inputTax = gstPayable = 0;
+  }
+}
+
 
     /* ――― 4. Insert sale row ――― */
     const saleRef = db.collection('sales').doc();   // pre-allocate ID
@@ -1482,43 +1597,123 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 
 
 // GET /expense – monthly expenses view
-app.get('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res) => {
+// GET /expense – monthly expenses view  ★ NOW pulls recurring templates
+app.get(
+  '/expense',
+  isAuthenticated,
+  restrictRoute('/expense'),
+  async (req, res) => {
+    try {
+      const accountId   = req.session.user.accountId;
+
+      /* ─── 1. work out month window (unchanged) ─── */
+      const today         = new Date();
+      const currentYear   = today.getFullYear();
+      const currentMonth  = pad(today.getMonth() + 1);
+      const defaultMonth  = `${currentYear}-${currentMonth}`;
+      const monthParam    = req.query.month || defaultMonth;       // ← keep param name
+      const startDate     = `${monthParam}-01`;
+      const [y, m]        = monthParam.split('-');
+      let nextM = parseInt(m, 10) + 1,
+          nextY = parseInt(y, 10);
+      if (nextM > 12) { nextM = 1; nextY++; }
+      const nextMonth = `${nextY}-${pad(nextM)}-01`;
+
+/* 2-B.  M O N T H - S P E C I F I C  recurring snapshot ------------- */
+await ensureRecurringSnapshot(accountId, monthParam);
+
+const [expenseSnap, recurringMonthSnap] = await Promise.all([
+  db.collection('expenses')
+    .where('accountId', '==', accountId)
+    .where('saleDate',  '>=', startDate)
+    .where('saleDate',  '<',  nextMonth)
+    .orderBy('createdAt', 'desc')
+    .get(),
+  db.collection('recurringMonthly')              // ← monthly snapshot
+    .where('accountId','==',accountId)
+    .where('month','==',monthParam)
+    .orderBy('expenseReason','asc')
+    .get()
+]);
+
+const expenses          = expenseSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+const recurringMonthly = recurringMonthSnap.docs
+  .map(d => ({ id:d.id, ...d.data() }))
+  .filter(t => !t.deleted);          // ⬅️  hide soft-deleted rows
+
+const totalExpense = expenses
+  .filter(e => e.expenseStatus !== 'Not Paid')   // skip unpaid expenses
+  .reduce((s, e) => s + (e.expenseCost || 0), 0);
+
+const recTotal = recurringMonthly               // monthly snapshot
+  .filter(t => t.expenseStatus !== 'Not Paid')   // skip unpaid snapshots
+  .reduce((s, t) => s + (t.expenseCost || 0), 0);
+
+const grandTotal = totalExpense + recTotal;
+
+
+
+      const groupedExpenses = {};
+      expenses.forEach(e => {
+        const created = (e.createdAt.toDate) ? e.createdAt.toDate() : new Date(e.createdAt);
+        const dateStr = created.toISOString().substring(0, 10);
+        (groupedExpenses[dateStr] = groupedExpenses[dateStr] || []).push(e);
+      });
+
+      
+
+res.render('expense', {
+  month            : monthParam,
+  groupedExpenses,
+  totalExpense,
+  recurringMonthly,   // ← keep
+  recTotal,           // ← keep
+  grandTotal,         // ← keep
+  blockedActions   : req.session.blockedActions || {}
+});
+
+
+    } catch (err) {
+      res.status(500).send(err.toString());
+    }
+});
+
+/* ─────────── RECURRING-EXPENSE TEMPLATES ─────────── */
+
+/* POST /add-recurring-expense – create template */
+app.post('/add-recurring-expense', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
-    const today     = new Date();
-    const currentYear  = today.getFullYear();
-    const currentMonth = pad(today.getMonth()+1);
-    const defaultMonth = `${currentYear}-${currentMonth}`;
-    const monthParam   = req.query.month || defaultMonth;
-    const startDate    = `${monthParam}-01`;
-    let [year, mon]    = monthParam.split('-');
-    let nextMon        = parseInt(mon,10) + 1;
-    let nextYear       = parseInt(year,10);
-    if (nextMon > 12) { nextMon = 1; nextYear++; }
-    const nextMonth = `${nextYear}-${pad(nextMon)}-01`;
+    const {
+  recurringReason,
+  recurringDefaultCost
+  // ◆ recurringStatus field intentionally discarded
+} = req.body;
 
-    const expenseSnap = await db.collection('expenses')
-      .where('accountId','==',accountId)
-      .where('saleDate','>=', startDate)
-      .where('saleDate','<', nextMonth)
-      .orderBy('createdAt','desc')
-      .get();
-    const expenses = expenseSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const totalExpense = expenses.reduce((sum,e)=>sum+e.expenseCost,0);
+const DEFAULT_STATUS = 'Not Paid';
 
-    const groupedExpenses = {};
-    expenses.forEach(exp => {
-      const created = (exp.createdAt.toDate) ? exp.createdAt.toDate() : new Date(exp.createdAt);
-      const dateStr = created.toISOString().substring(0,10);
-      groupedExpenses[dateStr] = groupedExpenses[dateStr] || [];
-      groupedExpenses[dateStr].push(exp);
+
+    await db.collection('recurringExpenses').add({
+      accountId,
+      expenseReason : recurringReason.trim(),
+      defaultCost   : parseFloat(recurringDefaultCost),
+      expenseStatus : DEFAULT_STATUS,
+
+      createdAt     : new Date()
     });
 
-    res.render('expense', { month: monthParam, groupedExpenses, totalExpense,blockedActions : req.session.blockedActions || {}});
+    /* return to the same month **/
+    const month = req.body.month || new Date().toISOString().substring(0, 7);
+    res.redirect(`/expense?month=${month}`);
   } catch (err) {
     res.status(500).send(err.toString());
   }
 });
+
+
+
+
+
 
 // GET /add-product – render form
 app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
@@ -2494,8 +2689,23 @@ app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    
       if (paymentDetail1 !== undefined) update.paymentDetail1 = +parseFloat(paymentDetail1 || 0);
       if (paymentDetail2 !== undefined) update.paymentDetail2 = +parseFloat(paymentDetail2 || 0);
       await saleRef.update(update);
-      const { summary } = await computeDailySummary(req.session.user.accountId, data.saleDate);
-      return res.json({ success:true, updatedRow:update, summary });
+      const { summary } = await computeDailySummary(
+        req.session.user.accountId, exp.saleDate
+      );
+
+      /* ▼ NEW — fresh month grand-total */
+      const monthTotal = await computeMonthTotal(
+        req.session.user.accountId,
+        exp.saleDate.substring(0, 7)     // "YYYY-MM"
+      );
+
+      return res.json({
+        success   : true,
+        updatedRow: update,
+        summary,
+        monthTotal                         // ▲ include in response
+      });
+
     }
 
     /* ------------------------------------------------------------------
@@ -2542,21 +2752,33 @@ app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    
       }
       if (need > 0) return res.json({ success:false, error:'Not enough stock' });
 
-    } else if (delta < 0) {                         // RETURN stock
+        } else if (delta < 0) {                         // RETURN stock
       let give = -delta;
       for (const u of [...batchesUsed].reverse()) {
         if (give <= 0) break;
         const ret = Math.min(u.qtyUsed, give);
-        const ref = batchCol.doc(u.id);
+
+        const ref  = batchCol.doc(u.id);
+        const snap = await ref.get();               // fetch once
+        if (!snap.exists) continue;                 // edge-case: batch gone
+
+        const d       = snap.data();
+        const after   = d.remainingQuantity + ret;  // would-be balance
+        const capped  = Math.min(after, d.quantity);// never exceed original
+
         stockOps.update(ref, {
-          quantity         : admin.firestore.FieldValue.increment(ret),
-          remainingQuantity: admin.firestore.FieldValue.increment(ret)
+          // quantity column tracks historical purchased qty; keep increment
+          quantity: admin.firestore.FieldValue.increment(ret),
+          // remainingQuantity is **absolute** capped value
+          remainingQuantity: capped
         });
+
         u.qtyUsed -= ret;
-        give -= ret;
+        give     -= ret;
       }
-      batchesUsed = batchesUsed.filter(u=>u.qtyUsed>0.0001);
+      batchesUsed = batchesUsed.filter(u => u.qtyUsed > 0.0001);
     }
+
     if (stockOps._ops.length) await stockOps.commit();
 
     /* refresh parent product ------------------------------------------ */
@@ -3167,67 +3389,129 @@ app.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res
 });
 
 
-app.post('/api/delete-expense', isAuthenticated, restrictAction('/expense','delete'), async (req, res) => {
-  const { expenseId } = req.body;
-  try {
-    const expRef = db.collection('expenses').doc(expenseId);
-    const expDoc = await expRef.get();
+app.post(
+  '/api/delete-expense',
+  isAuthenticated,
+  restrictAction('/expense', 'delete'),
+  async (req, res) => {
+    const { expenseId } = req.body;
 
-    /* NEW ✨ — idempotent */
-    if (!expDoc.exists) {
-      return res.json({ success: true });          // already deleted
+    try {
+      const expRef = db.collection('expenses').doc(expenseId);
+      const expDoc = await expRef.get();
+
+      /* ✨ idempotent: already gone → succeed silently */
+      if (!expDoc.exists) return res.json({ success: true });
+
+      const exp = expDoc.data();
+      if (exp.accountId !== req.session.user.accountId)
+        return res.json({ success: false, error: 'Access denied' });
+
+      /* 1️⃣ delete row */
+      await expRef.delete();
+
+      /* 2️⃣ fresh daily summary (same day) */
+      const { summary } = await computeDailySummary(
+        req.session.user.accountId,
+        exp.saleDate
+      );
+
+      /* 3️⃣ fresh month-total (YYYY-MM) */
+      const monthTotal = await computeMonthTotal(
+        req.session.user.accountId,
+        exp.saleDate.substring(0, 7)
+      );
+
+      /* 4️⃣ done */
+      return res.json({ success: true, summary, monthTotal });
+
+    } catch (e) {
+      return res.json({ success: false, error: e.toString() });
     }
-
-    const exp = expDoc.data();
-    if (exp.accountId !== req.session.user.accountId)
-      return res.json({ success: false, error: 'Access denied' });
-
-    // delete & refresh
-    await expRef.delete();
-    const { summary } = await computeDailySummary(
-      req.session.user.accountId,
-      exp.saleDate
-    );
-    res.json({ success: true, summary });
-  } catch (e) {
-    res.json({ success: false, error: e.toString() });
   }
-});
+);
 
-/* ─────────── AJAX: EDIT EXPENSE ─────────── */
+
+
+/* ─────────── AJAX: EDIT EXPENSE  (expanded 2025-06-21) ─────────── */
 app.post(
   '/api/edit-expense',
   isAuthenticated,
   restrictAction('/expense', 'edit'),
   async (req, res) => {
     try {
-      const { expenseId, field, value,
-              paymentDetail1, paymentDetail2 } = req.body;
+      const { expenseId, field, value, expenseDetail1, expenseDetail2 } = req.body;
 
-      if (field !== 'expenseStatus')
-        return res.json({ success: false, error: 'Invalid field' });
+
+      const ALLOWED = ['expenseStatus', 'expenseCost', 'expenseReason'];
+      if (!ALLOWED.includes(field))
+        return res.json({ success:false, error:'Invalid field' });
 
       const expRef  = db.collection('expenses').doc(expenseId);
       const expSnap = await expRef.get();
       if (!expSnap.exists)
-        return res.json({ success: false, error: 'Expense not found' });
+        return res.json({ success:false, error:'Expense not found' });
 
       const exp = expSnap.data();
       if (exp.accountId !== req.session.user.accountId)
-        return res.json({ success: false, error: 'Access denied' });
+        return res.json({ success:false, error:'Access denied' });
 
-      const update = { expenseStatus: value };
-      if (paymentDetail1 !== undefined)
-        update.expenseDetail1 = +parseFloat(paymentDetail1 || 0);
-      if (paymentDetail2 !== undefined)
-        update.expenseDetail2 = +parseFloat(paymentDetail2 || 0);
-      update.updatedAt = new Date();
+      /* ---------- build update ---------- */
+      const update = { updatedAt: new Date() };
+
+     if (field === 'expenseStatus') {
+  update.expenseStatus = value;
+
+  /* ▼ use the correct field names */
+  if (expenseDetail1 !== undefined)
+    update.expenseDetail1 = +parseFloat(expenseDetail1 || 0);
+
+  if (expenseDetail2 !== undefined)
+    update.expenseDetail2 = +parseFloat(expenseDetail2 || 0);
+
+  /* ▼ when it’s a Half-&-Half status, force expenseCost = d1 + d2  */
+  if (value.startsWith('Half')) {
+    const d1 = +parseFloat(update.expenseDetail1 || 0);
+    const d2 = +parseFloat(update.expenseDetail2 || 0);
+    update.expenseCost = +(d1 + d2).toFixed(2);
+  }
+
+  await expRef.update(update);
+
+  /* ---------- fresh daily + monthly summaries ---------- */
+  const { summary } = await computeDailySummary(
+    req.session.user.accountId,
+    exp.saleDate
+  );
+  const monthTotal = await computeMonthTotal(
+    req.session.user.accountId,
+    exp.saleDate.substring(0, 7)          // "YYYY-MM"
+  );
+
+  return res.json({
+    success   : true,
+    updatedRow: update,
+    summary,
+    monthTotal                              // ★ sent to client
+  });
+}
+ else if (field === 'expenseCost') {
+        const num = +parseFloat(value);
+        if (!Number.isFinite(num) || num < 0)
+          return res.json({ success:false, error:'Invalid amount' });
+        update.expenseCost = num;
+
+      } else if (field === 'expenseReason') {
+        const txt = (value || '').toString().substring(0,100).trim();
+        if (!txt) return res.json({ success:false, error:'Reason required' });
+        update.expenseReason = txt;
+      }
 
       await expRef.update(update);
 
+      /* ---------- fresh daily summary ---------- */
       const { summary } = await computeDailySummary(
-        req.session.user.accountId,
-        exp.saleDate
+        req.session.user.accountId, exp.saleDate
       );
 
       return res.json({
@@ -3235,9 +3519,10 @@ app.post(
         updatedRow: update,
         summary
       });
+
     } catch (err) {
       console.error('edit-expense error:', err);
-      return res.json({ success: false, error: err.toString() });
+      return res.json({ success:false, error:err.toString() });
     }
   }
 );
@@ -3247,34 +3532,169 @@ app.post(
 
 app.post('/api/expense', isAuthenticated, async (req, res) => {
   try {
-    const saved = await processExpense(req.body, req.session.user);
-    // saved does *not* include its own ID yet — grab it:
+    /* 0️⃣  Fire the insert (can be 1 or many rows) */
+    await processExpense(req.body, req.session.user);
+
+    /* 1️⃣  Fetch JUST the rows we created:
+           – total rows = length of expenseReason[]  */
+    const rowsInserted = Array.isArray(req.body.expenseReason)
+                           ? req.body.expenseReason.length
+                           : 1;
+
     const snap = await db.collection('expenses')
-                         .where('accountId','==',req.session.user.accountId)
-                         .orderBy('createdAt','desc')
-                         .limit(1)
-                         .get();
-    const doc = snap.docs[0];
-    const expense = { id: doc.id, ...doc.data() };
+      .where('accountId','==',req.session.user.accountId)
+      .orderBy('createdAt','desc')
+      .limit(rowsInserted)
+      .get();
 
-    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
-    res.json({ success: true, expense, summary });
-  } catch (e) {
-    res.json({ success: false, error: e.toString() });
+    /* Reverse so they come back oldest➜newest */
+    const addedExpenses = snap.docs.reverse().map(d => {
+      const e = d.data();
+      const created = e.createdAt?.toDate ? e.createdAt.toDate()
+                                          : new Date(e.createdAt);
+      return {
+        id         : d.id,
+        yyyy_mm_dd : e.saleDate,                                     // YYYY-MM-DD
+        dateLabel  : created.toLocaleString('default',{ month:'long', day:'numeric' }),
+        timeLabel  : created.toLocaleTimeString(),
+        ...e
+      };
+    });
+
+    /* 2️⃣  Re-compute this month’s running total */
+    const month   = req.body.saleDate.substring(0,7);                // "YYYY-MM"
+    const monthTotal = await computeMonthTotal(req.session.user.accountId, month);
+
+    /* 3️⃣  Done */
+    return res.json({
+      success   : true,
+      monthTotal,
+      expenses  : addedExpenses           // ALWAYS an array
+    });
+
+  } catch (err) {
+    console.error('/api/expense error:', err);
+    return res.json({ success:false, error: err.toString() });
   }
 });
 
-
-// AJAX: POST /api/sale
-app.post('/api/sale', isAuthenticated, async (req, res) => {
+app.post('/api/recurring-monthly/:recId', isAuthenticated, async (req, res) => {
   try {
-    const sale    = await processSale(req.body, req.session.user);
-    const { summary } = await computeDailySummary(req.session.user.accountId, req.body.saleDate);
-    res.json({ success: true, sale, summary });
-  } catch (e) {
-    res.json({ success: false, error: e.toString() });
+    const { recId } = req.params;
+    const {
+      expenseCost,
+      expenseStatus,
+      expenseReason,
+      propagate = 'true'
+    } = req.body;
+
+    const ref  = db.collection('recurringMonthly').doc(recId);
+    const snap = await ref.get();
+
+    /* 1️⃣  Access control */
+    if (!snap.exists || snap.data().accountId !== req.session.user.accountId)
+      return res.json({ success: false, error: 'Access denied' });
+
+    /* 2️⃣  Build patch */
+const patch        = { updatedAt: new Date() };
+
+/* Track changed fields so we can optionally push them back to the
+   master template when ?propagate=true (default).                   */
+let newCost    = undefined;   // number → defaultCost
+let newReason  = undefined;   // string → expenseReason
+
+
+    if (expenseCost !== undefined) {
+      newCost = +parseFloat(expenseCost);
+      if (!Number.isFinite(newCost) || newCost < 0)
+        return res.json({ success: false, error: 'Invalid amount' });
+      patch.expenseCost = newCost;
+    }
+
+    if (expenseStatus !== undefined)  patch.expenseStatus = expenseStatus;
+
+    if (expenseReason !== undefined) {
+  newReason = (expenseReason || '').toString().substring(0,100).trim();
+  if (!newReason)                 // empty after trimming
+    return res.json({ success:false, error:'Reason required' });
+
+  patch.expenseReason = newReason;
+}
+
+    /* 3️⃣  Propagate to the master template **only** when:
+           • the user ticked “propagate”, AND
+           • the default cost actually changed                              */
+    if ((propagate === true || propagate === 'true') &&
+    (typeof newCost === 'number' || typeof newReason === 'string')) {
+
+  const tplId = snap.data().templateId;
+  if (tplId) {
+    const tplUpdate = { updatedAt: new Date() };
+    if (typeof newCost   === 'number') tplUpdate.defaultCost   = newCost;
+    if (typeof newReason === 'string') tplUpdate.expenseReason = newReason;
+
+    await db.collection('recurringExpenses')
+            .doc(tplId)
+            .update(tplUpdate);
+  }
+}
+const monthTotal = await computeMonthTotal(
+  req.session.user.accountId, snap.data().month
+);
+
+return res.json({ success: true, monthTotal });
+  } catch (err) {
+    console.error('/api/recurring-monthly error:', err);
+    return res.json({ success: false, error: err.toString() });
   }
 });
+
+
+
+
+/* POST /delete-recurring-monthly/:recId – soft-delete *and* retire template */
+app.post('/delete-recurring-monthly/:recId', isAuthenticated, async (req, res) => {
+  try {
+    const { recId } = req.params;
+    const ref  = db.collection('recurringMonthly').doc(recId);
+    const snap = await ref.get();
+
+    /* 1️⃣  Permission check */
+    if (!snap.exists || snap.data().accountId !== req.session.user.accountId) {
+      const msg = 'Access denied';
+      return req.xhr
+        ? res.json({ success: false, error: msg })
+        : res.status(403).send(msg);
+    }
+
+    /* 2️⃣  Soft-delete this MONTH’S snapshot row           */
+    await ref.update({ deleted: true, updatedAt: new Date() });
+
+    /* 3️⃣  Retire the master template from this month on   */
+    const tplId = snap.data().templateId || null;
+    const month = snap.data().month;
+    if (tplId) {
+      await db.collection('recurringExpenses')
+              .doc(tplId)
+              .set(
+                { removalMonth: month, updatedAt: new Date() },
+                { merge: true }
+              );
+    }
+
+    /* 4️⃣  Respond */
+   if (req.xhr) {
+  const monthTotal = await computeMonthTotal(req.session.user.accountId, month);
+  return res.json({ success: true, monthTotal });
+}
+    res.redirect(`/expense?month=${month}`);
+
+  } catch (err) {
+    if (req.xhr) return res.json({ success: false, error: err.toString() });
+    res.status(500).send(err.toString());
+  }
+});
+
 
 
 
@@ -3363,8 +3783,18 @@ if (hasWrites) {
     await recalcProductFromBatches(productId);   // 2️⃣ then correct stock
 
 
-    const { summary } = await computeDailySummary(sale.accountId, sale.saleDate);
-    res.json({ success:true, summary });
+  /* ▼ NEW – re-compute month running total */
+const monthTotal = await computeMonthTotal(
+  sale.accountId,
+  exp.saleDate.substring(0, 7)        // "YYYY-MM"
+);
+
+const { summary } = await computeDailySummary(
+  sale.accountId, exp.saleDate
+);
+
+res.json({ success: true, summary, monthTotal });
+
 
   } catch (e) {
     console.error('delete-sale error:', e);

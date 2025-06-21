@@ -5,380 +5,865 @@
   <title>Expense</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
-  <!-- Font Awesome for Icons -->
+  <!-- Font Awesome -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <!-- Link to the custom CSS file -->
+  <!-- Page CSS -->
   <link rel="stylesheet" href="/css/expenses.css?v=<%= v %>">
 </head>
+
+
 <body>
 <%
-  // determine if delete action is permitted
-  const canDelete = !(blockedActions['/expense'] || []).includes('delete');
+  /* ────────────────────────────────────────────────────────────
+     ①  SERVER-SIDE HELPERS & CONSTANTS
+     ──────────────────────────────────────────────────────────── */
+ const canDelete = !(blockedActions['/expense'] || []).includes('delete');
+const canEdit   = !(blockedActions['/expense'] || []).includes('edit');   // ★ NEW
 
-  // helper to format "YYYY-MM" into "Month YYYY"
-  function formatMonthYear(ym) {
-    const [year, month] = ym.split('-');
-    const date = new Date(year, month - 1);
-    return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  }
 
-  // helper to format "YYYY-MM-DD" into "Month D"
-  function formatDate(fd) {
-    const [year, month, day] = fd.split('-');
-    const date = new Date(year, month - 1, day);
-    return date.toLocaleString('en-US', { month: 'long', day: 'numeric' });
-  }
+  // Format helpers
+  const formatMonthYear = ym => {
+    const [y, m] = ym.split('-');
+    return new Date(y, m - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  };
+  const formatDate = ymd => {
+    const [y, m, d] = ymd.split('-');
+    return new Date(y, m - 1, d).toLocaleString('en-US', { month: 'long', day: 'numeric' });
+  };
 
-  // build list of dates that actually have expenses
-  const expenseDates = groupedExpenses
-    ? Object.keys(groupedExpenses)
-        .sort()
-        .filter(d => Array.isArray(groupedExpenses[d]) && groupedExpenses[d].length > 0)
-    : [];
+  /* month-specific recurring list */
+const recList = Array.isArray(recurringMonthly)
+  ? recurringMonthly.filter(r => !r.deleted)
+  : [];
+
+
+  /* totals */
+const recTotal = recList
+    .filter(t => t.expenseStatus !== 'Not Paid')
+    .reduce((s, t) => s + (t.expenseCost || 0), 0);
+
+  const grandTotal = (+totalExpense || 0) + recTotal;
+
+  /* dates that actually contain expenses */
+  const expDates = Object.keys(groupedExpenses || {})
+        .filter(d => (groupedExpenses[d] || []).length)
+        .sort();
 %>
 
-  <!-- Sidebar -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
-      <i class="fas fa-chart-line"></i>
-      <span>Expense Report</span>
+<!-- ───────────────────────── Sidebar ───────────────────────── -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <i class="fas fa-chart-line"></i><span>Expense&nbsp;Report</span>
+  </div>
+  <div class="sidebar-nav">
+    <!-- Dashboard -->
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Dashboard</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-item"><a href="/"           class="sidebar-link"><i class="fas fa-home"></i>Dashboard</a></li>
+        <li class="sidebar-item"><a href="/sales"      class="sidebar-link"><i class="fas fa-shopping-cart"></i>Sales&nbsp;Report</a></li>
+        <li class="sidebar-item"><a href="/profit"     class="sidebar-link"><i class="fas fa-chart-bar"></i>Profit&nbsp;Report</a></li>
+        <li class="sidebar-item"><a href="/performance"class="sidebar-link"><i class="fas fa-rocket"></i>Performance</a></li>
+        <li class="sidebar-item"><a href="/stats"      class="sidebar-link"><i class="fas fa-chart-pie"></i>Stats</a></li>
+        <li class="sidebar-item"><a href="/expense"    class="sidebar-link active"><i class="fas fa-money-bill-wave"></i>Expenses</a></li>
+      </ul>
     </div>
-    <div class="sidebar-nav">
-      <div class="sidebar-section">
-        <div class="sidebar-heading">Dashboard</div>
-        <ul class="sidebar-menu">
-          <li class="sidebar-item">
-            <a href="/" class="sidebar-link">
-              <i class="fas fa-home"></i><span>Dashboard</span>
-            </a>
-          </li>
-          <li class="sidebar-item">
-            <a href="/sales" class="sidebar-link">
-              <i class="fas fa-shopping-cart"></i><span>Sales Report</span>
-            </a>
-          </li>
-          <li class="sidebar-item">
-            <a href="/profit" class="sidebar-link">
-              <i class="fas fa-chart-bar"></i><span>Profit Report</span>
-            </a>
-          </li>
-          <li class="sidebar-item"><a href="/performance" class="sidebar-link"><i class="fas fa-rocket"></i> Performance</a></li>
-          <li class="sidebar-item"><a href="/stats" class="sidebar-link"><i class="fas fa-chart-pie"></i> Stats</a></li>
-          <li class="sidebar-item">
-            <a href="/expense" class="sidebar-link active">
-              <i class="fas fa-money-bill-wave"></i><span>Expenses</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-      <div class="sidebar-section">
-        <div class="sidebar-heading">Products</div>
-        <ul class="sidebar-menu">
-          <li class="sidebar-item">
-            <a href="/add-product" class="sidebar-link">
-              <i class="fas fa-plus-circle"></i><span>Add New Product</span>
-            </a>
-          </li>
-          <li class="sidebar-item">
-            <a href="/view-products" class="sidebar-link">
-              <i class="fas fa-boxes"></i><span>View/Edit Products</span>
-            </a>
-          </li>
-        </ul>
-      </div>
-      <div class="sidebar-section">
-        <div class="sidebar-heading">Settings</div>
-        <ul class="sidebar-menu">
-          <li class="sidebar-item">
-            <a href="/profile" class="sidebar-link">
-              <i class="fas fa-user"></i><span>Profile</span>
-            </a>
-          </li>
-        </ul>
-      </div>
+    <!-- Products -->
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Products</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-item"><a href="/add-product"   class="sidebar-link"><i class="fas fa-plus-circle"></i>Add&nbsp;Product</a></li>
+        <li class="sidebar-item"><a href="/view-products" class="sidebar-link"><i class="fas fa-boxes"></i>View&nbsp;&nbsp;Product</a></li>
+      </ul>
     </div>
-    <div class="sidebar-footer">
-      <a href="/logout">
-        <i class="fas fa-sign-out-alt"></i><span>Logout</span>
-      </a>
+    <!-- Settings -->
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Settings</div>
+      <ul class="sidebar-menu">
+        <li class="sidebar-item"><a href="/profile" class="sidebar-link"><i class="fas fa-user"></i>Profile</a></li>
+      </ul>
     </div>
   </div>
+  <div class="sidebar-footer">
+    <a href="/logout"><i class="fas fa-sign-out-alt"></i>Logout</a>
+  </div>
+</div>
 
-  <!-- Main Content Area -->
-  <div class="main-content" id="main-content">
-    <div class="page-container">
-      <!-- Filter Form Card -->
-      <div class="formBox">
-        <form action="/expense" method="GET" id="filterForm">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <div>
-            <label for="month">Select Month:</label>
-            <input type="month" name="month" id="month" value="<%= month %>" required>
-            <input type="submit" value="Filter">
+<!-- ─────────────────────── Main panel ─────────────────────── -->
+<div class="main-content" id="main-content">
+  <div class="page-container">
+
+    <!-- ═══════════════  A. MONTH FILTER  ═══════════════ -->
+    <div class="formBox">
+      <form action="/expense" method="GET" id="filterForm">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label for="month">Select&nbsp;Month</label>
+        <input type="month" id="month" name="month" value="<%= month %>" required>
+        <input type="submit" value="Filter">
+      </form>
+    </div>
+
+    <!-- ═══════════════  B. ADD EXPENSES  ═══════════════ -->
+    <div class="formBox">
+      <form id="expenseForm" action="/expense" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="saleDate"  value="<%= month %>-01">
+        <input type="hidden" name="redirectTo" value="expense">
+
+        <div class="expense-form-wrapper">
+          <!-- rows land here -->
+          <div id="expenseItems"></div>
+
+          <!-- buttons -->
+          <div class="expense-button-group">
+            <button type="button" id="addExpense">Add&nbsp;More</button>
+            <input  type="submit" value="Submit&nbsp;Expenses">
           </div>
-        </form>
-      </div>
-
-      <!-- Expense Submission Form Card -->
-      <div class="formBox">
-        <form action="/expense" method="POST" id="expenseForm">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <input type="hidden" name="saleDate" value="<%= month %>-01">
-          <input type="hidden" name="redirectTo" value="expense">
-         <div class="expense-form-wrapper">
-  <div id="expenseItems"> 
-    <div class="expense-row">
-      <input type="text" name="expenseReason" placeholder="Expense Reason" class="expense-field" required>
-      <input type="number" step="0.01" name="expenseCost" placeholder="Expense Amount" class="expense-field" required>
-      <input type="hidden" name="expenseStatus" value="Paid Cash">
-      <input type="hidden" name="expenseDetail1" value="">
-      <input type="hidden" name="expenseDetail2" value="">
-      <button type="button" class="removeExpense" style="display: none;">Remove</button>
-    </div>
-  </div>
-
-  <div class="expense-button-group">
-    <button type="button" id="addExpense">Add More Expense</button>
-    <input type="submit" value="Submit Expenses">
-  </div>
-</div>
-
-        </form>
-      </div>
-
-      <% if (expenseDates.length > 0) { %>
-        <!-- Month Header -->
-       <div class="month-summary">
-  <div class="month-title">
-    <i class="fas fa-calendar-alt"></i>
-    Expenses for <%= formatMonthYear(month) %>
-  </div>
-  <div class="month-total">
-    <i class="fas fa-wallet"></i>
-    Total: ₹<span id="totalExpense"><%= totalExpense.toFixed(2) %></span>
-  </div>
-</div>
-
-
-        <div id="expenseContainer">
-          <% expenseDates.forEach(function(expenseDate) { %>
-            <div class="expense-group" data-date="<%= expenseDate %>">
-              <h3>Expenses for <%= formatDate(expenseDate) %></h3>
-              <table id="expenseTable-<%= expenseDate %>">
-                <thead>
-                  <tr>
-                    <th>Reason</th>
-                    <th>Amount</th>
-                    <th>Method</th>
-                    <th>Detail 1</th>
-                    <th>Detail 2</th>
-                    <th>Time</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% groupedExpenses[expenseDate].forEach(function(expense) {
-                       const created = expense.createdAt.toDate
-                         ? expense.createdAt.toDate()
-                         : new Date(expense.createdAt);
-                       const timeStr = created.toLocaleTimeString();
-                  %>
-                    <tr>
-                      <td><%= expense.expenseReason %></td>
-                      <td><%= expense.expenseCost.toFixed(2) %></td>
-                      <td><%= expense.expenseStatus %></td>
-                      <td><%= expense.expenseDetail1 || '-' %></td>
-                      <td><%= expense.expenseDetail2 || '-' %></td>
-                      <td><%= timeStr %></td>
-                      <td style="text-align:center;">
-                        <% if (canDelete) { %>
-                          <i class="fas fa-trash-alt delete-expense-btn"
-                             data-id="<%= expense.id %>"></i>
-                        <% } %>
-                      </td>
-                    </tr>
-                  <% }); %>
-                </tbody>
-              </table>
-            </div>
-          <% }); %>
         </div>
-
-      <% } else { %>
-        <p>No expenses found for this month.</p>
-      <% } %>
-
+      </form>
     </div>
-  </div>
 
+    <!-- ═══════════════  C. MONTH-SPECIFIC RECURRING  ═══════════════ -->
+    <div class="formBox">
+      <h2>Recurring&nbsp;Expenses for <%= formatMonthYear(month) %></h2>
+
+      <!-- add-template (creates/updates master templates) -->
+      <form id="recurringForm" action="/add-recurring-expense" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="month" value="<%= month %>">
+        <div class="expense-row-inline">
+  <input type="text"   name="recurringReason"       placeholder="e.g. Rent"
+         class="expense-field" required>
+  <input type="number" step="0.01" name="recurringDefaultCost"
+         placeholder="₹ 0.00" class="expense-field" required>
+  <!-- Method default = Not Paid (server-side); no user choice here -->
+  <button type="submit">Add&nbsp;Template</button>
+</div>
+
+      </form>
+
+      <!-- month snapshot list -->
+      <% if (recList.length) { %>
+      <table class="recurring-table" id="recurringTable">
+        <thead>
+          <tr>
+            <th>Reason</th>
+            <th>Amount&nbsp;₹</th>
+            <th>Method</th>
+            <th style="text-align:center;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% recList.forEach(r => { %>
+          <tr data-id="<%= r.id %>">
+  <!-- Reason – inline editable -->
+  <td class="<%= canEdit ? 'rec-edit editable-text' : '' %>"
+      data-id="<%= r.id %>" data-field="expenseReason">
+    <span class="value"><%= attr(r.expenseReason) %></span>
+    <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
+  </td>
+
+  <!-- Amount – inline editable -->
+  <td class="<%= canEdit ? 'rec-edit editable' : '' %>"
+      data-id="<%= r.id %>" data-field="expenseCost">
+    <span class="value"><%= (+r.expenseCost).toFixed(2) %></span>
+    <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
+  </td>
+
+  <!-- Method (status) – keep the <select> as-is -->
+  <td>
+    <select class="recStatus">
+      <option value="Paid Cash"   <%= r.expenseStatus==='Paid Cash'?'selected':'' %>>Paid&nbsp;Cash</option>
+      <option value="Paid Online" <%= r.expenseStatus==='Paid Online'?'selected':'' %>>Paid&nbsp;Online</option>
+      <option value="Not Paid"    <%= r.expenseStatus==='Not Paid'  ?'selected':'' %>>Not&nbsp;Paid</option>
+    </select>
+  </td>
+
+  <!-- Delete -->
+<td style="text-align:center;">
+  <i class="fas fa-trash-alt delete-recurring-btn"
+     data-id="<%= r.id %>"          
+     title="Delete this entry"></i>
+</td>
+
+</tr>
+
+          <% }) %>
+        </tbody>
+      </table>
+      <% } else { %>
+        <p style="text-align:center;">No recurring expenses for this month.</p>
+      <% } %>
+    </div>
+
+    <!-- ═══════════════  D. MONTH SUMMARY  ═══════════════ -->
+    <div class="month-summary">
+      <div class="month-title"><i class="fas fa-calendar-alt"></i> <%= formatMonthYear(month) %></div>
+      <div class="month-total"><i class="fas fa-wallet"></i>
+        Total: ₹<span id="totalExpense"><%= grandTotal.toFixed(2) %></span>
+      </div>
+    </div>
+
+    <!-- ═══════════════  E. DAILY EXPENSE GROUPS  ═══════════════ -->
+    <% if (expDates.length) { %>
+      <div id="expenseContainer">
+        <% expDates.forEach(d => { %>
+          <div class="expense-group" data-date="<%= d %>">
+            <h3>Expenses for <%= formatDate(d) %></h3>
+            <table id="expenseTable-<%= d %>">
+              <thead>
+                <tr>
+                  <th>Reason</th><th>Amount</th><th>Method</th>
+                  <th>Detail&nbsp;1</th><th>Detail&nbsp;2</th><th>Time</th>
+                  <th style="text-align:center;">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% groupedExpenses[d].forEach(e => {
+                     const created = e.createdAt?.toDate ? e.createdAt.toDate()
+                                                         : new Date(e.createdAt);
+                %>
+                 <tr>
+  <!-- Reason – editable text -->
+  <td class="<%= canEdit ? 'editable editable-text' : '' %>"
+      data-id="<%= e.id %>" data-field="expenseReason"
+      data-date="<%= d %>">
+    <span class="value"><%= attr(e.expenseReason) %></span>
+    <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
+  </td>
+
+  <!-- Amount – editable number -->
+  <td class="<%= canEdit ? 'editable' : '' %>"
+      data-id="<%= e.id %>" data-field="expenseCost"
+      data-date="<%= d %>">
+    <span class="value"><%= e.expenseCost.toFixed(2) %></span>
+    <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
+  </td>
+
+<!-- Method/Status – shows ONLY the status text -->
+<td class="<%= canEdit ? 'editable-status' : '' %>"
+    data-id="<%= e.id %>" data-field="expenseStatus"
+    data-date="<%= d %>"
+    data-detail1="<%= attr(e.expenseDetail1||'') %>"
+    data-detail2="<%= attr(e.expenseDetail2||'') %>">
+  <span class="value"><%= e.expenseStatus %></span>
+  <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
+</td>
+
+
+  <td><%= e.expenseDetail1 || '-' %></td>
+  <td><%= e.expenseDetail2 || '-' %></td>
+  <td><%= created.toLocaleTimeString() %></td>
+
+  <!-- Delete -->
+  <td style="text-align:center;">
+    <% if (canDelete) { %>
+      <i class="fas fa-trash-alt delete-expense-btn"
+         data-id="<%= e.id %>" data-date="<%= d %>"></i>
+    <% } %>
+  </td>
+</tr>
+
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <p>No expenses found for this month.</p>
+    <% } %>
+
+  </div><!-- /.page-container -->
+</div><!-- /.main-content -->
+
+<!-- ─────────────────────────  SCRIPTS  ───────────────────────── -->
 <script>
-/* ———————————————————————————————————————————————
-   GLOBAL CONSTANTS (set by EJS)
-——————————————————————————————————————————————— */
-const CAN_DELETE  = <%= canDelete ? 'true' : 'false' %>;
-const CSRF_TOKEN  = '<%- csrfToken %>';
-
-/* ———————————————————————————————————————————————
-   SIDEBAR TOGGLE
-——————————————————————————————————————————————— */
-const sidebarToggle = document.getElementById('sidebarToggle');
-if (sidebarToggle) {
-  sidebarToggle.addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('active');
-    document.getElementById('main-content').classList.toggle('sidebar-open');
-  });
+/* globals from EJS */
+const CAN_DELETE = <%= canDelete ? 'true' : 'false' %>;
+const CAN_EDIT   = <%= canEdit   ? 'true' : 'false' %>;
+const CSRF_TOKEN = '<%- csrfToken %>';
+/* HTML-escape helper – identical to the server-side version */
+function htmlEscape (s = '') {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
-/* ———————————————————————————————————————————————
-   DYNAMIC “ADD MORE EXPENSE” ROWS
-——————————————————————————————————————————————— */
-const expenseItems = document.getElementById('expenseItems');
-document.getElementById('addExpense').addEventListener('click', () => {
-  const row = document.createElement('div');
-  row.className = 'expense-row';
-  row.innerHTML = `
-    <input type="text"  name="expenseReason" placeholder="Expense Reason"  class="expense-field" required>
-    <input type="number" step="0.01" name="expenseCost"   placeholder="Expense Amount" class="expense-field" required>
-    <input type="hidden" name="expenseStatus"  value="Paid Cash">
-    <input type="hidden" name="expenseDetail1" value="">
-    <input type="hidden" name="expenseDetail2" value="">
-    <button type="button" class="removeExpense">Remove</button>`;
-  expenseItems.appendChild(row);
-  toggleRemoveButtons();
-});
-
-function toggleRemoveButtons () {
-  document.querySelectorAll('#expenseItems .expense-row').forEach((row, i) => {
-    row.querySelector('.removeExpense').style.display = i === 0 ? 'none' : 'inline-block';
-  });
-}
-
-expenseItems.addEventListener('click', e => {
-  if (e.target.classList.contains('removeExpense')) {
-    e.target.parentElement.remove();
-    toggleRemoveButtons();
-  }
-});
-
-/* ———————————————————————————————————————————————
-   POST-JSON HELPER  (adds CSRF + robust parsing)
-——————————————————————————————————————————————— */
-async function postJSON (url, data) {
+const attr = htmlEscape; 
+/* helper */
+async function postJSON (url, data = {}) {
   const res = await fetch(url, {
     method : 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': CSRF_TOKEN          
+      'Content-Type'    : 'application/json',
+      'X-CSRF-Token'    : CSRF_TOKEN,
+      'X-Requested-With': 'XMLHttpRequest'
     },
-    credentials : 'same-origin',
-    body        : JSON.stringify(data)
+    credentials: 'same-origin',
+    body       : JSON.stringify(data)
   });
-
-  const isJSON = res.headers.get('content-type')?.includes('application/json');
-  const payload = isJSON ? await res.json() : await res.text();
-
-  if (!isJSON) throw new Error(payload || 'Server returned non-JSON response');
-  if (!payload.success) throw new Error(payload.error || 'Unknown error');
-  return payload;
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || 'Unknown error');
+  return json;
 }
 
-/* ———————————————————————————————————————————————
-   SUBMIT EXPENSE FORM  (AJAX)
-——————————————————————————————————————————————— */
-document.getElementById('expenseForm').addEventListener('submit', async e => {
-  e.preventDefault();
+/* ────────────────────────────────────────────────────────────────
+   INLINE “ADD EXPENSE” FORM HELPERS  – restored from old version
+   (place immediately after the postJSON helper)
+   ──────────────────────────────────────────────────────────────── */
 
-  const fd   = new FormData(e.target);
-  const body = {};
-  for (const [k, v] of fd.entries()) {
-    body[k] = body[k] !== undefined
-      ? (Array.isArray(body[k]) ? body[k].concat(v) : [body[k], v])
-      : v;
+/* 1️⃣  row builder */
+function addExpenseRow (reason = '', cost = '', status = 'Paid Cash') {
+  const row = document.createElement('div');
+  row.className = 'expense-row';
+  row.innerHTML = `
+    <input type="text"   name="expenseReason" class="expense-field"
+           placeholder="Expense Reason"
+           value="${htmlEscape(reason)}" required>
+    <input type="number" step="0.01" name="expenseCost"   class="expense-field"
+           placeholder="₹ 0.00" value="${cost}" required>
+    <input type="hidden" name="expenseStatus"  value="${status}">
+    <input type="hidden" name="expenseDetail1" value="">
+    <input type="hidden" name="expenseDetail2" value="">
+    <button type="button" class="removeExpense">Remove</button>`;
+  document.getElementById('expenseItems').appendChild(row);
+}
+
+/* 2️⃣  hide the “Remove” button on the very first row */
+function toggleRemoveButtons () {
+  document.querySelectorAll('#expenseItems .expense-row').forEach((r, i) => {
+    r.querySelector('.removeExpense').style.display = i === 0 ? 'none' : 'inline-block';
+  });
+}
+
+/* 3️⃣  first blank row (only if none exist yet) */
+window.addEventListener('DOMContentLoaded', () => {
+  if (!document.querySelector('#expenseItems .expense-row')) addExpenseRow();
+  toggleRemoveButtons();
+});
+
+/* 4️⃣  “Add More” */
+document.getElementById('addExpense').addEventListener('click', () => {
+  addExpenseRow();
+  toggleRemoveButtons();
+});
+
+/* 5️⃣  dynamic remove */
+document.getElementById('expenseItems').addEventListener('click', ev => {
+  if (ev.target.classList.contains('removeExpense')) {
+    ev.target.parentElement.remove();
+    toggleRemoveButtons();
+  }
+});
+
+document.getElementById('expenseForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+
+  /* 🔒 1️⃣  lock the submit button so the user can’t spam-click */
+  const submitBtn = ev.target.querySelector('input[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;          // block repeat-clicks
+    submitBtn.value    = 'Saving…';     // visual feedback
   }
 
   try {
-    const { expense: ex } = await postJSON('/api/expense', body);
-
-    const createdAt = ex.createdAt && ex.createdAt._seconds
-        ? new Date(ex.createdAt._seconds * 1000)
-        : new Date(ex.createdAt);
-    const dateStr   = createdAt.toISOString().substring(0, 10);
-
-    let group = document.querySelector(`.expense-group[data-date="${dateStr}"]`);
-    if (!group) {
-      // if this date wasn't shown before, create it now
-      const container = document.getElementById('expenseContainer');
-      group = document.createElement('div');
-      group.className   = 'expense-group';
-      group.dataset.date = dateStr;
-      group.innerHTML   = `
-        <h3>Expenses for ${formatDate(dateStr)}</h3>
-        <table id="expenseTable-${dateStr}">
-          <thead>
-            <tr>
-              <th>Reason</th><th>Amount</th><th>Method</th><th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>`;
-      container.appendChild(group);
+    /* 2️⃣  gather rows → plain object */
+    const fd   = new FormData(ev.target);
+    const body = {};
+    for (const [k, v] of fd.entries()) {
+      body[k] = body[k] !== undefined ? [].concat(body[k], v) : v;
     }
 
-    const tbody = group.querySelector('tbody');
-    const row   = document.createElement('tr');
-    row.innerHTML = `
-      <td>${ex.expenseReason}</td>
-      <td>${Number(ex.expenseCost).toFixed(2)}</td>
-      <td>${ex.expenseStatus}</td>
-      <td>${ex.expenseDetail1 || '-'}</td>
-      <td>${ex.expenseDetail2 || '-'}</td>
-      <td>${createdAt.toLocaleTimeString()}</td>
-      <td style="text-align:center;">
-        ${CAN_DELETE
-          ? `<i class="fas fa-trash-alt delete-expense-btn" data-id="${ex.id}"></i>`
-          : ''}
-      </td>`;
-    tbody.prepend(row);
+    /* 3️⃣  send to backend */
+    const json = await postJSON('/api/expense', body);
 
-    // update total
-    const totalEl  = document.getElementById('totalExpense');
-    const newTotal = (parseFloat(totalEl.textContent) || 0) + parseFloat(ex.expenseCost);
-    totalEl.textContent = newTotal.toFixed(2);
-
-    e.target.reset();
+    /* 4️⃣  clear the form UI */
+    document.getElementById('expenseItems').innerHTML = '';
+    addExpenseRow();
     toggleRemoveButtons();
 
+    /* 5️⃣  inject freshly-saved rows (if any) */
+    if (Array.isArray(json.expenses)) {
+      json.expenses.forEach(e => injectExpenseRow(e));
+    }
+
+    /* 6️⃣  update month badge */
+    if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
+
   } catch (err) {
-    alert(err.message);
+    alert(err.message);                 // surface errors
+  } finally {
+    /* 🔓 7️⃣  unlock the button (success **or** failure) */
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.value    = 'Submit Expenses';   // restore label
+    }
   }
 });
 
-/* ———————————————————————————————————————————————
-   DELETE EXPENSE  (AJAX)
-——————————————————————————————————————————————— */
-document.getElementById('expenseContainer').addEventListener('click', async e => {
-  if (!e.target.classList.contains('delete-expense-btn')) return;
-  if (!confirm('Delete this expense?')) return;
+/* ===============================================================
+   RECURRING TEMPLATE – disable submit button while posting
+   =============================================================== */
+const recForm = document.getElementById('recurringForm');
+if (recForm) {
+  recForm.addEventListener('submit', () => {
+    const submitBtn = recForm.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.disabled  = true;   // lock repeat-clicks
+      submitBtn.textContent = 'Saving…';   // visual feedback
+    }
+    /* No need to re-enable: the page reloads after the POST */
+  });
+}
 
+
+
+/* ────────────────────────────────────────────────────────────────
+   GLOBAL click-handler  – delete + inline-edit
+   (mirrors the one used on sales.ejs, but supports three fields)
+   ──────────────────────────────────────────────────────────────── */
+document.addEventListener('click', async ev => {
+
+  /* 1️⃣ DELETE buttons (sale + expense) – unchanged */
+  /* ------------------------------------------------ */
+  const delSaleBtn = ev.target.closest('.delete-sale-btn');
+  if (delSaleBtn) {
+    if (!confirm('Delete this sale?')) return;
+    try {
+      const json = await postJSON('/api/delete-sale', { saleId: delSaleBtn.dataset.id });
+      delSaleBtn.closest('tr').remove();
+      refreshSummary(delSaleBtn.dataset.date, json.summary);
+    } catch (err) { alert(err.message); }
+    return;
+  }
+
+  const delExpBtn = ev.target.closest('.delete-expense-btn');
+  if (delExpBtn) {
+    if (!confirm('Delete this expense?')) return;
+    try {
+      const json = await postJSON('/api/delete-expense', { expenseId: delExpBtn.dataset.id });
+      delExpBtn.closest('tr').remove();
+      refreshSummary(delExpBtn.dataset.date, json.summary);
+      if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
+    } catch (err) { alert(err.message); }
+    return;
+  }
+    /* ─────────────────────────────────────────────
+     RECURRING-EXPENSE delete (month snapshot row)
+     ───────────────────────────────────────────── */
+  const delRecBtn = ev.target.closest('.delete-recurring-btn');
+  if (delRecBtn) {
+    if (!confirm('Delete this recurring expense?')) return;
+
+    const tr = delRecBtn.closest('tr');
+    const id = tr.dataset.id;
+
+    try {
+      const json = await postJSON(`/delete-recurring-monthly/${id}`, {});
+      tr.remove();                                   // vanish row
+      if (json.monthTotal !== undefined)            // live badge
+        updateMonthTotal(json.monthTotal);
+    } catch (err) {
+      alert(err.message);
+    }
+    return;                                         // stop bubbling
+  }
+
+
+  /* 2️⃣ EDIT icon */
+  const icon = ev.target.closest('.edit-icon');
+  if (!icon) return;              // click wasn’t on a pencil
+
+  const td     = icon.closest('td');
+  const id     = td.dataset.id;
+  const field  = td.dataset.field;      // expenseReason  / expenseCost / expenseStatus
+  const date   = td.dataset.date;
+  const oldD1  = td.dataset.detail1 || '';
+  const oldD2  = td.dataset.detail2 || '';
+  const oldVal = td.querySelector('.value').textContent.trim();
+
+  /* ------------------------------------------------
+     A.  STATUS (method) – dropdown + optional details
+     ------------------------------------------------ */
+/* ------------------------------------------------
+   A.  STATUS (method) – dropdown + optional details
+   ------------------------------------------------ */
+if (field === 'expenseStatus') {
+  const STATUSES = [
+    'Paid Cash',
+    'Paid Online',
+    'Not Paid',
+    'Half Cash + Half Online',
+    'Half Cash + Not Paid',
+    'Half Online + Not Paid'
+  ];
+
+  // keep original values
+  const oldStatus = oldVal;
+  const oldD1     = td.dataset.detail1 || '';
+  const oldD2     = td.dataset.detail2 || '';
+
+  // clear the cell & mark editing
+  td.classList.add('editing');
+  td.innerHTML = '';
+
+  // — form container
+  const form = document.createElement('div');
+  form.className = 'status-edit-form';
+  td.appendChild(form);
+
+  /* 1️⃣ STATUS DROPDOWN */
+  const sel = document.createElement('select');
+  STATUSES.forEach(s => {
+    const opt = Object.assign(document.createElement('option'), { value:s, text:s });
+    if (s === oldStatus) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  form.appendChild(sel);
+
+  /* 2️⃣ DETAIL INPUTS (created later on demand) */
+  const mkDetailInputs = () => {
+    // remove stale
+    form.querySelectorAll('.status-input').forEach(n => n.remove());
+
+    // need details?
+    if (!sel.value.startsWith('Half')) return;
+
+    ['Detail 1', 'Detail 2'].forEach((ph, i) => {
+      const inp = document.createElement('input');
+      Object.assign(inp, {
+        type:  'number',
+        step:  '0.01',
+        placeholder: ph,
+        value: i ? oldD2 : oldD1,
+        className: 'status-input'
+      });
+      form.appendChild(inp);
+    });
+  };
+  mkDetailInputs();
+
+/* 3️⃣ ACTION BUTTONS */
+const btnSave   = document.createElement('button');
+const btnCancel = document.createElement('button');
+
+/* ⬇️ prevent them from acting like a regular submit button */
+btnSave.type   = 'button';
+btnCancel.type = 'button';
+
+btnSave.innerHTML   = '<i class="fas fa-check"></i>';
+btnCancel.innerHTML = '<i class="fas fa-times"></i>';
+
+btnSave.className   = 'status-btn save';
+btnCancel.className = 'status-btn cancel';
+
+form.append(btnSave, btnCancel);
+
+
+  /* ✨ UX bits */
+  sel.addEventListener('change', mkDetailInputs);
+  form.querySelectorAll('input,select').forEach(el => {
+    // enter = save, esc = cancel
+    el.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') btnSave.click();
+      if (ev.key === 'Escape') btnCancel.click();
+    });
+  });
+
+  /* 🔘 Cancel just restores the original HTML */
+  const restore = () => {
+    td.classList.remove('editing');
+    td.innerHTML =
+      `<span class="value">${oldStatus}${
+        (oldD1||oldD2)
+          ? `<br><small>${oldD1?`Detail1: ${parseFloat(oldD1).toFixed(2)}`:''}${
+              oldD2?`${oldD1?', ':''}Detail2: ${parseFloat(oldD2).toFixed(2)}`:''
+            }</small>`
+          : ''
+      }</span><i class="fas fa-edit edit-icon"></i>`;
+  };
+  btnCancel.addEventListener('click', restore);
+
+  /* 🔘 Save = validate → POST → update cell */
+  btnSave.addEventListener('click', async () => {
+    const inputs = form.querySelectorAll('.status-input');
+    const d1 = inputs[0]?.value.trim() || '';
+    const d2 = inputs[1]?.value.trim() || '';
+
+    // basic numeric sanity when fields are visible
+    if (inputs.length && (d1 === '' || d2 === '' || +d1 < 0 || +d2 < 0)) {
+      return alert('Enter valid Detail 1 & Detail 2 amounts');
+    }
+
+    // skip server call if nothing changed
+    if (sel.value === oldStatus && d1 === oldD1 && d2 === oldD2) return restore();
+
+    try {
+const payload = { expenseId: id,               // id of this expense
+                        field     : 'expenseStatus', // field being updated
+                        value     : sel.value,
+                        expenseDetail1: d1,          // ✅ renamed keys
+                        expenseDetail2: d2 };
+
+      const res = await fetch('/api/edit-expense', {
+        method  : 'POST',
+        headers : {
+          'Content-Type' : 'application/json',
+          'X-CSRF-Token' : CSRF_TOKEN
+        },
+        body : JSON.stringify(payload)
+      });
+      const json = await res.json();
+
+          /* ── NEW: if the server recalculated expenseCost, update that cell too ── */
+      if (json.updatedRow && json.updatedRow.expenseCost !== undefined) {
+        const amountCell = td.parentElement.querySelector('td[data-field="expenseCost"] .value');
+        if (amountCell) amountCell.textContent = (+json.updatedRow.expenseCost).toFixed(2);
+      }
+
+
+      // success → rebuild cell
+      td.dataset.detail1 = d1;
+      td.dataset.detail2 = d2;
+      td.classList.remove('editing');
+      td.innerHTML =
+        `<span class="value">${sel.value}${
+          inputs.length
+            ? `<br><small>${d1 ? `Detail1: ${parseFloat(d1).toFixed(2)}` : ''}${
+                d2 ? `${d1?', ':''}Detail2: ${parseFloat(d2).toFixed(2)}` : ''
+              }</small>`
+            : ''
+        }</span><i class="fas fa-edit edit-icon"></i>`;
+
+      refreshSummary(date, json.summary);
+       if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
+    } catch (err) {
+      alert(err.message);
+      restore();
+    }
+  });
+
+  return; // ✅ handled
+}
+
+
+
+  /* ------------------------------------------------
+     B.  AMOUNT (expenseCost) – numeric input
+     ------------------------------------------------ */
+  if (field === 'expenseCost') {
+    td.classList.add('editing');
+    td.innerHTML = `<input type="number" step="0.01" value="${oldVal}">`;
+    const inp = td.firstChild;
+    inp.focus(); inp.select();
+
+    const finish = async () => {
+      const newVal = inp.value.trim();
+      td.classList.remove('editing');
+      if (newVal === oldVal) {
+        td.innerHTML = `<span class="value">${oldVal}</span><i class="fas fa-edit edit-icon"></i>`;
+        return;
+      }
+
+      /* 🔍 Daily vs Recurring table */
+      const isRecurring = td.closest('#recurringTable') !== null;
+      const endpoint    = isRecurring
+                            ? `/api/recurring-monthly/${id}`
+                            : '/api/edit-expense';
+      const payload     = isRecurring
+                            ? { expenseCost: newVal }
+                            : { expenseId: id, field: 'expenseCost', value: newVal };
+
+      try {
+        const json = await postJSON(endpoint, payload);
+
+              td.innerHTML =
+          `<span class="value">${parseFloat(newVal).toFixed(2)}</span><i class="fas fa-edit edit-icon"></i>`;
+
+        /* daily-summary only comes back from /api/edit-expense */
+        if (!isRecurring) {
+          refreshSummary(date, json.summary);
+          if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);   // ← NEW
+        }
+
+       
+      } catch (err) {
+        alert(err.message);
+        td.innerHTML = `<span class="value">${oldVal}</span><i class="fas fa-edit edit-icon"></i>`;
+      }
+    };
+    inp.addEventListener('blur', finish);
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') inp.blur(); });
+    return;
+  }
+
+
+  /* ------------------------------------------------
+     C.  REASON (expenseReason) – text input
+     ------------------------------------------------ */
+  if (field === 'expenseReason') {
+    td.classList.add('editing');
+    td.innerHTML = `<input type="text" maxlength="100" value="${oldVal.replace(/"/g, '&quot;')}">`;
+    const inp = td.firstChild;
+    inp.focus(); inp.select();
+
+    const finish = async () => {
+      const newVal = inp.value.trim();
+      td.classList.remove('editing');
+      if (newVal === oldVal || newVal === '') {
+        td.innerHTML = `<span class="value">${attr(oldVal)}</span><i class="fas fa-edit edit-icon"></i>`;
+        return;
+      }
+
+      /* 🔍 Daily vs Recurring table */
+      const isRecurring = td.closest('#recurringTable') !== null;
+      const endpoint    = isRecurring
+                            ? `/api/recurring-monthly/${id}`
+                            : '/api/edit-expense';
+      const payload     = isRecurring
+                            ? { expenseReason: newVal }
+                            : { expenseId: id, field: 'expenseReason', value: newVal };
+
+      try {
+        const json = await postJSON(endpoint, payload);
+
+td.innerHTML =
+  `<span class="value">${htmlEscape(newVal)}</span><i class="fas fa-edit edit-icon"></i>`;
+
+        if (!isRecurring) {
+          refreshSummary(date, json.summary);
+          if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);   // ← NEW
+        }
+
+      } catch (err) {
+        alert(err.message);
+td.innerHTML = `<span class="value">${htmlEscape(oldVal)}</span><i class="fas fa-edit edit-icon"></i>`;
+
+      }
+    };
+    inp.addEventListener('blur', finish);
+    inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') inp.blur(); });
+    return;
+  }
+
+
+});
+/* refreshSummary(…) – you already have this helper further down – keep it */
+
+document.getElementById('recurringTable')?.addEventListener('change', async ev => {
+  if (!ev.target.classList.contains('recStatus')) return;
+  const tr  = ev.target.closest('tr');
+  const id  = tr.dataset.id;
+  const sts = ev.target.value;
   try {
-    await postJSON('/api/delete-expense', { expenseId: e.target.dataset.id });
-
-    const tr   = e.target.closest('tr');
-    const cost = parseFloat(tr.children[1].textContent);
-    tr.remove();
-
-    const totalEl  = document.getElementById('totalExpense');
-    const newTotal = (parseFloat(totalEl.textContent) || 0) - cost;
-    totalEl.textContent = newTotal.toFixed(2);
-
-  } catch (err) {
-    alert(err.message);
-  }
+    const json = await postJSON(`/api/recurring-monthly/${id}`, { expenseStatus: sts });
+    if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
+  } catch (err) { alert(err.message); }
 });
+
+
+
+/* --------------------------------------------------------------
+   injectExpenseRow(e)
+   Adds a brand-new expense object (returned by /api/expense)
+   to its date group – creating the group/table if needed.
+---------------------------------------------------------------- */
+function injectExpenseRow (e) {
+  const dateKey = e.yyyy_mm_dd;            // backend supplies this
+  const container = document.getElementById('expenseContainer');
+
+  /* group wrapper exists? */
+  let group = container.querySelector(`.expense-group[data-date="${dateKey}"]`);
+  if (!group) {
+    /* build header + empty table */
+    group = document.createElement('div');
+    group.className = 'expense-group';
+    group.dataset.date = dateKey;
+    group.innerHTML = `
+      <h3>Expenses for ${e.dateLabel}</h3>
+      <table id="expenseTable-${dateKey}">
+        <thead>
+          <tr>
+            <th>Reason</th><th>Amount</th><th>Method</th>
+            <th>Detail&nbsp;1</th><th>Detail&nbsp;2</th><th>Time</th>
+            <th style="text-align:center;">Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>`;
+    container.appendChild(group);
+  }
+
+  /* build row */
+  const tbody = group.querySelector('tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="${CAN_EDIT?'editable editable-text':''}"
+        data-id="${e.id}" data-field="expenseReason" data-date="${dateKey}">
+      <span class="value">${htmlEscape(e.expenseReason)}</span>
+      ${CAN_EDIT?'<i class="fas fa-edit edit-icon"></i>':''}
+    </td>
+
+    <td class="${CAN_EDIT?'editable':''}"
+        data-id="${e.id}" data-field="expenseCost" data-date="${dateKey}">
+      <span class="value">${(+e.expenseCost).toFixed(2)}</span>
+      ${CAN_EDIT?'<i class="fas fa-edit edit-icon"></i>':''}
+    </td>
+
+    <td class="${CAN_EDIT?'editable-status':''}"
+        data-id="${e.id}" data-field="expenseStatus" data-date="${dateKey}"
+        data-detail1="${htmlEscape(e.expenseDetail1||'')}"
+        data-detail2="${htmlEscape(e.expenseDetail2||'')}">
+      <span class="value">${e.expenseStatus}</span>
+      ${CAN_EDIT?'<i class="fas fa-edit edit-icon"></i>':''}
+    </td>
+
+    <td>${e.expenseDetail1||'-'}</td>
+    <td>${e.expenseDetail2||'-'}</td>
+    <td>${e.timeLabel}</td>
+
+    <td style="text-align:center;">
+      ${CAN_DELETE?`<i class="fas fa-trash-alt delete-expense-btn"
+          data-id="${e.id}" data-date="${dateKey}"></i>`:''}
+    </td>`;
+  tbody.appendChild(tr);
+}
+
+
+/* ------------------------------------------------------------------
+   refreshSummary(date, summary)
+   Called after /api/edit-expense and /api/delete-expense.
+   The backend already sends the new daily summary; we convert that
+   into the month’s running total shown in the badge at the top.
+ ------------------------------------------------------------------ */
+function refreshSummary (_date, summary) {
+  if (!summary || !summary.totalCashExpenses) return;
+
+  /* month-total =  paid-cash + paid-online  */
+  const newMonthTotal = (summary.totalCashExpenses +
+                         summary.totalOnlineExpenses).toFixed(2);
+
+  const badge = document.getElementById('totalExpense');
+  if (badge) badge.textContent = newMonthTotal;
+}
+
+/* ────────────────
+   updateMonthTotal
+   ──────────────── */
+function updateMonthTotal (newTotal) {
+  const badge = document.getElementById('totalExpense');
+  if (!badge) return;
+  badge.textContent = parseFloat(newTotal).toFixed(2);
+}
+
+
 </script>
 
-<!-- keep this exactly where it was -->
 <script src="/js/firebasePersistence.js" type="module"></script>
-
 </body>
 </html>
+

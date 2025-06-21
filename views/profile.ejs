@@ -22,34 +22,38 @@
 }
 
 :root {
-  --primary-color: #3a7bd5;
-  --primary-light: #6faae7;
-  --primary-dark: #2c5282;
+  /* primary brand blues – DARKER */
+  --primary-dark : #1e3a8a;   /* indigo-900 */
+  --primary-color: #2563eb;   /* blue-600  */
+  --primary-light: #60a5fa;   /* blue-400  */
+
+  /* unchanged variables */
   --secondary-color: #2dd4bf;
-  --accent-color: #f59e0b;
-  --success-color: #10b981;
-  --error-color: #ef4444;
-  --warning-color: #f59e0b;
-  --dark-bg: #1e293b;
-  --light-bg: #f8fafc;
-  --card-bg: #ffffff;
-  --text-dark: #1e293b;
-  --text-light: #64748b;
-  --text-muted: #94a3b8;
-  --text-white: #f8fafc;
-  --border-color: #e2e8f0;
-  --border-light: #f1f5f9;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --accent-color   : #f59e0b;
+  --success-color  : #10b981;
+  --error-color    : #ef4444;
+  --warning-color  : #f59e0b;
+  --dark-bg        : #1e293b;
+  --light-bg       : #f8fafc;
+  --card-bg        : #ffffff;
+  --text-dark      : #1e293b;
+  --text-light     : #64748b;
+  --text-muted     : #94a3b8;
+  --text-white     : #f8fafc;
+  --border-color   : #e2e8f0;
+  --border-light   : #f1f5f9;
+  --shadow-sm      : 0 1px 2px 0 rgba(0,0,0,.05);
+  --shadow-md      : 0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px -2px rgba(0,0,0,.1);
+  --shadow-lg      : 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1);
+  --shadow-xl      : 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1);
+  --transition     : all .3s cubic-bezier(.4,0,.2,1);
+  --transition-fast: all .15s cubic-bezier(.4,0,.2,1);
+  --radius-sm      : 0.375rem;
+  --radius-md      : 0.5rem;
+  --radius-lg      : 0.75rem;
+  --radius-xl      : 1rem;
 }
+
 
 body {
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -156,18 +160,28 @@ main {
   font-size: 1.1rem;
 }
 
-/* Profile Header */
+.profile-header .profile-title h1,
+.profile-header .profile-title p {
+  color: var(--text-white);
+}
+
+
 .profile-header {
   display: flex;
   align-items: center;
   gap: 1.5rem;
   margin-bottom: 2rem;
   padding: 1.5rem 2rem;
-  background: linear-gradient(135deg, var(--card-bg) 0%, #f8fafc 100%);
+
+  /* exact same gradient as <header> but slightly darker */
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%) !important;
+
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--primary-dark);
+  color: var(--text-white);     /* keeps text readable */
 }
+
 
 .profile-avatar {
   width: 80px;
@@ -517,6 +531,13 @@ input:focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }
+/* Protected badge – same blue gradient as navbar & profile header */
+.protected-badge {
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%);
+  color: var(--text-white);
+  border-color: var(--primary-dark);
+}
+
 </style>
 <body>
   <header>
@@ -606,9 +627,10 @@ input:focus-visible {
         <label for="email">Email Address</label>
         <div class="input-wrapper">
           <input type="email" id="email" value="<%= user.email %>" disabled>
-          <span class="info-badge">
-            <i class="fas fa-lock"></i> Protected
-          </span>
+         <span class="info-badge protected-badge">
+  <i class="fas fa-lock"></i> Protected
+</span>
+
         </div>
       </div>
 

@@ -1119,44 +1119,46 @@ document.getElementById('expenseForm').addEventListener('submit', async e => {
   setLoading(submitBtn, true);
 
   try {
+    /* 1. send the form */
     const obj = Object.fromEntries(new FormData(e.target).entries());
-    const res = await postJSON('/api/expense', obj);
-    const ex  = res.expense;
+    const res = await postJSON('/api/expense', obj);   // res.expenses ⇢ array
 
-    /* make sure the expense table exists */
-    ensureTableExists(
-      '.tables-content div:nth-child(2)',
-      '#expenseTable',
-      `<thead>
-        <tr>
-          <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
-          <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-        </tr>
-      </thead>`
-    );
+    /* 2. render every row that came back (works for 1-N inserts) */
+    res.expenses.forEach(ex => {
+      /* make sure the expense table exists BEFORE each prepend */
+      ensureTableExists(
+        '.tables-content div:nth-child(2)',
+        '#expenseTable',
+        `<thead>
+          <tr>
+            <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
+            <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
+          </tr>
+        </thead>`
+      );
 
-    /* build row and prepend */
-const row = document.createElement('tr');
-row.innerHTML = `
-  <td>${escapeHtml(ex.expenseReason)}</td>
-  <td>${cash(ex.expenseCost)}</td>
-  <td>${escapeHtml(ex.expenseStatus)}</td>
-  <td>${ex.expenseDetail1 ? cash(ex.expenseDetail1) : '-'}</td>
-  <td>${ex.expenseDetail2 ? cash(ex.expenseDetail2) : '-'}</td>
-  <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
-  <td style="text-align:center;">
-    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
-       data-id="${escapeHtml(ex.id)}"></i>
-  </td>`;
+      /* build row and prepend it */
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${escapeHtml(ex.expenseReason)}</td>
+        <td>${cash(ex.expenseCost)}</td>
+        <td>${escapeHtml(ex.expenseStatus)}</td>
+        <td>${ex.expenseDetail1 ? cash(ex.expenseDetail1) : '-'}</td>
+        <td>${ex.expenseDetail2 ? cash(ex.expenseDetail2) : '-'}</td>
+        <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
+        <td style="text-align:center;">
+          <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
+             data-id="${escapeHtml(ex.id)}"></i>
+        </td>`;
+      document.querySelector('#expenseTable tbody').prepend(row);
+    });
 
+    /* 3. housekeeping */
+    refreshExpenseHeader();                     // rebuild “Expense Amount: ₹…”
+    if (res.summary) refreshSummary(res.summary); // safely refresh when provided
 
-    document.querySelector('#expenseTable tbody').prepend(row);
-
-    /* refresh summary and clean up */
-    refreshSummary(res.summary);
-    e.target.reset();
-    expenseStatusSelect.dispatchEvent(new Event('change'));  // collapse extras
-refreshExpenseHeader(); 
+    e.target.reset();                           // clear the form
+    expenseStatusSelect.dispatchEvent(new Event('change')); // hide extra fields
 
   } catch (err) {
     alert(err.message);
@@ -1164,6 +1166,7 @@ refreshExpenseHeader();
     setLoading(submitBtn, false);
   }
 });
+
 
 
   /* ——— OPENING BALANCE FORM ——— */
