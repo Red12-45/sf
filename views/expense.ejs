@@ -625,22 +625,29 @@ const payload = { expenseId: id,               // id of this expense
         if (amountCell) amountCell.textContent = (+json.updatedRow.expenseCost).toFixed(2);
       }
 
+// success → rebuild cell
+td.dataset.detail1 = d1;
+td.dataset.detail2 = d2;
+td.classList.remove('editing');
+td.innerHTML =
+  `<span class="value">${sel.value}${
+    inputs.length
+      ? `<br><small>${d1 ? `Detail1: ${parseFloat(d1).toFixed(2)}` : ''}${
+          d2 ? `${d1 ? ', ' : ''}Detail2: ${parseFloat(d2).toFixed(2)}` : ''
+        }</small>` : ''
+  }</span><i class="fas fa-edit edit-icon"></i>`;
 
-      // success → rebuild cell
-      td.dataset.detail1 = d1;
-      td.dataset.detail2 = d2;
-      td.classList.remove('editing');
-      td.innerHTML =
-        `<span class="value">${sel.value}${
-          inputs.length
-            ? `<br><small>${d1 ? `Detail1: ${parseFloat(d1).toFixed(2)}` : ''}${
-                d2 ? `${d1?', ':''}Detail2: ${parseFloat(d2).toFixed(2)}` : ''
-              }</small>`
-            : ''
-        }</span><i class="fas fa-edit edit-icon"></i>`;
+/* ▼ NEW – also refresh the Detail 1 / Detail 2 columns */
+const row = td.parentElement;          // current <tr>
+const d1Cell = row.children[3];        // Detail 1 column
+const d2Cell = row.children[4];        // Detail 2 column
 
-      refreshSummary(date, json.summary);
-       if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
+if (d1Cell) d1Cell.textContent = d1 ? (+d1).toFixed(2) : '-';
+if (d2Cell) d2Cell.textContent = d2 ? (+d2).toFixed(2) : '-';
+
+refreshSummary(date, json.summary);
+if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
+
     } catch (err) {
       alert(err.message);
       restore();

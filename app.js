@@ -410,11 +410,7 @@ const normalizeName = s =>
     .trim();
 
 const getCategories = async accountId => {
-  const key  = `categories_${accountId}`;
-  const from = await cacheGet(key);
-  if (from) return from;
-
-  /* ── FULL docs (no .select) so Firestore skips any rule-based strip ── */
+  // Always pull fresh rows from Firestore
   const snap = await db.collection('products')
                        .where('accountId', '==', accountId)
                        .get();
@@ -423,17 +419,12 @@ const getCategories = async accountId => {
     snap.docs.map(d => d.data().category).filter(Boolean)
   )];
 
-  /* ⚠️  cache ONLY when we have at least one real category */
-  if (uniq.length) await cacheSet(key, uniq, 3600);
-  return uniq;
+  return uniq;                          // straight from DB
 };
 
 
 const getUnits = async accountId => {
-  const key  = `units_${accountId}`;
-  const from = await cacheGet(key);
-  if (from) return from;
-
+  // Fresh fetch every time
   const snap = await db.collection('products')
                        .where('accountId', '==', accountId)
                        .get();
@@ -444,8 +435,7 @@ const getUnits = async accountId => {
         .filter(Boolean)
   )];
 
-  if (uniq.length) await cacheSet(key, uniq, 3600);
-  return uniq;
+  return uniq;                          // no Redis layer
 };
 
 /* ────────────────────────────────────────────────────────────────
@@ -1792,14 +1782,59 @@ if (!Number.isFinite(wp) || wp <= 0 ||
 
 
       let category = newCategory?.trim()
-  ? newCategory.trim()
-  : (selectedCategory || '');
-category = category.replace(/\s+/g,' ').trim();
-if (category)
-  category = category[0].toUpperCase() + category.slice(1).toLowerCase();
+        ? newCategory.trim()
+        : (selectedCategory || '');
 
-      const unitRaw = newUnit?.trim() || selectedUnit || '';
-      const unit = unitRaw.trim().toLowerCase();   // one canonical form
+      // normalise runs of spaces, then trim
+      category = category.replace(/\s+/g, ' ').trim();
+
+      // title-case for storage (e.g. "drinks" → "Drinks")
+      if (category) {
+        category = category[0].toUpperCase() + category.slice(1).toLowerCase();
+      }
+
+      /* ──────────────────────────────────────────────────────────────
+         ✨ DUPLICATE CATEGORY GUARD  (case- & space-insensitive)
+         – Runs only when the user typed a brand-new category.
+         – Uses the existing helper  normalizeName()  and  getCategories().
+      ────────────────────────────────────────────────────────────── */
+      if (newCategory?.trim()) {
+        const existingCats = await getCategories(accountId);   // cached helper
+        const isDup = existingCats.some(
+          c => normalizeName(c) === normalizeName(category)
+        );
+
+        if (isDup) {
+          return res
+            .status(400)
+            .send('Category already exists — choose a different name.');
+        }
+      }
+
+     /* ──────────────────────────
+         Unit normalisation & guard
+      ────────────────────────── */
+      const unitRawInput = newUnit?.trim() || selectedUnit || '';
+
+      // collapse extra spaces, trim, then lower-case for storage
+      let unit = unitRawInput.replace(/\s+/g, ' ').trim().toLowerCase();
+
+      /* ✨ DUPLICATE UNIT GUARD  (case- & space-insensitive)
+         – Runs only when the user typed a brand-new unit.
+         – Re-uses  normalizeName()  and  getUnits().
+      */
+      if (newUnit?.trim()) {
+        const existingUnits = await getUnits(accountId);      // cached helper
+        const isDupUnit = existingUnits.some(
+          u => normalizeName(u) === normalizeName(unit)
+        );
+
+        if (isDupUnit) {
+          return res
+            .status(400)
+            .send('Unit already exists — choose a different name.');
+        }
+      }
 
 
       /* --------------------------------------------------------------
@@ -1930,8 +1965,6 @@ const newRetail = +(
         unit
       });
 
-      await cacheDel(`categories_${accountId}`);
-await cacheDel(`units_${accountId}`);
 
 
       res.redirect('/add-product?success=1');
@@ -2328,8 +2361,49 @@ if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
 }
 
 
-    const unitRaw = newUnit?.trim() || selectedUnit || '';
-    const catRaw  = newCategory?.trim() || selectedCategory || '';
+    /* ──────────────────────────
+       Category normalisation & guard
+    ────────────────────────── */
+    const catInput = newCategory?.trim() || selectedCategory || '';
+
+    // collapse spaces → trim → Title-case for storage
+    let category = catInput.replace(/\s+/g, ' ').trim();
+    if (category) {
+      category = category[0].toUpperCase() + category.slice(1).toLowerCase();
+    }
+
+    /* ✨ DUPLICATE CATEGORY check (case- & space-insensitive) */
+    if (newCategory?.trim()) {
+      const existingCats = await getCategories(accountId);      // helper
+      const dupCat = existingCats.some(
+        c => normalizeName(c) === normalizeName(category)
+      );
+      if (dupCat) {
+        return res
+          .status(400)
+          .send('Category already exists — choose a different name.');
+      }
+    }
+
+    /* ──────────────────────────
+       Unit normalisation & guard
+    ────────────────────────── */
+    const unitInput = newUnit?.trim() || selectedUnit || '';
+    let unit = unitInput.replace(/\s+/g, ' ').trim().toLowerCase();
+
+    /* ✨ DUPLICATE UNIT check (case- & space-insensitive) */
+    if (newUnit?.trim()) {
+      const existingUnits = await getUnits(accountId);          // helper
+      const dupUnit = existingUnits.some(
+        u => normalizeName(u) === normalizeName(unit)
+      );
+      if (dupUnit) {
+        return res
+          .status(400)
+          .send('Unit already exists — choose a different name.');
+      }
+    }
+
 
 /* ----- keep previously-sold units intact ----- */
 /* ----- keep previously-sold units intact ----- */
@@ -2346,8 +2420,8 @@ await batchRef.update({
   quantity         : qty,
   remainingQuantity: newRemain,
   profitMargin     : +(sp - pp).toFixed(2),
-  ...(unitRaw && { unit: unitRaw.toLowerCase() }),
-  ...(catRaw  && { category: catRaw }),
+...(unit     && { unit }),   
+  ...(category && { category }),
   updatedAt        : new Date()
 });
 
@@ -2390,8 +2464,7 @@ await batchRef.update({
 
 
           await recalcProductFromBatches(targetProdId);
-      await cacheDel(`categories_${accountId}`);
-      await cacheDel(`units_${accountId}`);
+    
 
       res.redirect('/view-products');
 
@@ -3459,43 +3532,14 @@ app.post(
       /* ---------- build update ---------- */
       const update = { updatedAt: new Date() };
 
-     if (field === 'expenseStatus') {
-  update.expenseStatus = value;
+      if (field === 'expenseStatus') {
+        update.expenseStatus = value;
+        if (paymentDetail1 !== undefined)
+          update.expenseDetail1 = +parseFloat(paymentDetail1 || 0);
+        if (paymentDetail2 !== undefined)
+          update.expenseDetail2 = +parseFloat(paymentDetail2 || 0);
 
-  /* ▼ use the correct field names */
-  if (expenseDetail1 !== undefined)
-    update.expenseDetail1 = +parseFloat(expenseDetail1 || 0);
-
-  if (expenseDetail2 !== undefined)
-    update.expenseDetail2 = +parseFloat(expenseDetail2 || 0);
-
-  /* ▼ when it’s a Half-&-Half status, force expenseCost = d1 + d2  */
-  if (value.startsWith('Half')) {
-    const d1 = +parseFloat(update.expenseDetail1 || 0);
-    const d2 = +parseFloat(update.expenseDetail2 || 0);
-    update.expenseCost = +(d1 + d2).toFixed(2);
-  }
-
-  await expRef.update(update);
-
-  /* ---------- fresh daily + monthly summaries ---------- */
-  const { summary } = await computeDailySummary(
-    req.session.user.accountId,
-    exp.saleDate
-  );
-  const monthTotal = await computeMonthTotal(
-    req.session.user.accountId,
-    exp.saleDate.substring(0, 7)          // "YYYY-MM"
-  );
-
-  return res.json({
-    success   : true,
-    updatedRow: update,
-    summary,
-    monthTotal                              // ★ sent to client
-  });
-}
- else if (field === 'expenseCost') {
+      } else if (field === 'expenseCost') {
         const num = +parseFloat(value);
         if (!Number.isFinite(num) || num < 0)
           return res.json({ success:false, error:'Invalid amount' });
