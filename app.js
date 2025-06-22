@@ -84,9 +84,18 @@ if (missing.length) {
 process.on('unhandledRejection', err => {
   logger.error({ err }, 'Unhandled Promise Rejection');
 });
-process.on('uncaughtException', err => {
-  logger.fatal({ err }, 'Uncaught Exception');
-  process.exit(1);                  // let PM2/cluster restart
+
+process.on('uncaughtException', async err => {
+  logger.error({ err }, 'Uncaught Exception – soft-recovery attempt');
+
+  /* ── 1.  Kick the Redis client so it starts a fresh handshake ── */
+  try { await redisClient.quit();          /* ignore failures  */ } catch (_) {}
+  try { redisClient.connect().catch(()=>{}); } catch (_) {}
+
+  /* ── 2.  Nothing to do for Firestore – its gRPC layer auto-retries ── */
+
+  /* ── 3.  Stay alive ── */
+  // DO NOT call process.exit() here.
 });
 
 
@@ -122,8 +131,6 @@ const cacheDel = async key => {
   catch (err) { logger.warn({ err, key }, 'Redis cache → DEL failed'); }
 };
 
-
-
 // ─────────── Firebase Admin ───────────
 const serviceAccount = require('./serviceAccountKey.json');
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
@@ -132,7 +139,7 @@ const db = admin.firestore();
 /* ─────────── Express base ─────────── */
 const app = express();
 app.disable('x-powered-by');              // hide Express fingerprint
-
+app.use(helmet.hidePoweredBy()); 
 
 /* ─── FAST-PATH: static assets & favicon (Brotli/Gzip first) ─── */
 const expressStaticGzip = require('express-static-gzip');
@@ -165,6 +172,17 @@ app.use((req, res, next) => {
 app.set('trust proxy', 1);     // behind Nginx / Cloudflare / Render / etc.
 
 // later, plug it into Express
+
+// Force HTTPS behind a proxy / load-balancer
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' &&
+      req.headers['x-forwarded-proto'] !== 'https') {
+    return res.redirect(301, 'https://' + req.headers.host + req.url);
+  }
+  next();
+});
+
+
 app.use(pinoHttp);
 
 
@@ -202,31 +220,65 @@ redisClient
       logger.warn('⚠️ Redis ECONNRESET – reconnecting…');
     }
   });
-
-
 redisClient.connect().catch(console.error);     // kick off the first connect
 
-/* Express-session store */
-const redisStore = new RedisStore({
-  client: redisClient,
-  prefix: 'sess:'                                // default key prefix
+/* ─────────── Dual-store session middleware ───────────
+   • Uses Redis when it is ‘ready’.
+   • Instantly switches to MemoryStore when Redis drops.
+   • Swaps back to Redis the moment `.ready` fires again.
+   • Zero code changes anywhere else – req.session works as before.
+────────────────────────────────────────────────────────*/
+const MemoryStore = session.MemoryStore;
+const memoryStore = new MemoryStore({
+  checkPeriod: 15 * 60 * 1000   // wipe expired sessions every 15 min
 });
 
-
-app.use(session({
-  store: redisStore,
+const redisStore  = new RedisStore({
+  client: redisClient,
+  prefix: 'sess:'
+});
+/* reusable factory so both stores share identical cookie settings */
+const makeSession = (store) => session({
+  store,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
-  maxAge  : 24 * 60 * 60 * 1000,  // 1 day
-  httpOnly: true,
-  secure  : process.env.NODE_ENV === 'production',
-  sameSite: 'strict'
-}
+    maxAge  : 24 * 60 * 60 * 1000,   // 1 day
+    httpOnly: true,
+    secure  : process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  }
+});
+const redisSession   = makeSession(redisStore);
+const memorySession  = makeSession(memoryStore);
 
-}));
+/* flag toggled by Redis client events */
+let useRedis = true;
 
+/* hot-swap middleware – runs on every request */
+app.use((req, res, next) => {
+  (useRedis ? redisSession : memorySession)(req, res, next);
+});
+
+/* wire up Redis state changes */
+redisClient
+  .on('ready', () => {
+    if (!useRedis) {
+      useRedis = true;
+      logger.info('Session store ➜ Redis (connection restored)');
+    }
+  })
+  .on('end', () => {
+    if (useRedis) {
+      useRedis = false;
+      logger.warn('Session store ➜ Memory (Redis connection closed)');
+    }
+  })
+  .on('error', (err) => {
+    /* network blips turn the flag off; other code already logs the error */
+    useRedis = false;
+  });
 
 /* ─────────── keep sub-user session in sync ─────────── */
 app.use(async (req, res, next) => {
@@ -371,10 +423,19 @@ app.use((err, req, res, next) => {        // CSRF failure handler
     return res.status(403).send('Invalid CSRF token');
   next(err);
 });
-app.use((err, req, res, next) => {        // generic 500
-  console.error(err);
+/* ───────── generic error handler ───────── */
+app.use((err, req, res, next) => {
+  logger.error({ err, url: req.url }, 'Request failed');
+
+  // Typical network-outage codes: ENOTFOUND DNS, EAI_AGAIN DNS, ECONNRESET etc.
+  const transient = ['ENOTFOUND', 'EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT'];
+  if (transient.includes(err.code)) {
+    return res.status(503).send('Service temporarily unavailable – retry in a minute.');
+  }
+
   res.status(500).send('Internal Server Error');
 });
+
 
 
 
@@ -4521,10 +4582,6 @@ app.get(
   }
 );
 
-
-
-
-
 //* ─────────── START THE SERVER (memory-aware) ─────────── */
 const PORT = process.env.PORT || 3000;
 
@@ -4555,7 +4612,7 @@ if (CPUS > 1 && cluster.isPrimary) {
   /* simple respawn – keeps the dyno alive */
   cluster.on('exit', (worker, code, signal) => {
     logger.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
-    cluster.fork();
+   setTimeout(() => cluster.fork(), 2000); cluster.fork();
   });
 
 /* ────────── MODE B – single-process fallback ────────── */
