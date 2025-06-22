@@ -195,16 +195,74 @@
     return true;
   }
 
-  /* Wire-up events once DOM ready */
+  /* ──────────────────────────────────────────────────────────────
+     Either-or logic  (***separate handlers, no infinite loop***)
+  ────────────────────────────────────────────────────────────── */
+  function onCategorySelectChange () {
+    const catInput = document.getElementById('newCategory');
+    if (this.value) catInput.value = '';           // user picked ⇒ clear custom text
+  }
+
+  function onCategoryInput () {
+    const catSelect = document.getElementById('selectedCategory');
+    if (this.value.trim() && catSelect.value) {
+      catSelect.selectedIndex = 0;                 // user typing ⇒ deselect option
+    }
+  }
+
+  function onUnitSelectChange () {
+    const unitInput = document.getElementById('newUnit');
+    if (this.value) unitInput.value = '';
+  }
+
+  function onUnitInput () {
+    const unitSelect = document.getElementById('selectedUnit');
+    if (this.value.trim() && unitSelect.value) {
+      unitSelect.selectedIndex = 0;
+    }
+  }
+
+  /* One-off initial clean-up (covers server-rendered batch data) */
+  function initialEitherOrSync () {
+    const catSelect = document.getElementById('selectedCategory');
+    const catInput  = document.getElementById('newCategory');
+    const unitSelect = document.getElementById('selectedUnit');
+    const unitInput  = document.getElementById('newUnit');
+
+    if (catSelect.value && catInput.value.trim())  catInput.value  = '';
+    if (unitSelect.value && unitInput.value.trim()) unitInput.value = '';
+  }
+
+  /* Wire-up once DOM is ready */
   document.addEventListener('DOMContentLoaded', () => {
+    initialEitherOrSync();
+
+    /* Category listeners */
+    document.getElementById('selectedCategory')
+            .addEventListener('change', onCategorySelectChange);
+    document.getElementById('newCategory')
+            .addEventListener('input',  onCategoryInput);
+
+    /* Unit listeners */
+    document.getElementById('selectedUnit')
+            .addEventListener('change', onUnitSelectChange);
+    document.getElementById('newUnit')
+            .addEventListener('input',  onUnitInput);
+
+    /* Form submission + guards */
     const form = document.getElementById('editBatchForm');
     form.addEventListener('submit', e => {
       titleCaseProductName();
       if (!preventDuplicate(form)) e.preventDefault();
     });
+
+    /* Title-case on blur */
     document.getElementById('productName')
             .addEventListener('blur', titleCaseProductName);
   });
+
+  /* BFCache restore → ensure fields obey either-or rule */
+  window.addEventListener('pageshow', initialEitherOrSync);
 </script>
 
 <!-- Firebase modules (nonce added) -->

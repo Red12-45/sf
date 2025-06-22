@@ -207,24 +207,63 @@
      of unsafe inline attributes.
 ────────────────────────────────────────────── -->
 <script nonce="<%= cspNonce %>">
-  /* Toggle new-product fieldset */
+  /* Toggle new-product fieldset and wire up either-or behaviour
+     for Category and Unit inputs */
+
   function toggleNewProductFields () {
     const sel     = document.getElementById('existingProduct');
     const wrapper = document.getElementById('newProductFields');
     const inputs  = wrapper.querySelectorAll('input, select');
+
     if (sel.value === 'new') {
       wrapper.classList.remove('hidden');
-      inputs.forEach(i => { i.disabled = false; if (i.id === 'productName') i.required = true; });
+      inputs.forEach(i => {
+        i.disabled = false;
+        if (i.id === 'productName') i.required = true;
+      });
     } else {
       wrapper.classList.add('hidden');
-      inputs.forEach(i => { i.disabled = true; if (i.id === 'productName') i.required = false; });
+      inputs.forEach(i => {
+        i.disabled = true;
+        if (i.id === 'productName') i.required = false;
+      });
     }
   }
-  document.addEventListener('DOMContentLoaded', toggleNewProductFields);
-  window.addEventListener('pageshow',           toggleNewProductFields);
-  document.getElementById('existingProduct')
-          .addEventListener('change', toggleNewProductFields);
+
+  document.addEventListener('DOMContentLoaded', () => {
+    /* Ensure correct state on initial load */
+    toggleNewProductFields();
+
+    /* ─── Either-or wiring for Category ─── */
+    const catSelect = document.getElementById('selectedCategory');
+    const catInput  = document.getElementById('newCategory');
+
+    /* selecting a Category clears any custom text */
+    catSelect.addEventListener('change', () => { catInput.value = ''; });
+
+    /* typing custom Category text resets the select to its placeholder */
+    catInput.addEventListener('input', () => {
+      if (catInput.value.trim()) catSelect.selectedIndex = 0; // first option = ""
+    });
+
+    /* ─── Either-or wiring for Unit ─── */
+    const unitSelect = document.getElementById('selectedUnit');
+    const unitInput  = document.getElementById('newUnit');
+
+    unitSelect.addEventListener('change', () => { unitInput.value = ''; });
+    unitInput.addEventListener('input', () => {
+      if (unitInput.value.trim()) unitSelect.selectedIndex = 0;
+    });
+
+    /* Existing-vs-New product toggle */
+    document.getElementById('existingProduct')
+            .addEventListener('change', toggleNewProductFields);
+  });
+
+  /* Restore fieldset state when navigating back/forward via BFCache */
+  window.addEventListener('pageshow', toggleNewProductFields);
 </script>
+
 
 <script nonce="<%= cspNonce %>">
   /* Price/qty blur → fix to two decimals */

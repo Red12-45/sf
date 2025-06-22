@@ -2453,14 +2453,18 @@ await batchRef.update({
 
     /* 3. refresh the surviving product doc ---------------------------- */
     const prodRef = db.collection('products').doc(targetProdId);
- await prodRef.set({
+await prodRef.set({
   productName : newName,
   nameKey     : newNameKey,
-  ...(unitRaw && { unit: unitRaw.toLowerCase() }),
-  ...(catRaw  && { category: catRaw }),
-  ...(taxPct !== null && { inclusiveTax: taxPct }),  // ★ NEW
+
+  // persist the normalised values we already calculated above
+  ...(unit      && { unit }),          // ← “kg”, “pcs”, etc. (already lower-cased)
+  ...(category  && { category }),      // ← title-cased category
+
+  ...(taxPct !== null && { inclusiveTax: taxPct }),  // keep GST % when supplied
   updatedAt   : new Date()
 }, { merge: true });
+
 
 
           await recalcProductFromBatches(targetProdId);
