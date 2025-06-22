@@ -2942,23 +2942,23 @@ app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    
       profitPerUnit,
       profit         : totalProfit,
       batchesUsed,
-      productName    : data.productName.includes('(updated)') ? data.productName
-                                                              : data.productName + ' (updated)'
+      /* strip any legacy “ (updated)” suffix and always store a clean name */
+      productName    : data.productName.replace(/ \(updated\)$/, '')
     });
 
     const { summary } = await computeDailySummary(req.session.user.accountId, data.saleDate);
 
     return res.json({
       success:true,
-      updatedRow:{
-        saleQuantity : +newQty.toFixed(3),
-        totalSale    : +newTotalSale.toFixed(2),
-        retailPrice  : retailPerUnit,
-        wholesalePrice:avgWholesale,
+     updatedRow:{
+        saleQuantity  : +newQty.toFixed(3),
+        totalSale     : +newTotalSale.toFixed(2),
+        retailPrice   : retailPerUnit,
+        wholesalePrice: avgWholesale,
         profitPerUnit,
-        profit       : totalProfit,
-        productName  : data.productName.includes('(updated)') ? data.productName
-                                                              : data.productName + ' (updated)'
+        profit        : totalProfit,
+        /* return the clean product name as well */
+        productName   : data.productName.replace(/ \(updated\)$/, '')
       },
       summary
     });
