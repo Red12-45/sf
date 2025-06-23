@@ -3571,14 +3571,25 @@ app.post('/delete-employee', isAuthenticated, async (req, res) => {
 });
 
 
-/* ─────────── UPDATED SALE & EXPENSE ROUTES + AJAX ENDPOINTS ─────────── */
-// full‑page POST /sale
-app.post('/sale', isAuthenticated, async (req, res) => {
+/* ─────────── AJAX  POST  /api/sale  (always returns JSON) ─────────── */
+app.post('/api/sale', isAuthenticated, async (req, res) => {
   try {
-    await processSale(req.body, req.session.user);
-    res.redirect(`/?saleDate=${req.body.saleDate}`);
-  } catch (e) {
-    res.status(500).send(e.toString());
+    // 1️⃣  create the sale
+    const sale = await processSale(req.body, req.session.user);
+
+    // 2️⃣  fresh same-day summary for the quick dashboard refresh
+    const { summary } = await computeDailySummary(
+      req.session.user.accountId,
+      sale.saleDate
+    );
+
+    return res.json({ success: true, sale, summary });
+  } catch (err) {
+    console.error('/api/sale error:', err);
+    /* ALWAYS reply with JSON, even on failure */
+    return res
+      .status(400)
+      .json({ success: false, error: err.message || 'Something went wrong' });
   }
 });
 
@@ -3618,17 +3629,16 @@ app.post(
       /* 1️⃣ delete row */
       await expRef.delete();
 
-      /* 2️⃣ fresh daily summary (same day) */
-      const { summary } = await computeDailySummary(
-        req.session.user.accountId,
-        exp.saleDate
-      );
+const { summary } = await computeDailySummary(
+  sale.accountId,
+  sale.saleDate
+);
 
-      /* 3️⃣ fresh month-total (YYYY-MM) */
-      const monthTotal = await computeMonthTotal(
-        req.session.user.accountId,
-        exp.saleDate.substring(0, 7)
-      );
+const monthTotal = await computeMonthTotal(
+  sale.accountId,
+  sale.saleDate.substring(0, 7)       // "YYYY-MM"
+);
+
 
       /* 4️⃣ done */
       return res.json({ success: true, summary, monthTotal });
