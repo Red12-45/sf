@@ -3951,15 +3951,16 @@ if (hasWrites) {
     await recalcProductFromBatches(productId);   // 2️⃣ then correct stock
 
 
-  /* ▼ NEW – re-compute month running total */
+/* ▼ NEW – re-compute month running total */
 const monthTotal = await computeMonthTotal(
   sale.accountId,
-  exp.saleDate.substring(0, 7)        // "YYYY-MM"
+  sale.saleDate.substring(0, 7)       // "YYYY-MM"
 );
 
 const { summary } = await computeDailySummary(
-  sale.accountId, exp.saleDate
+  sale.accountId, sale.saleDate
 );
+
 
 res.json({ success: true, summary, monthTotal });
 
