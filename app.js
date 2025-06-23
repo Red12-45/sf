@@ -187,19 +187,20 @@ app.use(pinoHttp);
 
 
 /* ─────────── Redis client & session store ─────────── */
+
+/* ─────────── Redis client & session store ─────────── */
+const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;           // 12-month lifetime (ms)
+
 const redisClient = createClient({
   url: process.env.REDIS_URL,
   socket: {
-    /* keep idle connections alive (some cloud hosts kill quiet TCP streams) */
-    keepAlive: 10_000,                          // ping kernel every 10 s
-
-    /* exponential back-off:  0.1 s → … → max 30 s */
+    keepAlive: 10_000,
     reconnectStrategy: retries => Math.min(retries * 100, 30_000),
-
-    /* auto-TLS when the URL starts with “rediss://” (Redis Cloud, Upstash, etc.) */
     tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined
   }
 });
+
+
 
 redisClient
   // log “ready” only **once** to stop startup spam
@@ -234,22 +235,26 @@ const memoryStore = new MemoryStore({
 });
 
 const redisStore  = new RedisStore({
-  client: redisClient,
-  prefix: 'sess:'
+  client      : redisClient,
+  prefix      : 'sess:',
+  ttl         : ONE_YEAR / 1000,      // seconds
+  disableTouch: false                 // ← keep
 });
-/* reusable factory so both stores share identical cookie settings */
+
 const makeSession = (store) => session({
   store,
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  rolling: true,                      // refresh on every hit
   cookie: {
-    maxAge  : 24 * 60 * 60 * 1000,   // 1 day
+    maxAge  : ONE_YEAR,               // 365 days
     httpOnly: true,
     secure  : process.env.NODE_ENV === 'production',
     sameSite: 'strict'
   }
 });
+
 const redisSession   = makeSession(redisStore);
 const memorySession  = makeSession(memoryStore);
 
@@ -549,25 +554,20 @@ async function ensureRecurringSnapshot(accountId, month) {
 
     const id = `${accountId}_${month}_${doc.id}`;
 
-    batch.set(
-      db.collection('recurringMonthly').doc(id),
-      {
-        accountId,
-        month,
-        templateId   : doc.id,
-        expenseReason: d.expenseReason,
-        expenseCost  : d.defaultCost,
-        expenseStatus: 'Not Paid',   // every month starts fresh
-        createdAt    : new Date()
-      }
-    );
+batch.set(db.collection('recurringMonthly').doc(id),{
+  accountId,
+  month,
+  templateId   : doc.id,
+  expenseReason: d.expenseReason,
+  expenseCost  : 0,           // user will enter the real value later
+  expenseStatus: 'Not Paid',
+  createdAt    : new Date()
+});
+
   });
 
   if (batch._ops?.length) await batch.commit();   // ← only when needed
 }
-
-
-
 
 
 /* ─────────── DAILY SUMMARY (used by Ajax & dashboard) ─────────── */
@@ -678,9 +678,8 @@ async function computeMonthTotal(accountId, month) {
     .where('saleDate',  '<',  end)
     .get();
 
-  const expenseTotal = expSnap.docs
-    .filter(d => d.data().expenseStatus !== 'Not Paid')
-    .reduce((s,d)=> s + (+d.data().expenseCost || 0), 0);
+const expenseTotal = expSnap.docs
+  .reduce((s, d) => s + paidPortion(d.data()), 0);
 
   /* 2️⃣  Pull this month’s RECURRING snapshot rows */
   const recSnap = await db.collection('recurringMonthly')
@@ -688,17 +687,38 @@ async function computeMonthTotal(accountId, month) {
     .where('month',     '==', month)
     .get();
 
-  const recTotal = recSnap.docs
-    .filter(d => d.data().expenseStatus !== 'Not Paid' && !d.data().deleted)
-    .reduce((s,d)=> s + (+d.data().expenseCost || 0), 0);
+const recTotal = recSnap.docs
+  .filter(d => !d.data().deleted)
+  .reduce((s, d) => s + paidPortion(d.data()), 0);
 
   return +(expenseTotal + recTotal).toFixed(2);
 }
 
+/* ===============================================================
+   paidPortion(row) – return only what’s already paid
+   =============================================================== */
+function paidPortion (row) {
+  const status = row.expenseStatus || '';
+  const cost   = +row.expenseCost || 0;
 
+  switch (status) {
+    case 'Not Paid':
+      return 0;
 
-/* ─────────── processSale (shared full-page + Ajax) ─────────── */
-// ────────────────────────────────────────────────────────────────
+    case 'Half Cash + Not Paid':
+    case 'Half Online + Not Paid':
+      // Use the explicit paid half if supplied,
+      // otherwise assume an even 50-50 split.
+      return row.expenseDetail1 !== undefined
+             ? (+row.expenseDetail1 || 0)
+             : cost / 2;
+
+    // Everything else is fully settled
+    default:
+      return cost;
+  }
+}
+
 // processSale — creates one sale, updates stock/batches and
 //               returns the saved document               (AJAX + full-page)
 // ────────────────────────────────────────────────────────────────
@@ -874,7 +894,6 @@ async function processExpense(body, user) {
   return (await lastRef.get()).data();             // keep Ajax contract
 }
 
-/* ─────────── Global subscription check middleware ─────────── */
 /* ─────────── Global subscription check middleware ─────────── */
 app.use((req, res, next) => {
   if (!req.session || !req.session.user) return next();
@@ -1646,8 +1665,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   }
 });
 
-
-// GET /expense – monthly expenses view
 // GET /expense – monthly expenses view  ★ NOW pulls recurring templates
 app.get(
   '/expense',
@@ -1670,35 +1687,35 @@ app.get(
       if (nextM > 12) { nextM = 1; nextY++; }
       const nextMonth = `${nextY}-${pad(nextM)}-01`;
 
-/* 2-B.  M O N T H - S P E C I F I C  recurring snapshot ------------- */
-await ensureRecurringSnapshot(accountId, monthParam);
+const todayYM   = `${currentYear}-${currentMonth}`;   // "YYYY-MM"
+const isFuture  = monthParam > todayYM;   
 
-const [expenseSnap, recurringMonthSnap] = await Promise.all([
-  db.collection('expenses')
-    .where('accountId', '==', accountId)
-    .where('saleDate',  '>=', startDate)
-    .where('saleDate',  '<',  nextMonth)
-    .orderBy('createdAt', 'desc')
-    .get(),
-  db.collection('recurringMonthly')              // ← monthly snapshot
-    .where('accountId','==',accountId)
-    .where('month','==',monthParam)
-    .orderBy('expenseReason','asc')
-    .get()
-]);
+
+/* expenses: always fetch */
+const expenseSnap = await db.collection('expenses')
+  .where('accountId','==',accountId)
+  .where('saleDate','>=',startDate)
+  .where('saleDate','<', nextMonth)
+  .orderBy('createdAt','desc')
+  .get();
+
+/* recurringMonthSnap: empty if future month selected */
+const recurringMonthSnap = isFuture
+  ? { docs: [] }                                     // ➜ nothing to show
+  : await db.collection('recurringMonthly')
+      .where('accountId','==',accountId)
+      .where('month','==',monthParam)
+      .orderBy('expenseReason','asc')
+      .get();
 
 const expenses          = expenseSnap.docs.map(d => ({ id:d.id, ...d.data() }));
 const recurringMonthly = recurringMonthSnap.docs
   .map(d => ({ id:d.id, ...d.data() }))
   .filter(t => !t.deleted);          // ⬅️  hide soft-deleted rows
+/* use the helper so half-paid rows count only once */
+const totalExpense = expenses.reduce((s, e) => s + paidPortion(e), 0);
 
-const totalExpense = expenses
-  .filter(e => e.expenseStatus !== 'Not Paid')   // skip unpaid expenses
-  .reduce((s, e) => s + (e.expenseCost || 0), 0);
-
-const recTotal = recurringMonthly               // monthly snapshot
-  .filter(t => t.expenseStatus !== 'Not Paid')   // skip unpaid snapshots
-  .reduce((s, t) => s + (t.expenseCost || 0), 0);
+const recTotal = recurringMonthly.reduce((s, t) => s + paidPortion(t), 0);
 
 const grandTotal = totalExpense + recTotal;
 
@@ -1735,36 +1752,50 @@ res.render('expense', {
 app.post('/add-recurring-expense', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
-    const {
-  recurringReason,
-  recurringDefaultCost
-  // ◆ recurringStatus field intentionally discarded
-} = req.body;
+const { recurringReason } = req.body;
 
 const DEFAULT_STATUS = 'Not Paid';
 
 
-    await db.collection('recurringExpenses').add({
+/* ① create the master template */
+const tplRef = await db.collection('recurringExpenses').add({
+  accountId,
+  expenseReason : recurringReason.trim(),
+  createdAt     : new Date()
+});
+
+/* ② auto-generate snapshots for current & next 24 months */
+const batch = db.batch();
+const today = new Date();
+for (let i = 0; i < 24; i++) {                       // 2-year horizon
+  const dt   = new Date(today.getFullYear(), today.getMonth() + i, 1);
+  const ym   = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2,'0')}`;
+  const id   = `${accountId}_${ym}_${tplRef.id}`;
+
+  batch.set(
+    db.collection('recurringMonthly').doc(id),
+    {
       accountId,
-      expenseReason : recurringReason.trim(),
-      defaultCost   : parseFloat(recurringDefaultCost),
-      expenseStatus : DEFAULT_STATUS,
+      month        : ym,
+      templateId   : tplRef.id,
+      expenseReason: recurringReason.trim(),
+      expenseCost  : 0,
+      expenseStatus: 'Not Paid',
+      createdAt    : new Date()
+    },
+    { merge:true }                                   // overwrite-safe
+  );
+}
+await batch.commit();
 
-      createdAt     : new Date()
-    });
+/* ③ back to the UI */
+const month = req.body.month || new Date().toISOString().substring(0,7);
+res.redirect(`/expense?month=${month}`);
 
-    /* return to the same month **/
-    const month = req.body.month || new Date().toISOString().substring(0, 7);
-    res.redirect(`/expense?month=${month}`);
   } catch (err) {
     res.status(500).send(err.toString());
   }
 });
-
-
-
-
-
 
 // GET /add-product – render form
 app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
@@ -2539,11 +2570,6 @@ await prodRef.set({
 });
 
 
-
-
-/* ─────────── SALES & PROFIT REPORTING ─────────── */
-// ────────────────────────────────────────────────────────────────
-// GET  /sales  – Sales + Expense report with optional filters
 /* ────────────────────────────────────────────────────────────────
    GET /sales  – Sales & Expense report
    • Table rows honour *all* filters (saleDate, month, status)
@@ -2670,7 +2696,7 @@ const monthRevenueAmount = monthSales.reduce((sum, s) =>
            : s.retailPrice * s.saleQuantity), 0);
 
 const monthGrossProfit   = monthSales.reduce((sum, s) => sum + s.profit, 0);
-const monthExpenseTotal  = monthExpenses.reduce((sum, e) => sum + e.expenseCost, 0);
+const monthExpenseTotal  = await computeMonthTotal(accountId, month);
 const monthNetProfit     = monthGrossProfit - monthExpenseTotal;
 
 /* NEW ➜ total GST you owe this month */
@@ -2729,8 +2755,6 @@ const monthGstPayable    = monthSales.reduce((sum, s) =>
     }
   }
 );
-
-
 
 
 /* ─────────── DOWNLOAD SALES → EXCEL ─────────── */
@@ -3011,6 +3035,8 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
     const accountId = req.session.user.accountId;
     let salesQuery   = db.collection('sales').where('accountId','==',accountId);
     let expenseQuery = db.collection('expenses').where('accountId','==',accountId);
+    let recQuery     = db.collection('recurringMonthly').where('accountId','==',accountId);
+
     const { month, year } = req.query;
 
     /* ---------- date filter logic (unchanged) ---------- */
@@ -3035,13 +3061,46 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
       expenseQuery = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
     }
     /* ---------- fetch ---------- */
-    const [salesSnap, expSnap] = await Promise.all([salesQuery.get(), expenseQuery.get()]);
+/* Fetch data – include recurring snapshot rows */
+const [salesSnap, expSnap, recSnap] = await Promise.all([
+  salesQuery.get(),
+  expenseQuery.get(),
+  recQuery.get()
+]);
+
+const todayYM  = new Date().toISOString().substring(0,7);   // "YYYY-MM"
+
+const recRows  = recSnap.docs
+  .map(d => d.data())
+  .filter(d => !d.deleted && d.month <= todayYM);
+function paidPortion (row) {
+  const status = row.expenseStatus || '';
+  const cost   = +row.expenseCost || 0;
+
+  switch (status) {
+    case 'Not Paid':
+      return 0;
+
+    case 'Half Cash + Not Paid':
+    case 'Half Online + Not Paid':
+      return row.expenseDetail1 !== undefined
+             ? (+row.expenseDetail1 || 0)
+             : cost / 2;
+
+    /* fully settled in every other case */
+    default:
+      return cost;
+  }
+}
+
     const sales    = salesSnap.docs.map(d=>d.data());
     const expenses = expSnap.docs.map(d=>d.data());
 
     /* ---------- totals ---------- */
     const totalProfit      = sales.reduce((sum,s)=> sum + s.profit,0);
-    const totalExpenses    = expenses.reduce((sum,e)=> sum + e.expenseCost,0);
+const totalExpenses = [...expenses, ...recRows]
+  .reduce((sum, e) => sum + paidPortion(e), 0);
+
     const totalGstPayable  = sales.reduce((sum,s)=> sum + (s.gstPayable||0),0);
 
     const netProfit        = totalProfit - totalExpenses - totalGstPayable;
@@ -3057,12 +3116,23 @@ app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) =
     expenses.forEach(e=>{
       const m = e.saleDate.substring(0,7);
       if (!profitByMonth[m]) profitByMonth[m]={ profit:0, expenses:0, gst:0, netProfit:0 };
-      profitByMonth[m].expenses += e.expenseCost;
+ profitByMonth[m].expenses += paidPortion(e);
+
     });
-    Object.keys(profitByMonth).forEach(m=>{
-      const row = profitByMonth[m];
-      row.netProfit = row.profit - row.expenses - row.gst;
-    });
+    recRows.forEach(r => {
+  const m = r.month;                 // already "YYYY-MM"
+  if (!profitByMonth[m])
+    profitByMonth[m] = { profit:0, expenses:0, gst:0, netProfit:0 };
+  profitByMonth[m].expenses += paidPortion(r);
+});
+    Object.entries(profitByMonth).forEach(([m, row]) => {
+  row.netProfit = row.profit - row.expenses - row.gst;
+
+  // if everything is 0.00 remove the key ⇒ it won’t appear in the table
+  if (row.profit === 0 && row.expenses === 0 && row.gst === 0) {
+    delete profitByMonth[m];
+  }
+});
 
     /* ---------- render ---------- */
     res.render('profit',{
@@ -3569,8 +3639,6 @@ app.post(
   }
 );
 
-
-
 /* ─────────── AJAX: EDIT EXPENSE  (expanded 2025-06-21) ─────────── */
 app.post(
   '/api/edit-expense',
@@ -3578,8 +3646,13 @@ app.post(
   restrictAction('/expense', 'edit'),
   async (req, res) => {
     try {
-      const { expenseId, field, value, expenseDetail1, expenseDetail2 } = req.body;
-
+     const {
+  expenseId,
+  field,
+  value,
+  paymentDetail1 = req.body.expenseDetail1,
+  paymentDetail2 = req.body.expenseDetail2
+} = req.body;
 
       const ALLOWED = ['expenseStatus', 'expenseCost', 'expenseReason'];
       if (!ALLOWED.includes(field))
@@ -3616,18 +3689,21 @@ app.post(
         update.expenseReason = txt;
       }
 
-      await expRef.update(update);
+await expRef.update(update);
 
-      /* ---------- fresh daily summary ---------- */
-      const { summary } = await computeDailySummary(
-        req.session.user.accountId, exp.saleDate
-      );
+/* ── keep the day summary (unchanged) ── */
+const { summary } = await computeDailySummary(
+  req.session.user.accountId, exp.saleDate
+);
 
-      return res.json({
-        success: true,
-        updatedRow: update,
-        summary
-      });
+/* ── NEW: fresh month total after the status/amount/reason change ── */
+const monthTotal = await computeMonthTotal(
+  req.session.user.accountId,
+  exp.saleDate.substring(0, 7)        // ➜ "YYYY-MM"
+);
+
+/* ── return monthTotal so the front-end can call updateMonthTotal() ── */
+res.json({ success:true, updatedRow:update, summary, monthTotal });
 
     } catch (err) {
       console.error('edit-expense error:', err);
@@ -3635,8 +3711,6 @@ app.post(
     }
   }
 );
-
-
 
 
 app.post('/api/expense', isAuthenticated, async (req, res) => {
@@ -3687,79 +3761,44 @@ app.post('/api/expense', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─────────── AJAX: EDIT MONTHLY SNAPSHOT ROW ───────────
 app.post('/api/recurring-monthly/:recId', isAuthenticated, async (req, res) => {
   try {
     const { recId } = req.params;
-    const {
-      expenseCost,
-      expenseStatus,
-      expenseReason,
-      propagate = 'true'
-    } = req.body;
+    const snapRef   = db.collection('recurringMonthly').doc(recId);
+    const snap      = await snapRef.get();
 
-    const ref  = db.collection('recurringMonthly').doc(recId);
-    const snap = await ref.get();
+    if (!snap.exists) throw new Error('Row not found');
 
-    /* 1️⃣  Access control */
-    if (!snap.exists || snap.data().accountId !== req.session.user.accountId)
-      return res.json({ success: false, error: 'Access denied' });
+    /* 1️⃣  Build a white-list of fields we allow from the browser */
+    const update = {};
+    if (req.body.expenseCost   !== undefined)
+      update.expenseCost   = parseFloat(req.body.expenseCost);
 
-    /* 2️⃣  Build patch */
-const patch        = { updatedAt: new Date() };
+    if (req.body.expenseReason !== undefined)
+      update.expenseReason = req.body.expenseReason.trim();
 
-/* Track changed fields so we can optionally push them back to the
-   master template when ?propagate=true (default).                   */
-let newCost    = undefined;   // number → defaultCost
-let newReason  = undefined;   // string → expenseReason
+    if (req.body.expenseStatus !== undefined)
+      update.expenseStatus = req.body.expenseStatus.trim();
 
+    /* Nothing to change?  Bail out early. */
+    if (!Object.keys(update).length)
+      return res.json({ success:true });
 
-    if (expenseCost !== undefined) {
-      newCost = +parseFloat(expenseCost);
-      if (!Number.isFinite(newCost) || newCost < 0)
-        return res.json({ success: false, error: 'Invalid amount' });
-      patch.expenseCost = newCost;
-    }
+    /* 2️⃣  Persist changes */
+    await snapRef.update(update);
 
-    if (expenseStatus !== undefined)  patch.expenseStatus = expenseStatus;
+    /* 3️⃣  Return fresh month-total badge */
+    const monthTotal = await computeMonthTotal(
+      req.session.user.accountId,
+      snap.data().month
+    );
 
-    if (expenseReason !== undefined) {
-  newReason = (expenseReason || '').toString().substring(0,100).trim();
-  if (!newReason)                 // empty after trimming
-    return res.json({ success:false, error:'Reason required' });
-
-  patch.expenseReason = newReason;
-}
-
-    /* 3️⃣  Propagate to the master template **only** when:
-           • the user ticked “propagate”, AND
-           • the default cost actually changed                              */
-    if ((propagate === true || propagate === 'true') &&
-    (typeof newCost === 'number' || typeof newReason === 'string')) {
-
-  const tplId = snap.data().templateId;
-  if (tplId) {
-    const tplUpdate = { updatedAt: new Date() };
-    if (typeof newCost   === 'number') tplUpdate.defaultCost   = newCost;
-    if (typeof newReason === 'string') tplUpdate.expenseReason = newReason;
-
-    await db.collection('recurringExpenses')
-            .doc(tplId)
-            .update(tplUpdate);
-  }
-}
-const monthTotal = await computeMonthTotal(
-  req.session.user.accountId, snap.data().month
-);
-
-return res.json({ success: true, monthTotal });
+    return res.json({ success:true, monthTotal });
   } catch (err) {
-    console.error('/api/recurring-monthly error:', err);
-    return res.json({ success: false, error: err.toString() });
+    res.status(500).json({ success:false, error: err.message });
   }
 });
-
-
-
 
 /* POST /delete-recurring-monthly/:recId – soft-delete *and* retire template */
 app.post('/delete-recurring-monthly/:recId', isAuthenticated, async (req, res) => {
@@ -3780,16 +3819,30 @@ app.post('/delete-recurring-monthly/:recId', isAuthenticated, async (req, res) =
     await ref.update({ deleted: true, updatedAt: new Date() });
 
     /* 3️⃣  Retire the master template from this month on   */
-    const tplId = snap.data().templateId || null;
-    const month = snap.data().month;
-    if (tplId) {
-      await db.collection('recurringExpenses')
-              .doc(tplId)
-              .set(
-                { removalMonth: month, updatedAt: new Date() },
-                { merge: true }
-              );
-    }
+const tplId  = snap.data().templateId || null;
+const month  = snap.data().month;
+const todayYM = new Date().toISOString().substring(0,7);   // "YYYY-MM"
+
+if (tplId && month === todayYM) {
+  /* 1️⃣ mark template inactive from now on */
+  await db.collection('recurringExpenses')
+          .doc(tplId)
+          .set({ removalMonth:month, updatedAt:new Date() },{ merge:true });
+
+  /* 2️⃣ hide any existing snapshots in future months */
+const futSnap = await db.collection('recurringMonthly')
+  .where('accountId','==',snap.data().accountId)
+  .where('templateId','==',tplId)           // 🔒 equality filters only
+  .get();
+
+const futBatch = db.batch();
+futSnap.docs.forEach(d => {
+  if (d.data().month > month) {             // ➜ future only
+    futBatch.update(d.ref, { deleted:true, updatedAt:new Date() });
+  }
+});
+if (futBatch._ops?.length) await futBatch.commit();
+}
 
     /* 4️⃣  Respond */
    if (req.xhr) {
@@ -3803,8 +3856,6 @@ app.post('/delete-recurring-monthly/:recId', isAuthenticated, async (req, res) =
     res.status(500).send(err.toString());
   }
 });
-
-
 
 
 // AJAX: POST /api/opening-balance
@@ -3834,8 +3885,6 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
   }
 });
 
-/* ─────────── AJAX:  DELETE SALE  ─────────── */
-// ─────────── AJAX: DELETE SALE ───────────
 // ─────────── AJAX:  DELETE SALE  ───────────
 app.post('/api/delete-sale', isAuthenticated, restrictAction('/sales','delete'), async (req, res) => {
   const { saleId } = req.body;
@@ -4042,9 +4091,6 @@ app.get('/performance',
   }
 );
 
-
-/* ─────────── STATS DASHBOARD ─────────── */
-// GET /stats
 /* ─────────── STATS DASHBOARD ─────────── */
 // GET /stats
 app.get(
@@ -4055,194 +4101,180 @@ app.get(
     try {
       const accountId = req.session.user.accountId;
 
-      /* 1️⃣  Resolve date window → default = current month */
-    
+      /* helpers */
+      const pad   = n => String(n).padStart(2, '0');
       const today = new Date();
-      const currentYear = today.getFullYear();
+      const ymNow = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
 
       const {
-        month = '',
-        from  = '',
-        to    = '',
-        year  = '',
-        top: topParam = ''
+        month = '', from = '', to = '', year = '', top: topParam = ''
       } = req.query;
 
-      let startDate, endDate, periodLabel;
-      let uiMonth = month, uiFrom = from, uiTo = to, uiYear = year;
+      /* ──────────────────────────────────────────────────────────
+         1️⃣  KPI window → **always** current month (ymNow)
+         2️⃣  Chart window → entire calendar year (chartYear)
+      ────────────────────────────────────────────────────────── */
+      const kpiStart = `${ymNow}-01`;
+      let kNextM = today.getMonth() + 2, kNextY = today.getFullYear();
+      if (kNextM > 12) { kNextM = 1; kNextY++; }
+      const kpiEnd = `${kNextY}-${pad(kNextM)}-01`;
 
-      if (month) {                                          // single month
-        startDate = `${month}-01`;
-        const [y, m] = month.split('-');
-        let nextM = parseInt(m, 10) + 1, nextY = parseInt(y, 10);
-        if (nextM > 12) { nextM = 1; nextY++; }
-        endDate     = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = new Date(`${month}-01`)
-                        .toLocaleString('default', { month: 'long', year: 'numeric' });
+      const chartYear = year
+        ? +year
+        : (month ? +month.split('-')[0] : today.getFullYear());
 
-      } else if (from && to) {                              // month-range
-        startDate = `${from}-01`;
-        const [ty, tm] = to.split('-');
-        let nextM = parseInt(tm, 10) + 1, nextY = parseInt(ty, 10);
-        if (nextM > 12) { nextM = 1; nextY++; }
-        endDate     = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = `${from} → ${to}`;
+      const yearStart = `${chartYear}-01-01`;
+      const yearEnd   = `${chartYear + 1}-01-01`;
 
-      } else if (year) {                                    // explicit year
-        startDate   = `${year}-01-01`;
-        endDate     = `${parseInt(year, 10) + 1}-01-01`;
-        periodLabel = `Year ${year}`;
-
-      } else {                                             // DEFAULT = current month
-        const curYM = `${currentYear}-${pad(today.getMonth() + 1)}`;
-
-        /* start of this month (YYYY-MM-01) */
-        startDate = `${curYM}-01`;
-
-        /* first day of NEXT month */
-        let nextM = today.getMonth() + 2,
-            nextY = currentYear;
-        if (nextM > 12) { nextM = 1; nextY++; }
-        endDate = `${nextY}-${pad(nextM)}-01`;
-
-        /* “June 2025”-style label */
-        periodLabel = new Date(startDate)
-                        .toLocaleString('default', { month: 'long', year: 'numeric' });
-
-        /* pre-select the current month in the filter panel */
-        uiMonth = curYM;
-      }
-
-      /* how many rows to show in the Top-N lists (default 10) */
       const topN = Math.max(parseInt(topParam, 10) || 10, 1);
 
-      /* 2️⃣  Fetch sales + expenses in the window (+ GST map) */
-      const [salesSnap, expSnap] = await Promise.all([
+      /* ──────────────────────────────────────────────────────────
+         Parallel fetch:
+           • monthSalesSnap / monthExpSnap / monthRecSnap  → KPI + Top-N
+           • yearSalesSnap  / yearExpSnap  / yearRecSnap   → 12-month trends
+      ────────────────────────────────────────────────────────── */
+      const [
+        monthSalesSnap, monthExpSnap, monthRecSnap,
+        yearSalesSnap,  yearExpSnap,  yearRecSnap
+      ] = await Promise.all([
+        // current-month data (KPI + Top-N)
         db.collection('sales')
-          .where('accountId', '==', accountId)
-          .where('saleDate',  '>=', startDate)
-          .where('saleDate',  '<',  endDate)
+          .where('accountId','==',accountId)
+          .where('saleDate','>=',kpiStart)
+          .where('saleDate','<', kpiEnd)
           .get(),
         db.collection('expenses')
-          .where('accountId', '==', accountId)
-          .where('saleDate',  '>=', startDate)
-          .where('saleDate',  '<',  endDate)
+          .where('accountId','==',accountId)
+          .where('saleDate','>=',kpiStart)
+          .where('saleDate','<', kpiEnd)
+          .get(),
+        db.collection('recurringMonthly')
+          .where('accountId','==',accountId)
+          .get(),
+
+        // full-year window (trend charts)
+        db.collection('sales')
+          .where('accountId','==',accountId)
+          .where('saleDate','>=',yearStart)
+          .where('saleDate','<', yearEnd)
+          .get(),
+        db.collection('expenses')
+          .where('accountId','==',accountId)
+          .where('saleDate','>=',yearStart)
+          .where('saleDate','<', yearEnd)
+          .get(),
+        db.collection('recurringMonthly')
+          .where('accountId','==',accountId)
           .get()
       ]);
 
-      const sales    = salesSnap.docs.map(d => d.data());
-      const expenses = expSnap .docs.map(d => d.data());
-
-      /* 2-B ► build GST map & total */
-      const monthlyGst = {};        // { YYYY-MM : ₹ }
-      let   totalGstPayable = 0;
-      sales.forEach(s => {
-        const ym  = s.saleDate.substring(0, 7);
-        const gst = +s.gstPayable || 0;
-        monthlyGst[ym] = (monthlyGst[ym] || 0) + gst;
-        totalGstPayable += gst;
-      });
-
-      /* 3️⃣  Per-product aggregation + global totals */
-      const prodMap = {};
-      let totalProfit        = 0,
-          totalSales         = 0,
-          totalCashSales     = 0,
-          totalOnlineSales   = 0,
-          totalNotPaidSales  = 0;   // (kept for future badge work)
-
-      sales.forEach(s => {
-        /* ⓐ global totals */
-        totalProfit += s.profit;
-
-        const rowAmt = (s.totalSale !== undefined)
-          ? +parseFloat(s.totalSale)
-          : s.retailPrice * s.saleQuantity;
-        totalSales += rowAmt;
-
-        switch (s.status) {
-          case 'Paid Cash':                   totalCashSales   += rowAmt; break;
-          case 'Paid Online':                 totalOnlineSales += rowAmt; break;
-          case 'Not Paid':                    totalNotPaidSales+= rowAmt; break;
-          case 'Half Cash + Half Online':
-            if (s.paymentDetail1) totalCashSales   += s.paymentDetail1;
-            if (s.paymentDetail2) totalOnlineSales += s.paymentDetail2;
-            break;
-          case 'Half Cash + Not Paid':
-            if (s.paymentDetail1) totalCashSales   += s.paymentDetail1;
-            if (s.paymentDetail2) totalNotPaidSales+= s.paymentDetail2;
-            break;
-          case 'Half Online + Not Paid':
-            if (s.paymentDetail1) totalOnlineSales += s.paymentDetail1;
-            if (s.paymentDetail2) totalNotPaidSales+= s.paymentDetail2;
-            break;
+      /* ──────────────────────────────────────────────────────────
+         Shared helper – convert an expense row to “what’s paid”
+      ────────────────────────────────────────────────────────── */
+      const paidPortion = row => {
+        const s = row.expenseStatus || '';
+        const c = +row.expenseCost || 0;
+        switch (s) {
+          case 'Not Paid'               : return 0;
+          case 'Half Cash + Not Paid'   :
+          case 'Half Online + Not Paid' :
+            return row.expenseDetail1 !== undefined
+                   ? (+row.expenseDetail1 || 0)
+                   : c / 2;
+          default                       : return c;
         }
+      };
 
-        /* ⓑ per-product bucket for Top-N tables */
-        const pid = s.productId;
-        if (!prodMap[pid]) {
-          prodMap[pid] = {
-            productName : s.productName,
-            unitsSold   : 0,
-            revenue     : 0,
-            profit      : 0
-          };
-        }
-        const p = prodMap[pid];
-        p.unitsSold += +s.saleQuantity;
-        p.revenue   += rowAmt;
-        p.profit    += s.profit;
+      /* ───────────  KPI  &  Top-N  (current month)  ─────────── */
+      const sales      = monthSalesSnap.docs.map(d => d.data());
+      const expenses   = monthExpSnap .docs.map(d => d.data());
+
+      const recRowsNow = monthRecSnap.docs
+        .map(d => d.data())
+        .filter(r => !r.deleted && r.month === ymNow);
+
+      const totalRevenue    = sales.reduce((s,x)=>
+                              s + (x.totalSale !== undefined
+                                    ? +x.totalSale
+                                    : x.retailPrice * x.saleQuantity), 0);
+      const totalProfit     = sales.reduce((s,x)=>s + x.profit, 0);
+      const totalExpenses   = [...expenses, ...recRowsNow]
+                              .reduce((s,x)=>s + paidPortion(x), 0);
+      const totalGstPayable = sales.reduce((s,x)=>s + (+x.gstPayable||0), 0);
+      const netProfit       = totalProfit - totalExpenses - totalGstPayable;
+
+      /* --- Top-N products (still current-month only) --- */
+      const pMap = {};
+      sales.forEach(s => {
+        const k = s.productId;
+        if (!pMap[k])
+          pMap[k] = { productName:s.productName, unitsSold:0, revenue:0, profit:0 };
+        const row = pMap[k];
+        const qty = +s.saleQuantity;
+        const amt = (s.totalSale !== undefined) ? +s.totalSale : s.retailPrice * qty;
+        row.unitsSold += qty;
+        row.revenue   += amt;
+        row.profit    += s.profit;
       });
+      const pArr      = Object.values(pMap);
+      const topSelling= [...pArr].sort((a,b)=>b.unitsSold - a.unitsSold).slice(0, topN);
+      const topRevenue= [...pArr].sort((a,b)=>b.revenue   - a.revenue ).slice(0, topN);
+      const topProfit = [...pArr].sort((a,b)=>b.profit    - a.profit  ).slice(0, topN);
 
-      const prodArr = Object.values(prodMap);
-
-      const topSelling = [...prodArr]
-        .sort((a, b) => b.unitsSold - a.unitsSold)
-        .slice(0, topN);
-
-      const topRevenue = [...prodArr]
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, topN);
-
-      const topProfit = [...prodArr]
-        .sort((a, b) => b.profit - a.profit)
-        .slice(0, topN);
-
-      /* 4️⃣  Period-level totals */
-      const totalRevenue = sales.reduce((sum, s) =>
-        sum + (s.totalSale !== undefined
-                 ? +parseFloat(s.totalSale)
-                 : s.retailPrice * s.saleQuantity), 0);
+      /* ─────────── 12-month trend buckets (chartYear) ─────────── */
+      const yearSales    = yearSalesSnap.docs.map(d => d.data());
+      const yearExpenses = yearExpSnap .docs.map(d => d.data());
+      const yearRecRows  = yearRecSnap .docs
+        .map(d => d.data())
+        .filter(r => !r.deleted && r.month.startsWith(String(chartYear)));
 
       const monthlyProfit  = {};
       const monthlyExpense = {};
+      const monthlyGst     = {};
+      for (let m = 1; m <= 12; m++) {
+        const ym = `${chartYear}-${pad(m)}`;
+        monthlyProfit [ym] = 0;
+        monthlyExpense[ym] = 0;
+        monthlyGst    [ym] = 0;
+      }
 
-      sales.forEach(s => {
-        const ym = s.saleDate.substring(0, 7);
-        monthlyProfit[ym] = (monthlyProfit[ym] || 0) + +s.profit;
+      yearSales.forEach(s => {
+        const ym = s.saleDate.slice(0, 7);
+        if (monthlyProfit[ym] !== undefined) {
+          monthlyProfit[ym] += s.profit;
+          monthlyGst   [ym] += (+s.gstPayable || 0);
+        }
+      });
+      [...yearExpenses, ...yearRecRows].forEach(e => {
+        const ym = e.saleDate ? e.saleDate.slice(0,7) : e.month;
+        if (monthlyExpense[ym] !== undefined) {
+          monthlyExpense[ym] += paidPortion(e);
+        }
       });
 
-      expenses.forEach(e => {
-        const ym = e.saleDate.substring(0, 7);
-        monthlyExpense[ym] = (monthlyExpense[ym] || 0) + +e.expenseCost;
-      });
+      /* ─────────── Period label logic (unchanged UI) ─────────── */
+      let periodLabel, uiMonth = month, uiFrom = from, uiTo = to, uiYear = year;
+      if (month) {
+        periodLabel = new Date(`${month}-01`)
+                        .toLocaleString('default',{ month:'long', year:'numeric' });
+      } else if (from && to) {
+        periodLabel = `${from} → ${to}`;
+      } else if (year) {
+        periodLabel = `Year ${year}`;
+      } else {
+        periodLabel = new Date(`${ymNow}-01`)
+                        .toLocaleString('default',{ month:'long', year:'numeric' });
+        uiMonth = ymNow;            // default filter pre-select
+      }
 
-      /* 5️⃣  Render */
+      /* ─────────── Render ─────────── */
       res.render('stats', {
-        topSelling,
-        topRevenue,
-        topProfit,
-        monthlyProfit,
-        monthlyExpense,
-        totalRevenue,           // overall turnover in the chosen window
+        topSelling, topRevenue, topProfit,
+        monthlyProfit, monthlyExpense, monthlyGst,
+        totalRevenue, totalExpenses, totalGstPayable, netProfit,
         periodLabel,
-        month : uiMonth,
-        from  : uiFrom,
-        to    : uiTo,
-        totalGstPayable,        // GST owed for the period
-        monthlyGst,             // bar-chart ready { ym:₹ }
-        year  : uiYear,
-        topN
+        month:uiMonth, from:uiFrom, to:uiTo, year:uiYear, topN,
+        chartYear                     // sent to EJS for the JS payload
       });
 
     } catch (err) {
@@ -4251,7 +4283,6 @@ app.get(
     }
   }
 );
-
 
 
 /* ─────────── PASSWORD RESET ROUTES (MASTER-ONLY) ─────────── */

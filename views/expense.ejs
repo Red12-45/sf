@@ -37,12 +37,32 @@ const recList = Array.isArray(recurringMonthly)
   : [];
 
 
-  /* totals */
-const recTotal = recList
-    .filter(t => t.expenseStatus !== 'Not Paid')
-    .reduce((s, t) => s + (t.expenseCost || 0), 0);
+/* totals — mirror the same paidPortion() rules used on the server */
+const paidPortion = t => {
+  const status = t.expenseStatus || '';
+  const cost   = +t.expenseCost || 0;
 
-  const grandTotal = (+totalExpense || 0) + recTotal;
+  switch (status) {
+    case 'Not Paid':
+      return 0;
+
+    case 'Half Cash + Not Paid':
+    case 'Half Online + Not Paid':
+      // if the user entered the cash/online half explicitly, use it;
+      // otherwise assume a 50-50 split
+      return t.expenseDetail1 !== undefined
+             ? (+t.expenseDetail1 || 0)
+             : cost / 2;
+
+    /* every other status means the full amount is already settled */
+    default:
+      return cost;
+  }
+};
+
+const recTotal   = recList.reduce((s, t) => s + paidPortion(t), 0);
+const grandTotal = (+totalExpense || 0) + recTotal;
+
 
   /* dates that actually contain expenses */
   const expDates = Object.keys(groupedExpenses || {})
@@ -132,12 +152,10 @@ const recTotal = recList
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="month" value="<%= month %>">
         <div class="expense-row-inline">
-  <input type="text"   name="recurringReason"       placeholder="e.g. Rent"
-         class="expense-field" required>
-  <input type="number" step="0.01" name="recurringDefaultCost"
-         placeholder="₹ 0.00" class="expense-field" required>
-  <!-- Method default = Not Paid (server-side); no user choice here -->
-  <button type="submit">Add&nbsp;Template</button>
+<input type="text" name="recurringReason" placeholder="e.g. Rent"
+       class="expense-field" required>
+<!-- Amount is now set per-month, so no number field here -->
+<button type="submit">Create&nbsp;Recurring</button>
 </div>
 
       </form>
@@ -603,11 +621,13 @@ form.append(btnSave, btnCancel);
     if (sel.value === oldStatus && d1 === oldD1 && d2 === oldD2) return restore();
 
     try {
-const payload = { expenseId: id,               // id of this expense
-                        field     : 'expenseStatus', // field being updated
-                        value     : sel.value,
-                        expenseDetail1: d1,          // ✅ renamed keys
-                        expenseDetail2: d2 };
+const payload = {
+  expenseId : id,              // id of the expense row we’re editing
+  field     : 'expenseStatus', // tell the server which column changed
+  value     : sel.value,       // new status string
+  paymentDetail1 : d1,         // ⬅️ keep these names in sync
+  paymentDetail2 : d2
+};
 
       const res = await fetch('/api/edit-expense', {
         method  : 'POST',
@@ -684,21 +704,19 @@ if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
       const payload     = isRecurring
                             ? { expenseCost: newVal }
                             : { expenseId: id, field: 'expenseCost', value: newVal };
+try {
+  const json = await postJSON(endpoint, payload);
 
-      try {
-        const json = await postJSON(endpoint, payload);
+  td.innerHTML =
+    `<span class="value">${parseFloat(newVal).toFixed(2)}</span><i class="fas fa-edit edit-icon"></i>`;
 
-              td.innerHTML =
-          `<span class="value">${parseFloat(newVal).toFixed(2)}</span><i class="fas fa-edit edit-icon"></i>`;
+  /* 🔄 Always refresh the Month-Total badge */
+  if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);
 
-        /* daily-summary only comes back from /api/edit-expense */
-        if (!isRecurring) {
-          refreshSummary(date, json.summary);
-          if (json.monthTotal !== undefined) updateMonthTotal(json.monthTotal);   // ← NEW
-        }
+  /* daily-summary is only relevant for one-off expense rows */
+  if (!isRecurring) refreshSummary(date, json.summary);
 
-       
-      } catch (err) {
+} catch (err) {
         alert(err.message);
         td.innerHTML = `<span class="value">${oldVal}</span><i class="fas fa-edit edit-icon"></i>`;
       }

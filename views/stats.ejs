@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sales & Profit Analytics | DashInsight</title>
+  <title>Sales & Profit Analytics | SalesFlows</title>
 
   <!-- Icons / Fonts -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -24,7 +24,7 @@
 
   <!-- ────────── Navigation ────────── -->
   <nav>
-    <div class="nav-brand"><i class="fas fa-chart-line"></i><span>DashInsight</span></div>
+    <div class="nav-brand"><i class="fas fa-chart-line"></i><span>SalesFlow</span></div>
     <div class="nav-links">
       <a href="/"><i class="fas fa-home"></i> Home</a>
       <a href="/sales"><i class="fas fa-shopping-cart"></i> Sales</a>
@@ -233,9 +233,11 @@
   gst     : <%- JSON.stringify(monthlyGst      || {}) %>   // ★ NEW
 };
 
-window.TOTAL_REVENUE = <%- totalRevenue.toFixed(2) %>;
-window.TOTAL_GST     = <%- totalGstPayable.toFixed(2) %>;  // ★ NEW
-
+window.TOTAL_REVENUE = <%- totalRevenue.toFixed(2) %>;     // ← current month
+window.TOTAL_GST     = <%- totalGstPayable.toFixed(2) %>;  // ← current month
+window.TOTAL_EXPENSE = <%- totalExpenses.toFixed(2) %>;    // ← current month  ★ NEW
+window.NET_PROFIT    = <%- netProfit.toFixed(2) %>;        // ← current month  ★ NEW
+window.CHART_YEAR    = <%= chartYear %>;
   </script>
 
   <!-- Chart.js & plugin -->
@@ -282,24 +284,21 @@ window.TOTAL_GST     = <%- totalGstPayable.toFixed(2) %>;  // ★ NEW
 
       /* ⇢⇢ KPI Calculation */
   const calcKPIs = () => {
-  const totalRevenue = TOTAL_REVENUE;
+const totalRevenue = TOTAL_REVENUE;       // ← current month
+const totalExpense = TOTAL_EXPENSE;       // ← current month
+const totalGst     = TOTAL_GST;           // ← current month
+const netProfit    = NET_PROFIT;          // ← current month
 
-  let grossProfit   = 0,
-      totalExpense  = 0,
-      totalGst      = 0;
+const profitMargin = totalRevenue > 0
+  ? (netProfit / totalRevenue * 100)
+  : 0;
 
-  Object.values(MONTHLY_DATA.profit ).forEach(v => grossProfit  += v);
-  Object.values(MONTHLY_DATA.expense).forEach(v => totalExpense += v);
-  Object.values(MONTHLY_DATA.gst    ).forEach(v => totalGst     += v);
-
-  const netProfit    = grossProfit - totalExpense - totalGst;
-  const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
-
-  document.getElementById('kpiRevenue').textContent = fmtRupee(totalRevenue);
+document.getElementById('kpiRevenue').textContent = fmtRupee(totalRevenue);
 document.getElementById('kpiProfit' ).textContent = fmtRupee(netProfit);
 document.getElementById('kpiExpense').textContent = fmtRupee(totalExpense);
-document.getElementById('kpiGst'    ).textContent = fmtRupee(totalGst);      // ★ NEW
+document.getElementById('kpiGst'    ).textContent = fmtRupee(totalGst);
 document.getElementById('kpiMargin' ).textContent = profitMargin.toFixed(2) + '%';
+
 
 };
 

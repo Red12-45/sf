@@ -278,6 +278,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .nav-icon-btn {
+  text-decoration: none;
   width: 36px;
   height: 36px;
   display: flex;
