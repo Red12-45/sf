@@ -1,7 +1,4 @@
-
-
 // app.js – Ultimate Optimized version (Ajax‑ready, no missing pieces)
-
 const express = require('express');
 const admin = require('firebase-admin');
 const path = require('path');
@@ -9,30 +6,22 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 const { createClient } = require('redis');       // using Node Redis client
 const { RedisStore } = require('connect-redis'); // import RedisStore from connect-redis
-
 // ─────────── security deps (NEW) ───────────
 const helmet = require('helmet');              // 🔒
 const rateLimit = require('express-rate-limit');  // 🔒
 const csrf = require('csurf');               // 🔒
 const { body, validationResult } = require('express-validator'); // 🔒
-
-
 const favicon = require('serve-favicon');
 const Razorpay = require('razorpay');
 const ExcelJS = require('exceljs');      
 const compression = require('compression');
-
 const cors = require('cors');          // NEW
-
-
 const http = require('http');
 const cluster = require('cluster');
 const os = require('os');
 
 const crypto     = require('crypto');      
 const nodemailer = require('nodemailer'); 
-
-
 
 require('dotenv').config();
 
@@ -62,8 +51,6 @@ const pinoHttp = require('pino-http')({
     /\.(?:js|css|png|jpe?g|svg|woff2?)$/i.test(req.url)
 });
 
-
-
 /* ─────────── env sanity check ─────────── */
 const REQUIRED_ENV = [
   'SESSION_SECRET',
@@ -78,7 +65,6 @@ if (missing.length) {
   console.error('❌  Missing env vars →', missing.join(', '));
   process.exit(1);
 }
-
 
 /* ─────────── global crash safety ─────────── */
 process.on('unhandledRejection', err => {
@@ -97,8 +83,6 @@ process.on('uncaughtException', async err => {
   /* ── 3.  Stay alive ── */
   // DO NOT call process.exit() here.
 });
-
-
 
 // ─────────── cache ───────────
 /* ─────────── Distributed cache (shared by every worker) ─────────── */
@@ -136,6 +120,7 @@ const serviceAccount = require('./serviceAccountKey.json');
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
+
 /* ─────────── Express base ─────────── */
 const app = express();
 app.disable('x-powered-by');              // hide Express fingerprint
@@ -161,13 +146,11 @@ app.use('/', expressStaticGzip(path.join(__dirname, 'public'), {
 
 app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 
-
 /* ───────── Per-request CSP nonce ───────── */
 app.use((req, res, next) => {
   res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
   next();
 });
-
 
 app.set('trust proxy', 1);     // behind Nginx / Cloudflare / Render / etc.
 
@@ -182,11 +165,7 @@ app.use((req, res, next) => {
   next();
 });
 
-
 app.use(pinoHttp);
-
-
-/* ─────────── Redis client & session store ─────────── */
 
 /* ─────────── Redis client & session store ─────────── */
 const ONE_YEAR = 365 * 24 * 60 * 60 * 1000;           // 12-month lifetime (ms)
@@ -199,8 +178,6 @@ const redisClient = createClient({
     tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined
   }
 });
-
-
 
 redisClient
   // log “ready” only **once** to stop startup spam
@@ -302,7 +279,6 @@ app.use(async (req, res, next) => {
   next();
 });
 
-
 app.use((req, res, next) => {
   // make the logged-in user (if any) available to every EJS view
   res.locals.user = req.session?.user || null;
@@ -326,8 +302,6 @@ app.use((req, res, next) => {
 
   next();
 });
-
-
 
 /* ─────────── Helmet – strict CSP ─────────── */
 app.use(
@@ -377,18 +351,14 @@ helmet({
   })
 );
 
-
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
-
 
 /* ─────────── CORS & logging ─────────── */
 app.use(cors({
   origin      : (process.env.ALLOWED_ORIGINS || '').split(','),
   credentials : true
 }));
-
-
 
 app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
 
@@ -402,7 +372,6 @@ const apiLimiter = rateLimit({
 
 app.use(['/api', '/login', '/register'], apiLimiter);
 
-
 /* extra lock on high-risk routes */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 min
@@ -412,7 +381,6 @@ const authLimiter = rateLimit({
 });
 app.use(['/forgot-password', '/reset-password', '/payment-success'], authLimiter);
 
-
 // CSRF protection (MUST come _after_ session middleware)
 app.use(csrf());
 app.use((req, res, next) => {
@@ -420,7 +388,6 @@ app.use((req, res, next) => {
   res.locals.csrfToken = req.csrfToken();
   next();
 });
-
 
 /* CSRF & generic error shields (keep these LAST) */
 app.use((err, req, res, next) => {        // CSRF failure handler
@@ -441,9 +408,6 @@ app.use((err, req, res, next) => {
   res.status(500).send('Internal Server Error');
 });
 
-
-
-
 app.locals.formatIST = date => {
   const d = (typeof date?.toDate === 'function') 
             ? date.toDate() 
@@ -451,14 +415,12 @@ app.locals.formatIST = date => {
   return d.toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' });
 };
 
-
 app.locals.attr = (s = '') => String(s)
   .replace(/&/g, '&amp;')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#x27;')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;');
-
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -487,7 +449,6 @@ const getCategories = async accountId => {
 
   return uniq;                          // straight from DB
 };
-
 
 const getUnits = async accountId => {
   // Fresh fetch every time
@@ -568,7 +529,6 @@ batch.set(db.collection('recurringMonthly').doc(id),{
 
   if (batch._ops?.length) await batch.commit();   // ← only when needed
 }
-
 
 /* ─────────── DAILY SUMMARY (used by Ajax & dashboard) ─────────── */
 
@@ -809,8 +769,6 @@ if (typeof product.inclusiveTax === 'number') {
     outputTax = inputTax = gstPayable = 0;
   }
 }
-
-
     /* ――― 4. Insert sale row ――― */
     const saleRef = db.collection('sales').doc();   // pre-allocate ID
     const row     = {
@@ -848,8 +806,6 @@ if (typeof product.inclusiveTax === 'number') {
   // Re-compute parent-product stock *after* the transaction closes
   await recalcProductFromBatches(saleData.productId);
   await cacheDel(`dailySum_${accountId}_${saleData.saleDate}`);
-
-
   return saleData;
 }
 
@@ -910,8 +866,6 @@ app.use((req, res, next) => {
   next();
 });
 
-
-
 /* ─────────── PERMISSION HELPERS ─────────── */
 const requireMaster   = (req,res,next)=>
   req.session.user && req.session.user.isMaster
@@ -939,35 +893,28 @@ const restrictAction = (routeId, action) => (req, res, next) => {
 };
 
 async function getNextInvoiceNo(accountId) {
-  const ctrRef = db.collection('counters').doc(accountId);
+  const SHARDS = 10;
+  const rand   = Math.floor(Math.random() * SHARDS).toString(); // '0' … '9'
 
-  return db.runTransaction(async tx => {
+  /* 1️⃣  Increment one shard */
+  const shardRef = db
+    .collection('accounts').doc(accountId)
+    .collection('counterShards').doc(rand);
 
-    /* 1️⃣  Read the current counter (0 when brand-new account) */
-    const snap = await tx.get(ctrRef);
-    let seq = (snap.exists && typeof snap.data().invoiceSeq === 'number')
-                ? snap.data().invoiceSeq          // ← do **not** +1 yet
-                : 0;
+  await shardRef.set(
+    { value: admin.firestore.FieldValue.increment(1) },
+    { merge: true }
+  );
 
-    /* 2️⃣  Search forward until we hit the first unused number   */
-    /*     Real-world loops ≈0–2 so this stays very fast.         */
-    while (true) {
-      if (seq === 0) seq = 1;                       // bootstrap on first run
-      const candidate = 'INV-' + String(seq).padStart(6, '0');
+  /* 2️⃣  Read all shards and sum */
+  const snap = await db
+    .collection('accounts').doc(accountId)
+    .collection('counterShards').get();
 
-      const dupSnap = await db.collection('sales')
-                              .where('accountId','==',accountId)
-                              .where('invoiceNo','==',candidate)
-                              .limit(1).get();
+  const total = snap.docs.reduce((s, d) => s + (+d.data().value || 0), 0);
 
-      if (dupSnap.empty) {                          // ✅ free → lock & return
-        tx.set(ctrRef, { invoiceSeq: seq }, { merge:true });
-        return candidate;
-      }
-
-      seq++;                                        // already used → try next
-    }
-  });
+  /* 3️⃣  Format */
+  return 'INV-' + String(total).padStart(6, '0');
 }
 
 app.post('/api/invoice/start', isAuthenticated, async (req, res) => {
@@ -987,7 +934,6 @@ app.get('/invoice/finish', isAuthenticated, (req, res) => {
   res.redirect('/dashboard');
 });
 
-
 /* ───────────  AJAX “Finish Invoice”  ─────────── */
 app.post('/api/invoice/finish', isAuthenticated, (req, res) => {
   delete req.session.currentInvoiceNo;      // clear the session flag
@@ -999,7 +945,6 @@ const razorpay = new Razorpay({
   key_id:    process.env.RAZORPAY_KEY_ID,
   key_secret:process.env.RAZORPAY_KEY_SECRET
 });
-
 
 // ─────────── email (nodemailer) ───────────
 const transporter = nodemailer.createTransport({
@@ -1013,14 +958,12 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-
 /* ─────────── AUTHENTICATION ROUTES ─────────── */
 // GET /register
 app.get('/register', (req, res) => {
   if (req.session && req.session.user) return res.redirect('/');
   res.render('register', { errorMessage: null, oldInput: {} });
 });
-
 
 // POST /register
 app.post(
@@ -1120,14 +1063,24 @@ app.post(
 
 const userRef = await db.collection('users').add(userData);
 
+    // 2️⃣ Set accountId AND a 30-day trial expiry
+const trialExpiry = new Date();
+trialExpiry.setDate(trialExpiry.getDate() + 30);
+await userRef.update({
+  accountId: userRef.id,
+  subscriptionExpiry: trialExpiry
+});
 
-      // 2️⃣ Set accountId AND a 30-day trial expiry
-      const trialExpiry = new Date();
-      trialExpiry.setDate(trialExpiry.getDate() + 30);
-      await userRef.update({
-        accountId: userRef.id,
-        subscriptionExpiry: trialExpiry
-      });
+/* ── NEW: pre-create 10 counter shards ── */
+const shardBatch = db.batch();
+for (let i = 0; i < 10; i++) {
+  const shardRef = db
+    .collection('accounts').doc(userRef.id)
+    .collection('counterShards').doc(String(i));
+  shardBatch.set(shardRef, { value: 0 }, { merge: true });
+}
+await shardBatch.commit();
+
 
       // 3️⃣ Done → send them to login
       res.redirect('/login');
@@ -1141,10 +1094,6 @@ const userRef = await db.collection('users').add(userData);
     }
   }
 );
-
-
-
-
 
 // ─────────── brute‑force protection ───────────
 const MAX_LOGIN_ATTEMPTS  = 5;      // failures before block
@@ -1168,8 +1117,6 @@ const recordFailure = async key => {
 /** On successful login → wipe the counter. */
 const clearFailures = async key => redisClient.del(key);
 
-
-
 // GET /login
 app.get('/login', (req, res) => {
   if (req.session && req.session.user) {
@@ -1182,7 +1129,6 @@ app.get('/login', (req, res) => {
   });
 });
 
-// POST /login  (brute-force protected)
 // POST /login  (brute-force + 🔒 validation)
 app.post(
   '/login',
@@ -1203,7 +1149,6 @@ app.post(
         identifier: req.body.identifier || ''
       });
     }
-
     try {
       let { identifier, password } = req.body;
 
@@ -1324,20 +1269,16 @@ app.post(
   }
 );
 
-
-
 // GET /logout
 app.get('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/login');
 });
-
 // GET /customerservice
 app.get('/customerservice', (req, res) => res.render('cs'));
 
 // GET /documentation
 app.get('/documentation', (req, res) => res.render('documentations'));
-
 
 /* ─────────── USER MANAGEMENT ROUTES (Master Only) ─────────── */
 // GET /create-user
@@ -1427,11 +1368,7 @@ app.post('/delete-user', isAuthenticated, async (req, res) => {
   }
 });
 
-
-/* ─────────── PERMISSION MANAGEMENT (Master Only) ─────────── */
 // ─────────── PERMISSION MANAGEMENT (Master Only) ───────────
-
-// GET /permission
 // GET /permission
 app.get('/permission',
   isAuthenticated,
@@ -1464,8 +1401,6 @@ app.get('/permission',
       res.status(500).send(e.toString());
     }
 });
-
-
 /* ─────────── PERMISSION SAVE ─────────── */
 app.post(
   '/permission',
@@ -1508,9 +1443,7 @@ app.post(
   }
 );
 
-
 /* ─────────── PROTECTED APP ROUTES ─────────── */
-// GET /
 /* ─────────── PUBLIC LANDING ────────── */
 // (Insert this near the very top of your route section)
 app.get('/', (req, res) => {
@@ -1658,8 +1591,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   /* NEW ▼ passes the in-progress number (or null) to every template */
   currentInvoiceNo : req.session.currentInvoiceNo || null
 });
-
-
   } catch (err) {
     res.status(500).send(err.toString());
   }
@@ -1690,7 +1621,6 @@ app.get(
 const todayYM   = `${currentYear}-${currentMonth}`;   // "YYYY-MM"
 const isFuture  = monthParam > todayYM;   
 
-
 /* expenses: always fetch */
 const expenseSnap = await db.collection('expenses')
   .where('accountId','==',accountId)
@@ -1719,16 +1649,12 @@ const recTotal = recurringMonthly.reduce((s, t) => s + paidPortion(t), 0);
 
 const grandTotal = totalExpense + recTotal;
 
-
-
       const groupedExpenses = {};
       expenses.forEach(e => {
         const created = (e.createdAt.toDate) ? e.createdAt.toDate() : new Date(e.createdAt);
         const dateStr = created.toISOString().substring(0, 10);
         (groupedExpenses[dateStr] = groupedExpenses[dateStr] || []).push(e);
-      });
-
-      
+      });  
 
 res.render('expense', {
   month            : monthParam,
@@ -1739,15 +1665,12 @@ res.render('expense', {
   grandTotal,         // ← keep
   blockedActions   : req.session.blockedActions || {}
 });
-
-
     } catch (err) {
       res.status(500).send(err.toString());
     }
 });
 
 /* ─────────── RECURRING-EXPENSE TEMPLATES ─────────── */
-
 /* POST /add-recurring-expense – create template */
 app.post('/add-recurring-expense', isAuthenticated, async (req, res) => {
   try {
@@ -1755,7 +1678,6 @@ app.post('/add-recurring-expense', isAuthenticated, async (req, res) => {
 const { recurringReason } = req.body;
 
 const DEFAULT_STATUS = 'Not Paid';
-
 
 /* ① create the master template */
 const tplRef = await db.collection('recurringExpenses').add({
@@ -1832,7 +1754,6 @@ app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (r
 });
 
 /* ─────────── POST /add-product – create or update ─────────── */
-/* ─────────── POST /add-product – create or update ─────────── */
 app.post(
   '/add-product',
   isAuthenticated,
@@ -1852,8 +1773,6 @@ app.post(
         selectedUnit,
         newUnit
       } = req.body;
-
-
 const wp = +parseFloat(wholesalePrice);
 const rp = +parseFloat(retailPrice);
 const qty = +parseFloat(quantity);
@@ -1866,13 +1785,10 @@ if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
     return res.status(400).send('Inclusive-Tax % must be between 0 and 100');
 }
 
-
 if (!Number.isFinite(wp) || wp <= 0 ||
     !Number.isFinite(rp) || rp <= 0 ||
     !Number.isFinite(qty) || qty <= 0)
   return res.status(400).send('Prices and quantity must be > 0');
-
-
       let category = newCategory?.trim()
         ? newCategory.trim()
         : (selectedCategory || '');
@@ -1884,7 +1800,6 @@ if (!Number.isFinite(wp) || wp <= 0 ||
       if (category) {
         category = category[0].toUpperCase() + category.slice(1).toLowerCase();
       }
-
       /* ──────────────────────────────────────────────────────────────
          ✨ DUPLICATE CATEGORY GUARD  (case- & space-insensitive)
          – Runs only when the user typed a brand-new category.
@@ -1927,8 +1842,6 @@ if (!Number.isFinite(wp) || wp <= 0 ||
             .send('Unit already exists — choose a different name.');
         }
       }
-
-
       /* --------------------------------------------------------------
          0. Validation
       -------------------------------------------------------------- */
@@ -1983,7 +1896,6 @@ if (!Number.isFinite(wp) || wp <= 0 ||
           }
         }
       }
-
       /* --------------------------------------------------------------
          2. UPDATE flow
       -------------------------------------------------------------- */
@@ -1999,7 +1911,6 @@ const newRetail = +(
   ((curQ * d.retailPrice) + (qty * rp)) / newQ
 ).toFixed(2);
 
-
        await productRef.update({
   quantity      : newQ,
   wholesalePrice: newWholesale,
@@ -2011,8 +1922,6 @@ const newRetail = +(
   // ⬇️  only overwrite when the user actually entered a value
   ...(taxPct !== null && { inclusiveTax: taxPct })
 });
-
-
       /* --------------------------------------------------------------
          3. CREATE flow
       -------------------------------------------------------------- */
@@ -2041,7 +1950,6 @@ const newRetail = +(
         productRef  = await db.collection('products').add(data);
         productSnap = { id: productRef.id, data: () => data };
       }
-
       /* --------------------------------------------------------------
          4. Always create a NEW stock batch
       -------------------------------------------------------------- */
@@ -2056,18 +1964,12 @@ const newRetail = +(
         accountId,
         unit
       });
-
-
-
       res.redirect('/add-product?success=1');
     } catch (err) {
       res.status(500).send(err.toString());
     }
   }
 );
-
-
-
 
 // GET /view-products
 app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), async (req, res) => {
@@ -2211,8 +2113,6 @@ app.get('/download-products', isAuthenticated, restrictRoute('/view-products'), 
   }
 });
 
-
-
 /* ─────────── STOCK BATCH MANAGEMENT ─────────── */
 // POST /delete-stock-batch/:batchId
 // POST /delete-stock-batch/:batchId
@@ -2246,7 +2146,6 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-
         }
       });
     }
-
     // Otherwise full‐page flow
     res.redirect('/view-products');
   } catch (error) {
@@ -2255,7 +2154,6 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-
     res.status(500).send(error.toString());
   }
 });
-
 /* ─────────── STOCK BATCH HELPER (transaction-aware) ───────────
    • If a Firestore transaction object is supplied, we reuse it.
    • Otherwise we create a standalone transaction (old behaviour).
@@ -2308,7 +2206,6 @@ async function recalcProductFromBatches(productId, tx = null) {
   }
 }
 
-
 // GET /edit-stock-batch/:batchId
 app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
@@ -2341,8 +2238,6 @@ if (productSnap.exists) {
     batchData.inclusiveTax = pData.inclusiveTax;         // ★ NEW: pre-fill GST %
   }
 }
-
-
     res.render('editStockBatch', {
       batch:      batchData,
       categories,
@@ -2352,7 +2247,6 @@ if (productSnap.exists) {
     res.status(500).send(e.toString());
   }
 });
-
 
 // POST /api/edit-stock-batch-field/:batchId
 app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated,restrictAction('/view-products','edit'), async (req, res) => {
@@ -2410,7 +2304,6 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated,restrictAction(
   }
 });
 
-
 // POST /edit-stock-batch/:batchId
 app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
   try {
@@ -2451,8 +2344,6 @@ if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
     return res.status(400).send('Inclusive-Tax % must be between 0 and 100');
   }
 }
-
-
     /* ──────────────────────────
        Category normalisation & guard
     ────────────────────────── */
@@ -2476,7 +2367,6 @@ if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
           .send('Category already exists — choose a different name.');
       }
     }
-
     /* ──────────────────────────
        Unit normalisation & guard
     ────────────────────────── */
@@ -2496,8 +2386,6 @@ if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
       }
     }
 
-
-/* ----- keep previously-sold units intact ----- */
 /* ----- keep previously-sold units intact ----- */
 const oldQty    = batchSnap.data().quantity          || 0;
 const oldRemain = batchSnap.data().remainingQuantity ?? oldQty;
@@ -2516,7 +2404,6 @@ await batchRef.update({
   ...(category && { category }),
   updatedAt        : new Date()
 });
-
 
     /* 2. 🆕 merge-duplicates if another product already has newNameKey -- */
     const dupSnap = await db.collection('products')
@@ -2557,18 +2444,12 @@ await prodRef.set({
   updatedAt   : new Date()
 }, { merge: true });
 
-
-
-          await recalcProductFromBatches(targetProdId);
-    
-
+        await recalcProductFromBatches(targetProdId);
       res.redirect('/view-products');
-
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
-
 
 /* ────────────────────────────────────────────────────────────────
    GET /sales  – Sales & Expense report
@@ -2584,10 +2465,7 @@ app.get(
       const accountId          = req.session.user.accountId;
       // (updated code)
 let { saleDate, month, status } = req.query;   // ← month is now mutable
-
-
       /* ─── 0. Work out the month window we’ll “lock” the badges to ─── */
-      
       let monthStart, monthEnd;
 
       if (month) {                                        // user picked a month
@@ -2644,27 +2522,21 @@ if (saleDate) {
                     .where('saleDate', '<',  monthEnd);
   expenseQ = expenseQ.where('saleDate', '>=', monthStart)
                      .where('saleDate', '<',  monthEnd);
-
 } else {
-
   // 3️⃣ DEFAULT → use the *current* month window calculated above
   salesQ   = salesQ .where('saleDate', '>=', monthStart)
                     .where('saleDate', '<',  monthEnd);
   expenseQ = expenseQ.where('saleDate', '>=', monthStart)
                      .where('saleDate', '<',  monthEnd);
-
   // populate <input type="month"> so it shows the current month pre-selected
   month = monthStart.substring(0, 7);          // e.g. "2025-06"
 }
-
 /* (status filter unchanged) */
 if (status && status.trim() && status !== 'All') {
   salesQ   = salesQ  .where('status',        '==', status);
   expenseQ = expenseQ.where('expenseStatus', '==', status);
 }
-
-
-      /* ─── 2. ***Separate*** queries for MONTH totals (no status filter) ─── */
+   /* ─── 2. ***Separate*** queries for MONTH totals (no status filter) ─── */
       const monthSalesQ = db.collection('sales')
                             .where('accountId', '==', accountId)
                             .where('saleDate',  '>=', monthStart)
@@ -2702,8 +2574,6 @@ const monthNetProfit     = monthGrossProfit - monthExpenseTotal;
 /* NEW ➜ total GST you owe this month */
 const monthGstPayable    = monthSales.reduce((sum, s) =>
   sum + (s.gstPayable || 0), 0);
-
-
       /* ─── 5. Opening balances & times (unchanged) ─── */
       const dateSet = new Set();
       sales.forEach(s   => dateSet.add(s.saleDate));
@@ -2727,35 +2597,28 @@ const monthGstPayable    = monthSales.reduce((sum, s) =>
           openingBalances[date] = 0;
         }
       }));
-
       /* ─── 6. Render – pass MONTH totals to the badges ─── */
      res.render('sales', {
   sales,
   expenses,
-
   saleDate,
   month,
   status,
-
   // *** BADGE figures (month-locked) ***
   totalRevenueAmount   : monthRevenueAmount,
   profitWithoutExpenses: monthGrossProfit,
   totalExpensesAmount  : monthExpenseTotal,
   profitAfterExpenses  : monthNetProfit,
   monthGstPayable,                       // ★ NEW
-
   openingTimes,
   openingBalances,
   blockedActions: req.session.blockedActions || {}
 });
-
-
     } catch (err) {
       res.status(500).send(err.toString());
     }
   }
 );
-
 
 /* ─────────── DOWNLOAD SALES → EXCEL ─────────── */
 // GET /download-sales
@@ -2829,8 +2692,6 @@ app.get('/download-sales', isAuthenticated, restrictRoute('/sales'), async (req,
   }
 });
 
-
-
 /* ─────────── AJAX inline edit   /api/edit-sale ─────────── */
 app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    async (req, res) => {
   try {
@@ -2851,25 +2712,21 @@ app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    
       if (paymentDetail1 !== undefined) update.paymentDetail1 = +parseFloat(paymentDetail1 || 0);
       if (paymentDetail2 !== undefined) update.paymentDetail2 = +parseFloat(paymentDetail2 || 0);
       await saleRef.update(update);
-      const { summary } = await computeDailySummary(
-        req.session.user.accountId, exp.saleDate
-      );
-
-      /* ▼ NEW — fresh month grand-total */
-      const monthTotal = await computeMonthTotal(
-        req.session.user.accountId,
-        exp.saleDate.substring(0, 7)     // "YYYY-MM"
-      );
-
+    const { summary } = await computeDailySummary(
+  req.session.user.accountId,
+  data.saleDate           // ✅ use the row we just read
+);
+const monthTotal = await computeMonthTotal(
+  req.session.user.accountId,
+  data.saleDate.substring(0, 7)
+);
       return res.json({
         success   : true,
         updatedRow: update,
         summary,
         monthTotal                         // ▲ include in response
       });
-
     }
-
     /* ------------------------------------------------------------------
        2️⃣ We’re changing either **saleQuantity** or **totalSale**
           → need to return/consume stock, recalc FIFO & profit
@@ -2940,7 +2797,6 @@ app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    
       }
       batchesUsed = batchesUsed.filter(u => u.qtyUsed > 0.0001);
     }
-
     if (stockOps._ops.length) await stockOps.commit();
 
     /* refresh parent product ------------------------------------------ */
@@ -2986,13 +2842,11 @@ app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    
       },
       summary
     });
-
   } catch (err) {
     console.error(err);
     return res.json({ success:false, error:err.message });
   }
 });
-
 
 app.post('/delete-product/:productId', isAuthenticated, restrictAction('/view-products','delete'), async (req, res) => {
   try {
@@ -3067,9 +2921,7 @@ const [salesSnap, expSnap, recSnap] = await Promise.all([
   expenseQuery.get(),
   recQuery.get()
 ]);
-
 const todayYM  = new Date().toISOString().substring(0,7);   // "YYYY-MM"
-
 const recRows  = recSnap.docs
   .map(d => d.data())
   .filter(d => !d.deleted && d.month <= todayYM);
@@ -3092,8 +2944,7 @@ function paidPortion (row) {
       return cost;
   }
 }
-
-    const sales    = salesSnap.docs.map(d=>d.data());
+   const sales    = salesSnap.docs.map(d=>d.data());
     const expenses = expSnap.docs.map(d=>d.data());
 
     /* ---------- totals ---------- */
@@ -3150,23 +3001,12 @@ const totalExpenses = [...expenses, ...recRows]
   }
 });
 
-
-
-
 /* ─────────── SUBSCRIPTION & PAYMENT ROUTES ─────────── */
 // GET /pricing
-// app.get('/pricing', (req, res) => {
-//   const now = new Date();
-//   if (req.session.user?.subscriptionExpiry && new Date(req.session.user.subscriptionExpiry) > now)
-//     return res.redirect('/');
-//   res.render('pricing', { user: req.session.user || null });
-// });
-
 app.get('/pricing', (req, res) => {
   // now all users—subscribed or not—can view pricing
   res.render('pricing', { user: req.session.user || null });
 });
-
 
 /* ───── GET /subscribe/monthly  (secure) ───── */
 app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
@@ -3200,10 +3040,8 @@ app.get('/subscribe/half-yearly', isAuthenticated, async (req, res) => {
   const amount   = 2699 * 100;
   const currency = 'INR';
   const receipt  = `receipt_halfyearly_${Date.now()}`;
-
   try {
     const order = await razorpay.orders.create({ amount, currency, receipt });
-
     await db.collection('paymentOrders').doc(order.id).set({
       userId : req.session.user.id,
       plan   : 'Half-Yearly',
@@ -3213,23 +3051,19 @@ app.get('/subscribe/half-yearly', isAuthenticated, async (req, res) => {
       paid   : false,
       createdAt : new Date()
     });
-
     res.render('payment', { order, user: req.session.user });
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
 
-
 /* ───── GET /subscribe/yearly  (secure) ───── */
 app.get('/subscribe/yearly', isAuthenticated, async (req, res) => {
   const amount   = 4799 * 100;
   const currency = 'INR';
   const receipt  = `receipt_yearly_${Date.now()}`;
-
   try {
     const order = await razorpay.orders.create({ amount, currency, receipt });
-
     await db.collection('paymentOrders').doc(order.id).set({
       userId : req.session.user.id,
       plan   : 'Yearly',
@@ -3239,13 +3073,11 @@ app.get('/subscribe/yearly', isAuthenticated, async (req, res) => {
       paid   : false,
       createdAt : new Date()
     });
-
     res.render('payment', { order, user: req.session.user });
   } catch (e) {
     res.status(500).send(e.toString());
   }
 });
-
 
 /* ───── POST /payment-success  (hardened) ───── */
 app.post('/payment-success', isAuthenticated, async (req, res) => {
@@ -3310,9 +3142,6 @@ app.post('/payment-success', isAuthenticated, async (req, res) => {
     res.status(500).send('Payment processing failed, please contact support.');
   }
 });
-
-
-
 /* ─────────── PROFILE & BILLING (Master Only) ─────────── */
 // GET /profile
 /* ─────────── GET /profile – editable version ─────────── */
@@ -3327,7 +3156,6 @@ app.get('/profile', isAuthenticated, requireMaster, async (req, res) => {
         ? userData.subscriptionExpiry.toDate()
         : new Date(userData.subscriptionExpiry);
     }
-
     res.render('profile', {
       user        : userData,
       csrfToken   : req.csrfToken(),
@@ -3390,7 +3218,6 @@ app.post('/profile', isAuthenticated, requireMaster, async (req, res) => {
   }
 });
 
-
 // GET /billing
 app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
   try {
@@ -3432,8 +3259,6 @@ app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
       res.status(500).send(err.toString());
     }
   });
-  
-
 
 /* ─────────── EMPLOYEE REPORTING ─────────── */
 // GET /employees
@@ -3570,7 +3395,6 @@ app.post('/delete-employee', isAuthenticated, async (req, res) => {
   }
 });
 
-
 /* ─────────── AJAX  POST  /api/sale  (always returns JSON) ─────────── */
 app.post('/api/sale', isAuthenticated, async (req, res) => {
   try {
@@ -3630,15 +3454,14 @@ app.post(
       await expRef.delete();
 
 const { summary } = await computeDailySummary(
-  sale.accountId,
-  sale.saleDate
+  exp.accountId,
+  exp.saleDate
 );
 
 const monthTotal = await computeMonthTotal(
-  sale.accountId,
-  sale.saleDate.substring(0, 7)       // "YYYY-MM"
+  exp.accountId,
+  exp.saleDate.substring(0, 7)        // "YYYY-MM"
 );
-
 
       /* 4️⃣ done */
       return res.json({ success: true, summary, monthTotal });
@@ -3722,7 +3545,6 @@ res.json({ success:true, updatedRow:update, summary, monthTotal });
   }
 );
 
-
 app.post('/api/expense', isAuthenticated, async (req, res) => {
   try {
     /* 0️⃣  Fire the insert (can be 1 or many rows) */
@@ -3753,7 +3575,6 @@ app.post('/api/expense', isAuthenticated, async (req, res) => {
         ...e
       };
     });
-
     /* 2️⃣  Re-compute this month’s running total */
     const month   = req.body.saleDate.substring(0,7);                // "YYYY-MM"
     const monthTotal = await computeMonthTotal(req.session.user.accountId, month);
@@ -3866,8 +3687,6 @@ if (futBatch._ops?.length) await futBatch.commit();
     res.status(500).send(err.toString());
   }
 });
-
-
 // AJAX: POST /api/opening-balance
 app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
   try {
@@ -3889,7 +3708,6 @@ app.post('/api/opening-balance', isAuthenticated, async (req, res) => {
   closingTime  : closingTime || '',
   summary
 });
-
   } catch (e) {
     res.json({ success: false, error: e.toString() });
   }
@@ -3902,17 +3720,13 @@ app.post('/api/delete-sale', isAuthenticated, restrictAction('/sales','delete'),
     const saleRef = db.collection('sales').doc(saleId);
     const saleDoc = await saleRef.get();
     if (!saleDoc.exists) return res.json({ success:true });
-
     const sale = saleDoc.data();
     if (sale.accountId !== req.session.user.accountId)
       return res.json({ success:false, error:'Access denied' });
-
     const productId = sale.productId;
     const batchCol  = db.collection('stockBatches');
-    const batchOps  = db.batch();
-    
+    const batchOps  = db.batch();   
     const missing   = [];
-
     if (Array.isArray(sale.batchesUsed)) {
       for (const bu of sale.batchesUsed) {
         const ref  = batchCol.doc(bu.id);
@@ -3949,8 +3763,6 @@ if (hasWrites) {
 
         await saleRef.delete();           // 1️⃣ remove sale first
     await recalcProductFromBatches(productId);   // 2️⃣ then correct stock
-
-
 /* ▼ NEW – re-compute month running total */
 const monthTotal = await computeMonthTotal(
   sale.accountId,
@@ -3961,31 +3773,21 @@ const { summary } = await computeDailySummary(
   sale.accountId, sale.saleDate
 );
 
-
 res.json({ success: true, summary, monthTotal });
-
-
   } catch (e) {
     console.error('delete-sale error:', e);
     res.json({ success:false, error:e.toString() });
   }
 });
 
-
-
 // GET /tnc – Terms & Conditions
 app.get('/terms-and-conditions', (req, res) => {
   res.render('tnc', { host: req.get('host') });
 });
-
-// In app.js, after your documentation route for example:
-
 // GET /privacy
 app.get('/privacy', (req, res) => {
   res.render('privacy');
 });
-
-
 /* ─────────── Health check ─────────── */
 app.get('/healthz', (req, res) => res.status(200).send('OK'));
 
@@ -3993,13 +3795,10 @@ app.get('/healthz', (req, res) => res.status(200).send('OK'));
 // GET /performance
 app.get('/performance',
   isAuthenticated,
-  
   async (req, res) => {
     try {
       const accountId = req.session.user.accountId;
-
       /* ───── 1. Determine date window ───── */
-     
       const today  = new Date();
       const curYM  = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
       const {
@@ -4040,7 +3839,6 @@ app.get('/performance',
         endDate     = `${nextY}-${pad(nextM)}-01`;
         periodLabel = new Date(startDate).toLocaleString('default',{ month:'long', year:'numeric' });
       }
-
       /* Top‑N (default 10) */
       const topN = Math.max(parseInt(topParam,10)||10, 1);
 
@@ -4101,7 +3899,6 @@ app.get('/performance',
     }
   }
 );
-
 /* ─────────── STATS DASHBOARD ─────────── */
 // GET /stats
 app.get(
@@ -4116,7 +3913,6 @@ app.get(
       const pad   = n => String(n).padStart(2, '0');
       const today = new Date();
       const ymNow = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
-
       const {
         month = '', from = '', to = '', year = '', top: topParam = ''
       } = req.query;
@@ -4178,7 +3974,6 @@ app.get(
           .where('accountId','==',accountId)
           .get()
       ]);
-
       /* ──────────────────────────────────────────────────────────
          Shared helper – convert an expense row to “what’s paid”
       ────────────────────────────────────────────────────────── */
@@ -4248,7 +4043,6 @@ app.get(
         monthlyExpense[ym] = 0;
         monthlyGst    [ym] = 0;
       }
-
       yearSales.forEach(s => {
         const ym = s.saleDate.slice(0, 7);
         if (monthlyProfit[ym] !== undefined) {
@@ -4262,7 +4056,6 @@ app.get(
           monthlyExpense[ym] += paidPortion(e);
         }
       });
-
       /* ─────────── Period label logic (unchanged UI) ─────────── */
       let periodLabel, uiMonth = month, uiFrom = from, uiTo = to, uiYear = year;
       if (month) {
@@ -4295,9 +4088,7 @@ app.get(
   }
 );
 
-
 /* ─────────── PASSWORD RESET ROUTES (MASTER-ONLY) ─────────── */
-
 // GET /forgot-password
 app.get('/forgot-password', (req, res) => {
   if (req.session?.user) return res.redirect('/');
@@ -4313,13 +4104,11 @@ app.post('/forgot-password', async (req, res) => {
       return res.status(400).render('forgotPassword',
         { sent: false, error: 'Please enter your registered email.' });
     }
-
     // master-account lookup
     const snap = await db.collection('users')
                          .where('email',    '==', email)
                          .where('isMaster', '==', true)
                          .limit(1).get();
-
     /* Always show success even if no match → no user enumeration */
     if (snap.empty) return res.render('forgotPassword', { sent: true, error: null });
 
@@ -4339,8 +4128,6 @@ await db.collection('passwordResets').doc(tokenHash).set({
 });
 
 const link = `${process.env.BASE_URL || 'http://localhost:3000'}/reset-password/${rawToken}`;
-
-
     // fire the email
     await transporter.sendMail({
       to      : email,
@@ -4378,7 +4165,11 @@ const doc        = await db.collection('passwordResets').doc(tokenHash).get();
       return res.status(400).render('resetPassword',
         { token: '', invalid: true, error: 'Link has expired. Request a new one.' });
     }
-    res.render('resetPassword', { token, invalid: false, error: null });
+res.render('resetPassword', {               // token → rawToken
+  token: rawToken,
+  invalid: false,
+  error: null
+});
   } catch (err) {
     res.status(500).send(err.toString());
   }
@@ -4465,8 +4256,6 @@ app.get(
   }
 );
 
-
-
 // GET /invoice-number/:invoiceNo  – print ALL sales that share this number
 app.get(
   '/invoice-number/:invoiceNo',
@@ -4511,8 +4300,6 @@ app.get(
     }
   }
 );
-
-
 /* ─────────── GST SUMMARY HELPER ─────────── *
    Returns an array like
    [
@@ -4652,10 +4439,10 @@ if (CPUS > 1 && cluster.isPrimary) {
   for (let i = 0; i < CPUS; i++) cluster.fork();
 
   /* simple respawn – keeps the dyno alive */
-  cluster.on('exit', (worker, code, signal) => {
-    logger.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
-   setTimeout(() => cluster.fork(), 2000); cluster.fork();
-  });
+cluster.on('exit', (worker, code, signal) => {
+  logger.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
+  setTimeout(() => cluster.fork(), 2000);   // single, delayed fork
+});
 
 /* ────────── MODE B – single-process fallback ────────── */
 } else {
