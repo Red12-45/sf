@@ -3724,55 +3724,78 @@ app.post('/api/delete-sale', isAuthenticated, restrictAction('/sales','delete'),
     if (sale.accountId !== req.session.user.accountId)
       return res.json({ success:false, error:'Access denied' });
     const productId = sale.productId;
-    const batchCol  = db.collection('stockBatches');
-    const batchOps  = db.batch();   
-    const missing   = [];
-    if (Array.isArray(sale.batchesUsed)) {
-      for (const bu of sale.batchesUsed) {
-        const ref  = batchCol.doc(bu.id);
-        const snap = await ref.get();
-        if (snap.exists) {
-          batchOps.update(ref, {
-            quantity         : admin.firestore.FieldValue.increment(bu.qtyUsed),
-            remainingQuantity: admin.firestore.FieldValue.increment(bu.qtyUsed)
-          });
-        } else {
-          missing.push(bu);
-        }
-      }
+/* ─────────── 1. RESTORE STOCK ─────────── */
+const batchCol  = db.collection('stockBatches');
+const batchOps  = db.batch();   
+const prodRef   = db.collection('products').doc(productId);   // master doc
+const missing   = [];
+
+let didUpdate = false;                      // ← NEW – track writes
+
+if (Array.isArray(sale.batchesUsed)) {
+  for (const bu of sale.batchesUsed) {
+    const ref  = batchCol.doc(bu.id);
+    const snap = await ref.get();
+    if (snap.exists) {
+      batchOps.update(ref, {
+        quantity         : admin.firestore.FieldValue.increment(bu.qtyUsed),
+        remainingQuantity: admin.firestore.FieldValue.increment(bu.qtyUsed)
+      });
+      didUpdate = true;                     // at least one real write
+    } else {
+      missing.push(bu);                     // will recreate later
     }
-    const hasWrites = batchOps._mutations?.length || 0;   // safest available
-if (hasWrites) {
-  await batchOps.commit();
+  }
 }
 
-    /* recreate missing batches with correct numbers --------------------- */
-    for (const bu of missing) {
-      await batchCol.add({
-        productId,
-        productName      : sale.productName.replace(/ \(updated\)$/, ''),
-        purchasePrice    : sale.wholesalePrice,
-        salePrice        : sale.retailPrice,
-        quantity         : bu.qtyUsed,
-        remainingQuantity: bu.qtyUsed,
-        batchDate        : new Date(),
-        accountId        : sale.accountId,
-        unit             : sale.unit || ''
-      });
-    }
+/* bump the master product stock back by the exact sale qty */
+batchOps.update(prodRef, {
+  quantity: admin.firestore.FieldValue.increment(sale.saleQuantity)
+});
+didUpdate = true;
+
+/* commit only when we really queued something */
+if (didUpdate) await batchOps.commit();
+
+/* recreate any batches that were missing entirely -------------------- */
+for (const bu of missing) {
+  await batchCol.add({
+    productId,
+    productName      : sale.productName.replace(/ \(updated\)$/, ''),
+    purchasePrice    : sale.wholesalePrice,
+    salePrice        : sale.retailPrice,
+    quantity         : bu.qtyUsed,
+    remainingQuantity: bu.qtyUsed,
+    batchDate        : new Date(),
+    accountId        : sale.accountId,
+    unit             : sale.unit || ''
+  });
+}
+
 
         await saleRef.delete();           // 1️⃣ remove sale first
     await recalcProductFromBatches(productId);   // 2️⃣ then correct stock
 /* ▼ NEW – re-compute month running total */
+await Promise.all([
+  cacheDel(`dailySum_${sale.accountId}_${sale.saleDate}`),
+  cacheDel(`monthTotal_${sale.accountId}_${sale.saleDate.substring(0, 7)}`),
+  cacheDel(`products_${sale.accountId}`),      // full list
+  cacheDel(`product_${productId}`)             // single-item cache
+]);
+
+
+/* 1️⃣  Fresh month aggregate */
 const monthTotal = await computeMonthTotal(
   sale.accountId,
   sale.saleDate.substring(0, 7)       // "YYYY-MM"
 );
 
+/* 2️⃣  Fresh daily summary (will be re-cached for 30 s inside) */
 const { summary } = await computeDailySummary(
   sale.accountId, sale.saleDate
 );
 
+/* 3️⃣  Send the up-to-date numbers back to the browser */
 res.json({ success: true, summary, monthTotal });
   } catch (e) {
     console.error('delete-sale error:', e);
