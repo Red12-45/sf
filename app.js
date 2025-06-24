@@ -2707,26 +2707,53 @@ app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    
     /* ------------------------------------------------------------------
        1️⃣ Pure-status edits (unchanged) – skip all quantity / price maths
     ------------------------------------------------------------------ */
-    if (field === 'status') {
-      const update = { status:value };
-      if (paymentDetail1 !== undefined) update.paymentDetail1 = +parseFloat(paymentDetail1 || 0);
-      if (paymentDetail2 !== undefined) update.paymentDetail2 = +parseFloat(paymentDetail2 || 0);
-      await saleRef.update(update);
-    const { summary } = await computeDailySummary(
-  req.session.user.accountId,
-  data.saleDate           // ✅ use the row we just read
-);
-const monthTotal = await computeMonthTotal(
-  req.session.user.accountId,
-  data.saleDate.substring(0, 7)
-);
-      return res.json({
-        success   : true,
-        updatedRow: update,
-        summary,
-        monthTotal                         // ▲ include in response
-      });
-    }
+if (field === 'status') {
+  const update = { status:value };
+  if (paymentDetail1 !== undefined) update.paymentDetail1 = +parseFloat(paymentDetail1 || 0);
+  if (paymentDetail2 !== undefined) update.paymentDetail2 = +parseFloat(paymentDetail2 || 0);
+  await saleRef.update(update);
+
+  const { summary } = await computeDailySummary(
+    req.session.user.accountId,
+    data.saleDate
+  );
+  const monthTotal = await computeMonthTotal(
+    req.session.user.accountId,
+    data.saleDate.substring(0, 7)
+  );
+
+  return res.json({
+    success   : true,
+    updatedRow: update,
+    summary,
+    monthTotal
+  });
+}
+
+/* ------------------------------------------------------------------
+   1️⃣-b Extra-Info edit – simple text update, no maths
+------------------------------------------------------------------ */
+if (field === 'extraInfo') {
+  const update = { extraInfo: (value || '').trim() };
+  await saleRef.update(update);
+
+  const { summary } = await computeDailySummary(
+    req.session.user.accountId,
+    data.saleDate
+  );
+  const monthTotal = await computeMonthTotal(
+    req.session.user.accountId,
+    data.saleDate.substring(0, 7)
+  );
+
+  return res.json({
+    success   : true,
+    updatedRow: update,
+    summary,
+    monthTotal
+  });
+}
+
     /* ------------------------------------------------------------------
        2️⃣ We’re changing either **saleQuantity** or **totalSale**
           → need to return/consume stock, recalc FIFO & profit

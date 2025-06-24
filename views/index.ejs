@@ -1010,6 +1010,7 @@ function refreshExpenseHeader () {
   };
 
  /* ——— SALE FORM ——— */
+/* ——— SALE FORM ——— */
 document.getElementById('saleForm').addEventListener('submit', async e => {
   if (e.submitter?.classList.contains('noAjax')) return;   // normal post
   e.preventDefault();
@@ -1033,73 +1034,72 @@ document.getElementById('saleForm').addEventListener('submit', async e => {
       opt.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
     }
 
-/* build a new row and prepend it */
-/* build a new row and prepend it – HTML now escaped */
-/* build a new row and prepend it – every dynamic value is escaped */
-const row = document.createElement('tr');
-const pillClass = {
-  'Paid Cash'  : 'status-cash',
-  'Paid Online': 'status-online',
-  'Not Paid'   : 'status-notpaid'
-}[s.status] || 'status-mixed';
+    /* build a new row and prepend it – every dynamic value is escaped */
+    const row = document.createElement('tr');
+    const pillClass = {
+      'Paid Cash'  : 'status-cash',
+      'Paid Online': 'status-online',
+      'Not Paid'   : 'status-notpaid'
+    }[s.status] || 'status-mixed';
 
-row.innerHTML = `
-  <td>${escapeHtml(s.productName)}</td>
-  <td>${cash(s.wholesalePrice)}</td>
-  <td>${cash(s.retailPrice)}</td>
-  <td>${qty(s.saleQuantity)}</td>
-  <td>${escapeHtml(s.unit || '-')}</td>
-  <td>${cash(s.totalSale)}</td>
-  <td>${cash(s.profitPerUnit)}</td>
-  <td>${cash(s.profit)}</td>
-  <td>${s.gstPayable !== undefined ? cash(s.gstPayable) : '-'}</td>
-  <td>
-    <span class="status-pill ${pillClass}">${escapeHtml(s.status)}</span>
-    ${(s.paymentDetail1 || s.paymentDetail2)
-        ? `<div class="status-details-inline">
-             ${s.paymentDetail1 ? `<span><strong>Detail1:</strong> ₹${cash(s.paymentDetail1)}</span>` : ''}
-             ${s.paymentDetail2 ? `<span><strong>Detail2:</strong> ₹${cash(s.paymentDetail2)}</span>` : ''}
-           </div>` : ''}
-  </td>
-  <td>${s.extraInfo ? escapeHtml(s.extraInfo) : '-'}</td>
-  <td>${new Date(s.createdAt).toLocaleTimeString('en-IN',
-        { hour12:false, timeZone:'Asia/Kolkata' })}</td>
-  <td style="text-align:center;">
-    <a href="/invoice/${escapeHtml(s.id)}"
-       target="_blank" rel="noopener noreferrer" class="print-btn"
-       title="Print this line only"><i class="fas fa-receipt"></i></a>&nbsp;
-    <a href="/invoice-number/${escapeHtml(s.invoiceNo)}"
-       target="_blank" rel="noopener noreferrer"
-       title="Print full invoice ${escapeHtml(s.invoiceNo)}"><i class="fas fa-file-invoice"></i></a>&nbsp;
-    <i class="fas fa-trash-alt delete-sale-btn"
-       data-id="${escapeHtml(s.id)}"
-       data-product-id="${escapeHtml(s.productId)}"
-       data-quantity="${escapeHtml(s.saleQuantity)}"
-       title="Delete sale"></i>
-  </td>`;
-
-
-
+    row.innerHTML = `
+      <td>${escapeHtml(s.productName)}</td>
+      <td>${cash(s.wholesalePrice)}</td>
+      <td>${cash(s.retailPrice)}</td>
+      <td>${qty(s.saleQuantity)}</td>
+      <td>${escapeHtml(s.unit || '-')}</td>
+      <td>${cash(s.totalSale)}</td>
+      <td>${cash(s.profitPerUnit)}</td>
+      <td>${cash(s.profit)}</td>
+      <td>${s.gstPayable !== undefined ? cash(s.gstPayable) : '-'}</td>
+      <td>
+        <span class="status-pill ${pillClass}">${escapeHtml(s.status)}</span>
+        ${(s.paymentDetail1 || s.paymentDetail2)
+            ? `<div class="status-details-inline">
+                 ${s.paymentDetail1 ? `<span><strong>Detail1:</strong> ₹${cash(s.paymentDetail1)}</span>` : ''}
+                 ${s.paymentDetail2 ? `<span><strong>Detail2:</strong> ₹${cash(s.paymentDetail2)}</span>` : ''}
+               </div>` : ''}
+      </td>
+      <td>${s.extraInfo ? escapeHtml(s.extraInfo) : '-'}</td>
+      <td>${new Date(s.createdAt).toLocaleTimeString('en-IN',
+            { hour12:false, timeZone:'Asia/Kolkata' })}</td>
+      <td style="text-align:center;">
+        <a href="/invoice/${escapeHtml(s.id)}"
+           target="_blank" rel="noopener noreferrer" class="print-btn"
+           title="Print this line only"><i class="fas fa-receipt"></i></a>&nbsp;
+        <a href="/invoice-number/${escapeHtml(s.invoiceNo)}"
+           target="_blank" rel="noopener noreferrer"
+           title="Print full invoice ${escapeHtml(s.invoiceNo)}"><i class="fas fa-file-invoice"></i></a>&nbsp;
+        <i class="fas fa-trash-alt delete-sale-btn"
+           data-id="${escapeHtml(s.id)}"
+           data-product-id="${escapeHtml(s.productId)}"
+           data-quantity="${escapeHtml(s.saleQuantity)}"
+           title="Delete sale"></i>
+      </td>`;
 
     /* ensure table exists, then prepend */
-  ensureTableExists(
-  '.tables-content div:first-child',
-  '#salesTable',
-  `<thead>
-     <tr>
-       <th>Product</th><th>Wholesale</th><th>Sale Price</th>
-       <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
-       <th>Total Profit</th><th>GST Payable</th><th>Status</th>
-       <th>Info</th><th>Time</th><th>Action</th>
-     </tr>
-   </thead>`
-);
+    ensureTableExists(
+      '.tables-content div:first-child',
+      '#salesTable',
+      `<thead>
+         <tr>
+           <th>Product</th><th>Wholesale</th><th>Sale Price</th>
+           <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
+           <th>Total Profit</th><th>GST Payable</th><th>Status</th>
+           <th>Info</th><th>Time</th><th>Action</th>
+         </tr>
+       </thead>`
+    );
 
     document.querySelector('#salesTable tbody').prepend(row);
 
     /* refresh UI */
     refreshSummary(res.summary);
+
+    /* 🔄 RESET form + restore full product list */
     e.target.reset();
+    filterProductOptions(false);          // 👈 NEW: unhide every option
+
     updateSaleCalculations();
     statusSelect.dispatchEvent(new Event('change'));
 

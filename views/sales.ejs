@@ -11,68 +11,90 @@
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
 <style nonce="<%= cspNonce %>">
     /* Inline‐editing styles */
-    td.editable, td.editable-status { position: relative; cursor: pointer; }
+    td.editable, td.editable-status {
+      position: relative;
+      cursor: pointer;
+      white-space: normal;              /* ← allow wrapping */
+    }
     td.editable .edit-icon,
     td.editable-status .edit-icon {
       display: none;
       position: absolute;
-      right: 6px; top: 50%;
+      right: 6px;
+      top: 50%;
       transform: translateY(-50%);
-      font-size: 0.9em; color: #555;
+      font-size: 0.9em;
+      color: #555;
     }
     td.editable:hover .edit-icon,
-    td.editable-status:hover .edit-icon { display: inline; }
-    td.editable.editing, td.editable-status.editing { padding: 0; }
+    td.editable-status:hover .edit-icon {
+      display: inline;
+    }
+    td.editable.editing,
+    td.editable-status.editing {
+      padding: 0;
+    }
     td.editable.editing input,
     td.editable-status.editing select,
     td.editable-status.editing input {
-      width: 100%; border: none; padding: 4px;
-      box-sizing: border-box; font-size: inherit;
+      width: auto;                      /* ← let content size it */
+      min-width: 120px;                 /* ← ensure a sensible minimum */
+      border: none;
+      padding: 4px;
+      box-sizing: border-box;
+      font-size: inherit;
+      white-space: normal;              /* ← wrap long labels */
     }
 
     /* Detail input style */
     td.editable-status .status-input {
-      width: 45%; margin-right: 4%; padding: 2px; box-sizing: border-box;
+      width: 45%;
+      min-width: 80px;                  /* ← ensure detail inputs aren’t too tiny */
+      margin-right: 4%;
+      padding: 2px;
+      box-sizing: border-box;
       font-size: inherit;
+      white-space: normal;
     }
 
     /* NEW ➜ inline totals beside Filter */
     .summary-inline {
-  display: inline-flex;
-  gap: .8rem;
-  margin-left: 1rem;
-  align-items: center;
-  font-size: .85em;
-}
+      display: inline-flex;
+      gap: .8rem;
+      margin-left: 1rem;
+      align-items: center;
+      font-size: .85em;
+    }
 
-.summary-item {
-  display: flex;
-  align-items: center;
-  gap: .3rem;
-  padding: .2rem .6rem;
-  border-radius: .5rem;
-  font-weight: 500;
-}
+    .summary-item {
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .2rem .6rem;
+      border-radius: .5rem;
+      font-weight: 500;
+    }
 
-.summary-item.revenue {
-  background: rgba(46, 204, 113, 0.1);
-  color: #2ecc71;
-}
+    .summary-item.revenue {
+      background: rgba(46, 204, 113, 0.1);
+      color: #2ecc71;
+    }
 
-.summary-item.profit {
-  background: rgba(52, 152, 219, 0.1);
-  color: #3498db;
-}
+    .summary-item.profit {
+      background: rgba(52, 152, 219, 0.1);
+      color: #3498db;
+    }
 
-.summary-item.expense {
-  background: rgba(231, 76, 60, 0.1);
-  color: #e74c3c;
-}
+    .summary-item.expense {
+      background: rgba(231, 76, 60, 0.1);
+      color: #e74c3c;
+    }
 
-.summary-item .fas {
-  font-size: .9em;
-}
-  </style>
+    .summary-item .fas {
+      font-size: .9em;
+    }
+</style>
+
 </head>
 <body>
   <%
@@ -321,7 +343,13 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
                   </td>
 
                   
-                  <td><%= sale.extraInfo||'-' %></td>
+                  <td class="<%= canEdit ? 'editable' : '' %>"
+    data-id="<%= sale.id %>"
+    data-field="extraInfo"
+    data-date="<%= date %>">
+  <span class="value"><%= sale.extraInfo || '-' %></span>
+  <% if (canEdit) { %><i class="fas fa-edit edit-icon"></i><% } %>
+</td>
                   <td><%= (sale.createdAt?.toDate ? sale.createdAt.toDate() : new Date(sale.createdAt)).toLocaleTimeString() %></td>
                   <td style="text-align:center;">
   <% if (canDelete) { %>
@@ -795,6 +823,72 @@ if (field === 'expenseStatus') {
   
         // —— NUMERIC fields (saleQuantity or retailPrice) ——
         // —— NUMERIC fields (saleQuantity • retailPrice • totalSale) ——
+        /* ────────────────────────────────
+   TEXT field inline-edit: extraInfo
+   ──────────────────────────────── */
+if (field === 'extraInfo') {
+  const oldText = td.querySelector('.value').textContent.trim();
+  td.classList.add('editing');
+  td.innerHTML =
+    `<input type="text" value="${oldText === '-' ? '' : oldText}"
+            style="min-width:150px;">`;
+
+  const input = td.querySelector('input');
+  input.focus();
+  input.select();
+
+  /* helper to finish the edit */
+  const finish = async (save) => {
+    const newVal = save ? input.value.trim() : oldText;
+    td.classList.remove('editing');
+
+    /* cancel or no change  restore */
+    if (!save || newVal === oldText) {
+      td.innerHTML =
+        `<span class="value">${oldText}</span><i class="fas fa-edit edit-icon"></i>`;
+      return;
+    }
+
+    /* POST the update */
+    try {
+      const res = await fetch('/api/edit-sale', {
+        method : 'POST',
+        headers: {
+          'Content-Type' : 'application/json',
+          'X-CSRF-Token' : csrfToken
+        },
+        body: JSON.stringify({
+          saleId : id,
+          field  : 'extraInfo',
+          value  : newVal
+        })
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Update failed');
+
+      td.innerHTML =
+        `<span class="value">${newVal || '-'}</span><i class="fas fa-edit edit-icon"></i>`;
+
+      /* summaries stay the same, but keep the call for consistency */
+      refreshSummary(date, json.summary);
+
+    } catch (err) {
+      alert(err.message);
+      td.innerHTML =
+        `<span class="value">${oldText}</span><i class="fas fa-edit edit-icon"></i>`;
+    }
+  };
+
+  /* blur = save | Enter = save | Esc = cancel */
+  input.addEventListener('blur',   ()  => finish(true));
+  input.addEventListener('keydown',ev => {
+    if (ev.key === 'Enter') input.blur();
+    if (ev.key === 'Escape') finish(false);
+  });
+
+  return;          // ✅ handled
+}
+
         if (field === 'saleQuantity' || field === 'totalSale') {
 
           const oldNum = td.querySelector('.value').textContent.trim();
