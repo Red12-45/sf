@@ -41,7 +41,7 @@
         <div class="sidebar-heading">Products</div>
         <ul class="sidebar-menu">
           <li class="sidebar-item"><a href="/add-product"  class="sidebar-link"><i class="fas fa-plus-circle"></i> Add New Product</a></li>
-          <li class="sidebar-item"><a href="/view-products"class="sidebar-link"><i class="fas fa-boxes"></i> View/Edit Products</a></li>
+          <li class="sidebar-item"><a href="/view-products"class="sidebar-link"><i class="fas fa-boxes"></i>Inventory</a></li>
         </ul>
       </div>
 
@@ -231,6 +231,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+
     /* Ensure correct state on initial load */
     toggleNewProductFields();
 
@@ -288,13 +289,17 @@
     );
     input.value = words.join(' ');
   }
-  document.addEventListener('DOMContentLoaded', () => {
-    const p = document.getElementById('productName');
-    if (!p) return;
-    p.addEventListener('blur',  titleCaseProductName);
-    p.addEventListener('paste', () => setTimeout(titleCaseProductName, 0));
-    p.addEventListener('input', titleCaseProductName);
-  });
+document.addEventListener('DOMContentLoaded', () => {
+  const p = document.getElementById('productName');
+  if (!p) return;
+
+  /* Re-format only after the user finishes typing or pastes text.
+     We no longer run on every keystroke, so spaces the user types
+     (e.g. “Star Cement”) are preserved. */
+  p.addEventListener('blur',  titleCaseProductName);
+  p.addEventListener('paste', () => setTimeout(titleCaseProductName, 0));
+});
+
 </script>
 
 <script nonce="<%= cspNonce %>">
