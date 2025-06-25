@@ -127,7 +127,7 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
         <div class="sidebar-heading">Products</div>
         <ul class="sidebar-menu">
           <li class="sidebar-item"><a href="/add-product" class="sidebar-link"><i class="fas fa-plus-circle"></i> Add New Product</a></li>
-          <li class="sidebar-item"><a href="/view-products" class="sidebar-link"><i class="fas fa-boxes"></i> View/Edit Products</a></li>
+          <li class="sidebar-item"><a href="/view-products" class="sidebar-link"><i class="fas fa-boxes"></i> Inventory</a></li>
         </ul>
       </div>
       <div class="sidebar-section">
@@ -422,64 +422,68 @@ const canDelete = !(blockedActions['/sales'] || []).includes('delete');
 
             
 
-            <!-- Summary Box -->
-            <div class="summaryBox">
-              <button class="toggleSummary" data-date="<%= date %>">
-                <i class="fas fa-chart-pie"></i> Show Summary
-              </button>
-              <div class="summaryContent" id="summary_<%= date %>" style="display:none;">
-                <% 
-                  let tS=0,tP=0,cS=0,oS=0,nS=0,cE=0,oE=0;
-                  daySales.forEach(s=>{
-                    const amt=s.retailPrice*s.saleQuantity;
-                    tS+=amt; tP+=s.profit;
-                    switch(s.status){
-                      case 'Paid Cash': cS+=amt; break;
-                      case 'Paid Online': oS+=amt; break;
-                      case 'Not Paid': nS+=amt; break;
-                      case 'Half Cash + Half Online':
-                        if(s.paymentDetail1) cS+=parseFloat(s.paymentDetail1);
-                        if(s.paymentDetail2) oS+=parseFloat(s.paymentDetail2);
-                        break;
-                      case 'Half Cash + Not Paid':
-                        if(s.paymentDetail1) cS+=parseFloat(s.paymentDetail1);
-                        if(s.paymentDetail2) nS+=parseFloat(s.paymentDetail2);
-                        break;
-                      case 'Half Online + Not Paid':
-                        if(s.paymentDetail1) oS+=parseFloat(s.paymentDetail1);
-                        if(s.paymentDetail2) nS+=parseFloat(s.paymentDetail2);
-                        break;
-                    }
-                  });
-                  dayExps.forEach(e=>{
-                    switch(e.expenseStatus){
-                      case 'Paid Cash': cE+=parseFloat(e.expenseCost); break;
-                      case 'Paid Online': oE+=parseFloat(e.expenseCost); break;
-                      case 'Half Cash + Half Online':
-                        if(e.expenseDetail1) cE+=parseFloat(e.expenseDetail1);
-                        if(e.expenseDetail2) oE+=parseFloat(e.expenseDetail2);
-                        break;
-                      case 'Half Cash + Not Paid':
-                        if(e.expenseDetail1) cE+=parseFloat(e.expenseDetail1);
-                        break;
-                      case 'Half Online + Not Paid':
-                        if(e.expenseDetail1) oE+=parseFloat(e.expenseDetail1);
-                        break;
-                    }
-                  });
-                  
-                  const finalCash  = openingBal + cS - cE;
-                %>
-                <p data-key="totalSales">Total Sales: <%= tS.toFixed(2) %></p>
-                <p data-key="totalProfit">Total Profit: <%= tP.toFixed(2) %></p>
-                <p data-key="totalCashSales">Total Cash Sales: <%= cS.toFixed(2) %></p>
-                <p data-key="totalOnlineSales">Total Online Sales: <%= oS.toFixed(2) %></p>
-                <p data-key="totalNotPaidSales">Total Not Paid Sales: <%= nS.toFixed(2) %></p>
-                <p data-key="totalCashExpenses">Total Cash Expenses: <%= cE.toFixed(2) %></p>
-                <p data-key="totalOnlineExpenses">Total Online Expenses: <%= oE.toFixed(2) %></p>
-                <p data-key="finalCash">Final Cash: <%= finalCash.toFixed(2) %></p>
-              </div>
-            </div>
+        <!-- Summary Box -->
+<div class="summaryBox">
+  <button class="toggleSummary" data-date="<%= date %>">
+    <i class="fas fa-chart-pie"></i> Show Summary
+  </button>
+  <div class="summaryContent" id="summary_<%= date %>" style="display:none;">
+    <% 
+      let tS=0, tP=0, cS=0, oS=0, nS=0, cE=0, oE=0, gS=0;
+      daySales.forEach(s=>{
+        const amt = s.retailPrice * s.saleQuantity;
+        tS += amt; 
+        tP += s.profit;
+        gS += parseFloat(s.gstPayable || 0);              // ← accumulate GST
+        switch(s.status){
+          case 'Paid Cash': cS+=amt; break;
+          case 'Paid Online': oS+=amt; break;
+          case 'Not Paid': nS+=amt; break;
+          case 'Half Cash + Half Online':
+            if(s.paymentDetail1) cS+=parseFloat(s.paymentDetail1);
+            if(s.paymentDetail2) oS+=parseFloat(s.paymentDetail2);
+            break;
+          case 'Half Cash + Not Paid':
+            if(s.paymentDetail1) cS+=parseFloat(s.paymentDetail1);
+            if(s.paymentDetail2) nS+=parseFloat(s.paymentDetail2);
+            break;
+          case 'Half Online + Not Paid':
+            if(s.paymentDetail1) oS+=parseFloat(s.paymentDetail1);
+            if(s.paymentDetail2) nS+=parseFloat(s.paymentDetail2);
+            break;
+        }
+      });
+      dayExps.forEach(e=>{
+        switch(e.expenseStatus){
+          case 'Paid Cash': cE+=parseFloat(e.expenseCost); break;
+          case 'Paid Online': oE+=parseFloat(e.expenseCost); break;
+          case 'Half Cash + Half Online':
+            if(e.expenseDetail1) cE+=parseFloat(e.expenseDetail1);
+            if(e.expenseDetail2) oE+=parseFloat(e.expenseDetail2);
+            break;
+          case 'Half Cash + Not Paid':
+            if(e.expenseDetail1) cE+=parseFloat(e.expenseDetail1);
+            break;
+          case 'Half Online + Not Paid':
+            if(e.expenseDetail1) oE+=parseFloat(e.expenseDetail1);
+            break;
+        }
+      });
+      
+      const finalCash = openingBal + cS - cE;
+    %>
+    <p data-key="totalSales">Total Sales: <%= tS.toFixed(2) %></p>
+    <p data-key="totalProfit">Total Profit: <%= tP.toFixed(2) %></p>
+    <p data-key="totalCashSales">Total Cash Sales: <%= cS.toFixed(2) %></p>
+    <p data-key="totalOnlineSales">Total Online Sales: <%= oS.toFixed(2) %></p>
+    <p data-key="totalNotPaidSales">Total Not Paid Sales: <%= nS.toFixed(2) %></p>
+    <p data-key="totalCashExpenses">Total Cash Expenses: <%= cE.toFixed(2) %></p>
+    <p data-key="totalOnlineExpenses">Total Online Expenses: <%= oE.toFixed(2) %></p>
+    <p data-key="totalGstPayable">Total GST Payable: <%= gS.toFixed(2) %></p>      <!-- ★ new -->
+    <p data-key="finalCash">Final Cash: <%= finalCash.toFixed(2) %></p>
+  </div>
+</div>
+
           </div>
           <% }); %>
         <% } %>
@@ -694,8 +698,6 @@ btnCancel.innerHTML = '<i class="fas fa-times"></i>';
 
   return; // ✅ handled
 }
-
-
 /* ─────────────────────────────────────────────────────────────
    EXPENSE status inline-edit  (mirrors the sale handler above)
    ──────────────────────────────────────────────────────────── */
