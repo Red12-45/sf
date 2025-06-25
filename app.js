@@ -7,24 +7,16 @@ const session = require('express-session');
 const { createClient } = require('redis');       // using Node Redis client
 const { RedisStore } = require('connect-redis'); // import RedisStore from connect-redis
 // ─────────── security deps (NEW) ───────────
-const helmet = require('helmet');              // 🔒
 const rateLimit = require('express-rate-limit');  // 🔒
 const csrf = require('csurf');               // 🔒
-const { body, validationResult } = require('express-validator'); // 🔒
 const favicon = require('serve-favicon');
 const Razorpay = require('razorpay');
-const ExcelJS = require('exceljs');      
 const compression = require('compression');
 const cors = require('cors');          // NEW
-const http = require('http');
-const cluster = require('cluster');
-const os = require('os');
-
 const crypto     = require('crypto');      
 const nodemailer = require('nodemailer'); 
 
 require('dotenv').config();
-
 // ─── Logger (Pino) ──────────────────────────────────────────────
 const pino   = require('pino');
 const logger = pino({
@@ -36,7 +28,6 @@ const logger = pino({
         options: { colorize: true, translateTime: 'SYS:standard' } }
     : undefined
 });
-
 // ─── HTTP-logger middleware (after the logger exists) ───────────
 const pinoHttp = require('pino-http')({
   logger,
@@ -97,7 +88,6 @@ const cacheGet = async key => {
     return null;                             // fall back to live DB read
   }
 };
-
 const cacheSet = async (key, value, ttlSec = 300) => {
   try {
     await redisClient.set(
@@ -109,7 +99,6 @@ const cacheSet = async (key, value, ttlSec = 300) => {
     logger.warn({ err, key }, 'Redis cache → SET failed');
   }
 };
-
 const cacheDel = async key => {
   try { await redisClient.del(cacheKey(key)); }
   catch (err) { logger.warn({ err, key }, 'Redis cache → DEL failed'); }
@@ -120,11 +109,11 @@ const serviceAccount = require('./serviceAccountKey.json');
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-
 /* ─────────── Express base ─────────── */
 const app = express();
-app.disable('x-powered-by');              // hide Express fingerprint
-app.use(helmet.hidePoweredBy()); 
+
+/* ─────────── HELMET SECURITY MIDDLEWARE (externalised) ─────────── */
+require('./routes/helmetConfig')(app);
 
 /* ─── FAST-PATH: static assets & favicon (Brotli/Gzip first) ─── */
 const expressStaticGzip = require('express-static-gzip');
@@ -154,8 +143,6 @@ app.use((req, res, next) => {
 
 app.set('trust proxy', 1);     // behind Nginx / Cloudflare / Render / etc.
 
-// later, plug it into Express
-
 // Force HTTPS behind a proxy / load-balancer
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === 'production' &&
@@ -177,8 +164,7 @@ const redisClient = createClient({
     reconnectStrategy: retries => Math.min(retries * 100, 30_000),
     tls: process.env.REDIS_URL.startsWith('rediss://') ? {} : undefined
   }
-});
-
+})
 redisClient
   // log “ready” only **once** to stop startup spam
   .once('ready', () => logger.info('✅ Redis ready (initial connection)'))
@@ -217,7 +203,6 @@ const redisStore  = new RedisStore({
   ttl         : ONE_YEAR / 1000,      // seconds
   disableTouch: false                 // ← keep
 });
-
 const makeSession = (store) => session({
   store,
   secret: process.env.SESSION_SECRET,
@@ -231,18 +216,14 @@ const makeSession = (store) => session({
     sameSite: 'strict'
   }
 });
-
 const redisSession   = makeSession(redisStore);
 const memorySession  = makeSession(memoryStore);
-
 /* flag toggled by Redis client events */
 let useRedis = true;
-
 /* hot-swap middleware – runs on every request */
 app.use((req, res, next) => {
   (useRedis ? redisSession : memorySession)(req, res, next);
 });
-
 /* wire up Redis state changes */
 redisClient
   .on('ready', () => {
@@ -261,7 +242,6 @@ redisClient
     /* network blips turn the flag off; other code already logs the error */
     useRedis = false;
   });
-
 /* ─────────── keep sub-user session in sync ─────────── */
 app.use(async (req, res, next) => {
   if (req.session?.user && !req.session.user.isMaster) {
@@ -278,7 +258,6 @@ app.use(async (req, res, next) => {
   }
   next();
 });
-
 app.use((req, res, next) => {
   // make the logged-in user (if any) available to every EJS view
   res.locals.user = req.session?.user || null;
@@ -291,7 +270,6 @@ const buildId = process.env.RENDER_GIT_COMMIT || Date.now().toString();
 app.use((req, res, next) => {
   // expose buildId to every EJS template as `v`
   res.locals.v = buildId;
-
   // disable caching for HTML responses so templates always re-render with the newest `v`
   if (req.accepts('html')) {
     res.setHeader('Cache-Control',
@@ -299,57 +277,8 @@ app.use((req, res, next) => {
     res.setHeader('Pragma',  'no-cache');
     res.setHeader('Expires', '0');
   }
-
   next();
 });
-
-/* ─────────── Helmet – strict CSP ─────────── */
-app.use(
-helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          
-          "https://cdnjs.cloudflare.com",
-          "https://cdn.jsdelivr.net",
-          "https://www.gstatic.com",
-          // razorpay checkout script
-          "https://checkout.razorpay.com",
-        ],
-        styleSrc: [
-          "'self'",
-          "'unsafe-inline'",
-          "https://cdnjs.cloudflare.com",
-          "https://fonts.googleapis.com"
-        ],
-        connectSrc: [
-          "'self'",
-          "https://*.firebaseio.com",
-          "https://firestore.googleapis.com",
-          // for XHR/secure calls back to Razorpay
-          "https://*.razorpay.com"
-        ],
-        imgSrc: ["'self'", "data:", "blob:"],
-        fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "https://fonts.gstatic.com"],
-        // **here** add the API domain so the checkout iframe can load
-        frameSrc: [
-          "'self'",
-          "https://checkout.razorpay.com",
-          "https://api.razorpay.com"
-        ],
-        // if you want to be extra-sure for legacy browsers:
-        childSrc: [
-          "'self'",
-          "https://checkout.razorpay.com",
-          "https://api.razorpay.com"
-        ]
-      }
-    }
-  })
-);
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
@@ -360,8 +289,6 @@ app.use(cors({
   credentials : true
 }));
 
-app.use(helmet.hsts({ maxAge: 63072000, includeSubDomains: true })); // 2 years
-
 // Global rate-limit – hits every sensitive endpoint
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 min
@@ -369,7 +296,6 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
-
 app.use(['/api', '/login', '/register'], apiLimiter);
 
 /* extra lock on high-risk routes */
@@ -404,7 +330,6 @@ app.use((err, req, res, next) => {
   if (transient.includes(err.code)) {
     return res.status(503).send('Service temporarily unavailable – retry in a minute.');
   }
-
   res.status(500).send('Internal Server Error');
 });
 
@@ -428,7 +353,6 @@ if (process.env.NODE_ENV === 'production') app.set('view cache', true);
 
 // ─────────── helpers ───────────
 const pad = n => String(n).padStart(2, '0');
-
 /* NEW ➜ case-insensitive, space-insensitive key
    — now *never* crashes if s is empty/undefined — */
 const normalizeName = s =>
@@ -442,11 +366,9 @@ const getCategories = async accountId => {
   const snap = await db.collection('products')
                        .where('accountId', '==', accountId)
                        .get();
-
   const uniq = [...new Set(
     snap.docs.map(d => d.data().category).filter(Boolean)
   )];
-
   return uniq;                          // straight from DB
 };
 
@@ -455,80 +377,13 @@ const getUnits = async accountId => {
   const snap = await db.collection('products')
                        .where('accountId', '==', accountId)
                        .get();
-
   const uniq = [...new Set(
     snap.docs
         .map(d => (d.data().unit || '').toLowerCase())
         .filter(Boolean)
   )];
-
   return uniq;                          // no Redis layer
 };
-
-/* ────────────────────────────────────────────────────────────────
-   ensureRecurringSnapshot(accountId, month)      ★ UPDATED 2025-06-21 ★
-   • Creates a snapshot row for every template that *should* exist
-     in the given month **but is missing**.
-   • A template that carries   removalMonth: 'YYYY-MM'
-     is considered “retired” from that month onwards.
-   ----------------------------------------------------------------*/
-async function ensureRecurringSnapshot(accountId, month) {
-  /* 0️⃣  Build a set of templateIds that are already snapshotted */
-  const existingSnap = await db.collection('recurringMonthly')
-                               .where('accountId', '==', accountId)
-                               .where('month',      '==', month)
-                               .get();
-  const have = new Set(existingSnap.docs.map(d => d.data().templateId));
-
-  /* 1️⃣  Work out first day of NEXT month (for “future” filter) */
-  const [y, m] = month.split('-');
-  let nextM = parseInt(m, 10) + 1,
-      nextY = parseInt(y, 10);
-  if (nextM > 12) { nextM = 1; nextY++; }
-  const nextMonthStart = new Date(
-    `${nextY}-${String(nextM).padStart(2, '0')}-01T00:00:00Z`
-  );
-
-  /* 2️⃣  Pull every master template for this account */
-  const tplSnap = await db.collection('recurringExpenses')
-                          .where('accountId', '==', accountId)
-                          .get();
-
-  const batch = db.batch();
-
-  tplSnap.docs.forEach(doc => {
-    const d = doc.data();
-
-    /* ── 🆕  Skip templates retired in, or before, this month ── */
-    if (d.removalMonth && d.removalMonth <= month) return;
-
-    /* Skip templates created AFTER this month finishes           */
-    const created = d.createdAt
-      ? (typeof d.createdAt.toDate === 'function'
-          ? d.createdAt.toDate()
-          : new Date(d.createdAt))
-      : new Date(0);
-    if (created >= nextMonthStart) return;
-
-    /* Skip if we already have a snapshot row for this template   */
-    if (have.has(doc.id)) return;
-
-    const id = `${accountId}_${month}_${doc.id}`;
-
-batch.set(db.collection('recurringMonthly').doc(id),{
-  accountId,
-  month,
-  templateId   : doc.id,
-  expenseReason: d.expenseReason,
-  expenseCost  : 0,           // user will enter the real value later
-  expenseStatus: 'Not Paid',
-  createdAt    : new Date()
-});
-
-  });
-
-  if (batch._ops?.length) await batch.commit();   // ← only when needed
-}
 
 /* ─────────── DAILY SUMMARY (used by Ajax & dashboard) ─────────── */
 
@@ -537,7 +392,6 @@ async function computeDailySummary(accountId, saleDate) {
   const ck = `dailySum_${accountId}_${saleDate}`;
   const cached = await cacheGet(ck);
   if (cached) return cached;            // hit ➜ <0.5 ms path
-
   /* 1. ORIGINAL Firestore work (unchanged logic) */
   const [salesSnap, expSnap, obDoc] = await Promise.all([
     db.collection('sales')
@@ -550,23 +404,19 @@ async function computeDailySummary(accountId, saleDate) {
       .get(),
     db.collection('openingBalances').doc(`${accountId}_${saleDate}`).get()
   ]);
-
   const s = {
     totalProfit:0, totalSales:0,
     totalCashSales:0, totalOnlineSales:0, totalNotPaidSales:0,
     totalCashExpenses:0, totalOnlineExpenses:0,
     totalGstPayable:0
   };
-
   salesSnap.forEach(doc => {
     const d   = doc.data();
     const amt = d.totalSale !== undefined
                   ? +parseFloat(d.totalSale)
                   : d.retailPrice * d.saleQuantity;
-
     s.totalProfit += d.profit;
     s.totalSales  += amt;
-
     switch (d.status) {
       case 'Paid Cash':               s.totalCashSales   += amt; break;
       case 'Paid Online':             s.totalOnlineSales += amt; break;
@@ -586,7 +436,6 @@ async function computeDailySummary(accountId, saleDate) {
     }
     s.totalGstPayable += (d.gstPayable || 0);
   });
-
   expSnap.forEach(doc => {
     const d = doc.data();
     switch (d.expenseStatus) {
@@ -609,22 +458,17 @@ async function computeDailySummary(accountId, saleDate) {
   s.finalCash      = +((+openingBal) + s.totalCashSales - s.totalCashExpenses).toFixed(2);
   s.totalSales     = +s.totalSales.toFixed(2);
   s.totalProfit    = +s.totalProfit.toFixed(2);
-
   const result = { summary: s, openingBalance: openingBal };
-
   /* 2. STORE in Redis (30 s TTL) */
   await cacheSet(ck, result, 30);
-
   return result;
 }
-
 /* ────────────────────────────────────────────────────────────────
    computeMonthTotal(accountId, month)          ★ NEW 2025-06-21 ★
    Returns the grand total (regular + recurring) for the month,
    skipping rows whose status is “Not Paid”.
    ----------------------------------------------------------------*/
 async function computeMonthTotal(accountId, month) {
-
   const start = `${month}-01`;
   const [y, m] = month.split('-');
   let nextM = parseInt(m, 10) + 1, nextY = parseInt(y, 10);
@@ -637,20 +481,16 @@ async function computeMonthTotal(accountId, month) {
     .where('saleDate',  '>=', start)
     .where('saleDate',  '<',  end)
     .get();
-
 const expenseTotal = expSnap.docs
   .reduce((s, d) => s + paidPortion(d.data()), 0);
-
   /* 2️⃣  Pull this month’s RECURRING snapshot rows */
   const recSnap = await db.collection('recurringMonthly')
     .where('accountId','==',accountId)
     .where('month',     '==', month)
     .get();
-
 const recTotal = recSnap.docs
   .filter(d => !d.data().deleted)
   .reduce((s, d) => s + paidPortion(d.data()), 0);
-
   return +(expenseTotal + recTotal).toFixed(2);
 }
 
@@ -664,7 +504,6 @@ function paidPortion (row) {
   switch (status) {
     case 'Not Paid':
       return 0;
-
     case 'Half Cash + Not Paid':
     case 'Half Online + Not Paid':
       // Use the explicit paid half if supplied,
@@ -672,29 +511,23 @@ function paidPortion (row) {
       return row.expenseDetail1 !== undefined
              ? (+row.expenseDetail1 || 0)
              : cost / 2;
-
     // Everything else is fully settled
     default:
       return cost;
   }
 }
-
 // processSale — creates one sale, updates stock/batches and
 //               returns the saved document               (AJAX + full-page)
 // ────────────────────────────────────────────────────────────────
 async function processSale(body, user) {
-
   /* 0️⃣  PRE-WORK ────────── */
   const accountId = user.accountId;
-
   // (only now it’s safe to run a separate Firestore tx)
   if (!body.invoiceNo || !body.invoiceNo.trim()) {
     body.invoiceNo = await getNextInvoiceNo(accountId);
   }
-
   /* --------------- 1.  MAIN TRANSACTION --------------- */
   const saleData = await db.runTransaction(async tx => {
-
     let {
       productId,
       customProductId,
@@ -707,7 +540,6 @@ async function processSale(body, user) {
       paymentDetail1,
       paymentDetail2
     } = body;
-
     /* 🔒 Sanitise free-text note (≤200 chars, no leading/trailing space) */
     extraInfo = extraInfo ? extraInfo.toString().substring(0, 200).trim() : '';
   saleQuantity = +parseFloat(saleQuantity);
@@ -716,7 +548,6 @@ if (!Number.isFinite(saleQuantity) || saleQuantity <= 0) {
   throw new Error('Quantity must be greater than zero');
 }
 const totalSale = +parseFloat(totalSaleInput);
-
     /* ――― 1. Load product row ――― */
     const selectedProductId = (customProductId?.trim()) ? customProductId : productId;
     const productRef        = db.collection('products').doc(selectedProductId);
@@ -731,33 +562,27 @@ const totalSale = +parseFloat(totalSaleInput);
                          .where('remainingQuantity','>',0)
                          .orderBy('batchDate','asc');
     const batchSnap = await tx.get(batchQuery);
-
     let remaining      = saleQuantity;
     let totalWholesale = 0;
     const batchesUsed  = [];
-
     for (const b of batchSnap.docs) {
       if (remaining <= 0) break;
       const d    = b.data();
       const take = Math.min(d.remainingQuantity, remaining);
-
       tx.update(b.ref, {
         quantity         : admin.firestore.FieldValue.increment(-take),
         remainingQuantity: +(d.remainingQuantity - take).toFixed(3)
       });
-
       totalWholesale += d.purchasePrice * take;
       batchesUsed.push({ id: b.id, qtyUsed: take });
       remaining -= take;
     }
     if (remaining > 0) throw new Error('Not enough stock');
-
     /* ――― 3. Profit & GST math ――― */
     const avgWholesale  = +(totalWholesale / saleQuantity).toFixed(2);
     const retailPerUnit = +(totalSale     / saleQuantity).toFixed(2);
     const profitPerUnit = +(retailPerUnit - avgWholesale).toFixed(2);
     const totalProfit   = +(profitPerUnit * saleQuantity).toFixed(2);
-
     let outputTax = 0, inputTax = 0, gstPayable = 0;
 if (typeof product.inclusiveTax === 'number') {
   const r = product.inclusiveTax;
@@ -797,11 +622,9 @@ if (typeof product.inclusiveTax === 'number') {
     tx.set(saleRef, row);
 
     /* 5.  🔄  Stock recalc moved OUTSIDE the transaction  */
-
     row.id = saleRef.id;            // bubble ID to caller
     return row;
   });
-
   /* --------------- 2.  POST-COMMIT UPDATE --------------- */
   // Re-compute parent-product stock *after* the transaction closes
   await recalcProductFromBatches(saleData.productId);
@@ -813,21 +636,17 @@ if (typeof product.inclusiveTax === 'number') {
 async function processExpense(body, user) {
   const accountId = user.accountId;
   const saleDate  = body.saleDate;
-
   // Normalise to arrays so single-row & multi-row both work
   const reasons  = Array.isArray(body.expenseReason) ? body.expenseReason  : [body.expenseReason];
   const costs    = Array.isArray(body.expenseCost)   ? body.expenseCost    : [body.expenseCost];
   const statuses = Array.isArray(body.expenseStatus) ? body.expenseStatus  : [body.expenseStatus];
   const d1s      = Array.isArray(body.expenseDetail1)? body.expenseDetail1 : [body.expenseDetail1];
   const d2s      = Array.isArray(body.expenseDetail2)? body.expenseDetail2 : [body.expenseDetail2];
-
   /* 🔄 Validate & trim once */
   reasons .forEach((v,i)=>reasons [i]=(v||'').toString().substring(0,100).trim());
   statuses.forEach((v,i)=>statuses[i]=(v||'').toString().substring(0,40) .trim());
-
   const batch = db.batch();
   let lastRef = null;
-
   for (let i = 0; i < reasons.length; i++) {
     const ref = db.collection('expenses').doc();   // pre-allocate ID
     lastRef   = ref;
@@ -843,10 +662,8 @@ async function processExpense(body, user) {
     };
     batch.set(ref, data);
   }
-
   await batch.commit();
   await cacheDel(`dailySum_${accountId}_${saleDate}`);
-
   return (await lastRef.get()).data();             // keep Ajax contract
 }
 
@@ -870,10 +687,8 @@ app.use((req, res, next) => {
 const requireMaster   = (req,res,next)=>
   req.session.user && req.session.user.isMaster
     ? next() : res.status(403).send('Access denied');
-
 const isAuthenticated = (req,res,next)=>
   req.session && req.session.user ? next() : res.redirect('/login');
-
 const restrictRoute   = routeId => (req,res,next)=>{
   if(req.session.user.isMaster) return next();
   if(req.session.lockedRoutes?.includes(routeId))
@@ -895,50 +710,22 @@ const restrictAction = (routeId, action) => (req, res, next) => {
 async function getNextInvoiceNo(accountId) {
   const SHARDS = 10;
   const rand   = Math.floor(Math.random() * SHARDS).toString(); // '0' … '9'
-
   /* 1️⃣  Increment one shard */
   const shardRef = db
     .collection('accounts').doc(accountId)
     .collection('counterShards').doc(rand);
-
   await shardRef.set(
     { value: admin.firestore.FieldValue.increment(1) },
     { merge: true }
   );
-
   /* 2️⃣  Read all shards and sum */
   const snap = await db
     .collection('accounts').doc(accountId)
     .collection('counterShards').get();
-
   const total = snap.docs.reduce((s, d) => s + (+d.data().value || 0), 0);
-
   /* 3️⃣  Format */
   return 'INV-' + String(total).padStart(6, '0');
 }
-
-app.post('/api/invoice/start', isAuthenticated, async (req, res) => {
-  try {
-    if (!req.session.currentInvoiceNo) {
-      req.session.currentInvoiceNo =
-        await getNextInvoiceNo(req.session.user.accountId);
-    }
-    return res.json({ success: true, invoiceNo: req.session.currentInvoiceNo });
-  } catch (err) {
-    console.error('/api/invoice/start error:', err);
-    return res.json({ success: false, error: err.toString() });
-  }
-});
-app.get('/invoice/finish', isAuthenticated, (req, res) => {
-  delete req.session.currentInvoiceNo;
-  res.redirect('/dashboard');
-});
-
-/* ───────────  AJAX “Finish Invoice”  ─────────── */
-app.post('/api/invoice/finish', isAuthenticated, (req, res) => {
-  delete req.session.currentInvoiceNo;      // clear the session flag
-  return res.json({ success: true });
-});
 
 /* ─────────── Razorpay ─────────── */
 const razorpay = new Razorpay({
@@ -958,501 +745,27 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-/* ─────────── AUTHENTICATION ROUTES ─────────── */
-// GET /register
-app.get('/register', (req, res) => {
-  if (req.session && req.session.user) return res.redirect('/');
-  res.render('register', { errorMessage: null, oldInput: {} });
-});
-
-// POST /register
-app.post(
-  '/register',
-  [
-  body('name')
-    .isLength({ min: 2, max: 60 })
-    .withMessage('Name must be at least 2 characters.')
-    .trim().escape(),
-
-  body('email')
-    .isEmail()
-    .withMessage('Invalid email address.')
-    .normalizeEmail(),
-
-  body('phone')
-    .optional({ checkFalsy: true })
-    .isMobilePhone('en-IN')
-    .withMessage('Invalid Indian phone number.')
-    .trim().escape(),
-
-  body('address')
-    .isLength({ max: 200 })
-    .withMessage('Address too long.')
-    .trim().escape(),
-
-  body('location')
-    .optional({ checkFalsy: true })
-    .trim().escape(),
-
-  /* ─── NEW – optional GST Number (15-char GSTIN) ─── */
-  body('gstNumber')
-    .optional({ checkFalsy: true })
-    .matches(/^[0-9A-Z]{15}$/)
-    .withMessage('GST number must be 15 characters (digits/A-Z).'),
-
-  body('password')
-    .isStrongPassword({
-      minLength : 8,
-      minLowercase: 1,
-      minUppercase: 1,
-      minNumbers  : 1,
-      minSymbols  : 1
-    })
-    .withMessage('Password must be 8 chars incl. upper, lower, number & symbol.'),
-
-  body('confirmPassword')
-    .custom((val, { req }) => {
-      if (val !== req.body.password)
-        throw new Error('Passwords do not match');
-      return true;
-    })
-],
-
-  async (req, res) => {
-    const errors = validationResult(req);
-    const {
-  name, email, phone, address, location,
-  businessName, gstNumber = '', password
-} = req.body;
-
-    const oldInput = { name, email, phone, address, location, businessName  };
-
-    if (!errors.isEmpty()) {
-      return res.status(400).render('register', {
-        errorMessage: errors.array().map(e => e.msg).join('<br>'),
-        oldInput
-      });
-    }
-
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const exists = await db.collection('users')
-        .where('email', '==', normalizedEmail)
-        .limit(1).get();
-      if (!exists.empty) {
-        return res.status(400).render('register', {
-          errorMessage: 'User already exists',
-          oldInput
-        });
-      }
-
-          // 1️⃣ Hash password and create user
-      const hashed = await bcrypt.hash(password, 10);
-      const userData = {
-  name,
-  email        : normalizedEmail,
-  phone,
-  address,
-  location,
-  businessName,
-  ...(gstNumber && { gstNumber: gstNumber.trim().toUpperCase() }), // ✅ optional
-  password     : hashed,
-  isMaster     : true,
-  createdAt    : new Date()
-};
-
-const userRef = await db.collection('users').add(userData);
-
-    // 2️⃣ Set accountId AND a 30-day trial expiry
-const trialExpiry = new Date();
-trialExpiry.setDate(trialExpiry.getDate() + 30);
-await userRef.update({
-  accountId: userRef.id,
-  subscriptionExpiry: trialExpiry
-});
-
-/* ── NEW: pre-create 10 counter shards ── */
-const shardBatch = db.batch();
-for (let i = 0; i < 10; i++) {
-  const shardRef = db
-    .collection('accounts').doc(userRef.id)
-    .collection('counterShards').doc(String(i));
-  shardBatch.set(shardRef, { value: 0 }, { merge: true });
-}
-await shardBatch.commit();
-
-
-      // 3️⃣ Done → send them to login
-      res.redirect('/login');
-
-    } catch (err) {
-      console.error(err);
-      return res.status(500).render('register', {
-        errorMessage: 'Something went wrong. Please try again.',
-        oldInput
-      });
-    }
-  }
-);
-
-// ─────────── brute‑force protection ───────────
-const MAX_LOGIN_ATTEMPTS  = 5;      // failures before block
-const BLOCK_TIME_SECONDS  = 15 * 60; // 15‑minute lock‑out
-
-/**
- * Returns current failure count for key.
- * key =   "bf:<identifier>"  (preferred)  when user types an email / sub‑user ID / phone
- *       or "bfip:<ip>"       (fallback)   when identifier missing/garbled
- */
-const getAttempts = async key =>
-  parseInt(await redisClient.get(key) || '0', 10);
-
-/** Increment failures and (re)set expiry. */
-const recordFailure = async key => {
-  const attempts = await redisClient.incr(key);
-  if (attempts === 1) await redisClient.expire(key, BLOCK_TIME_SECONDS);
-  return attempts;
-};
-
-/** On successful login → wipe the counter. */
-const clearFailures = async key => redisClient.del(key);
-
-// GET /login
-app.get('/login', (req, res) => {
-  if (req.session && req.session.user) {
-    return res.redirect('/');
-  }
-  // first time or after failure: no error, blank identifier
-  res.render('login', {
-    loginError: null,
-    identifier: ''
-  });
-});
-
-// POST /login  (brute-force + 🔒 validation)
-app.post(
-  '/login',
-  [
-    body('identifier')
-      .notEmpty()
-      .withMessage('Email / sub-user ID / phone is required.')
-      .trim().escape(),
-    body('password')
-      .notEmpty()
-      .withMessage('Password is required.')
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).render('login', {
-        loginError: errors.array()[0].msg,
-        identifier: req.body.identifier || ''
-      });
-    }
-    try {
-      let { identifier, password } = req.body;
-
-      // normalize identifier
-      if (identifier.includes('@')) identifier = identifier.trim().toLowerCase();
-
-      // pick key for brute-force table
-      const bruteKey = identifier ? `bf:${identifier}` : `bfip:${req.ip}`;
-
-      /* 1️⃣  Lock-out check (unchanged) */
-      const currentAttempts = await getAttempts(bruteKey);
-      if (currentAttempts >= MAX_LOGIN_ATTEMPTS) {
-  const ttlSecs = await redisClient.ttl(bruteKey);        // −1 or −2 ⇒ no TTL
-  const retryAfter = ttlSecs > 0
-      ? Math.ceil(ttlSecs / 60)                           // real time left
-      : Math.ceil(BLOCK_TIME_SECONDS / 60);               // default 15 min
-  return res.status(429).render('login', {
-    loginError: `Too many failed attempts. Try again in ${retryAfter} minute${retryAfter === 1 ? '' : 's'}.`,
-    identifier
-  });
-}
-
-      /* 2️⃣  Lookup user (unchanged) */
-      const [emailQ, subUserQ, phoneQ] = await Promise.all([
-        db.collection('users').where('email', '==', identifier).get(),
-        db.collection('users').where('subUserId', '==', identifier).get(),
-        db.collection('users').where('phone', '==', identifier).get()
-      ]);
-      const userDoc = !emailQ.empty
-        ? emailQ.docs[0]
-        : !subUserQ.empty
-          ? subUserQ.docs[0]
-          : !phoneQ.empty
-            ? phoneQ.docs[0]
-            : null;
-
-      if (!userDoc) {
-        await recordFailure(bruteKey);
-        const triesLeft = MAX_LOGIN_ATTEMPTS - (await getAttempts(bruteKey));
-        return res.status(400).render('login', {
-          loginError: triesLeft > 0
-            ? `User not found. ${triesLeft} attempt${triesLeft === 1 ? '' : 's'} remaining.`
-            : 'Too many failed attempts. Please try again later.',
-          identifier
-        });
-      }
-
-      /* 3️⃣  Password check (unchanged) */
-      const userData = userDoc.data();
-      const validPw = await bcrypt.compare(password, userData.password);
-      if (!validPw) {
-        const tries = await recordFailure(bruteKey);
-        const left = MAX_LOGIN_ATTEMPTS - tries;
-        return res.status(400).render('login', {
-          loginError: left > 0
-            ? `Invalid password – ${left} attempt${left === 1 ? '' : 's'} remaining.`
-            : 'Too many failed attempts. Please try again later.',
-          identifier
-        });
-      }
-
-      /* 4️⃣  Success – wipe failures */
-      await clearFailures(bruteKey);
-
-      /* 5️⃣  Subscription logic (unchanged) */
-      let subscriptionExpiry = userData.subscriptionExpiry
-        ? (typeof userData.subscriptionExpiry.toDate === 'function'
-            ? userData.subscriptionExpiry.toDate()
-            : new Date(userData.subscriptionExpiry))
-        : null;
-
-      if (!userData.isMaster) {
-        const masterDoc = await db.collection('users')
-                                  .doc(userData.accountId).get();
-        if (masterDoc.exists && masterDoc.data().subscriptionExpiry) {
-          const d = masterDoc.data().subscriptionExpiry;
-          subscriptionExpiry = typeof d.toDate === 'function' ? d.toDate() : new Date(d);
-        }
-      }
-
-      /* 6️⃣  Attach to session & redirect (unchanged) */
-         /* 6️⃣  Attach to session & redirect (with businessName) */
-   req.session.user = {
-     id              : userDoc.id,
-     name            : userData.name,
-     email           : userData.email,
-     businessName    : userData.businessName||'',  // ← added
-     isMaster        : userData.isMaster || false,
-     accountId       : userData.accountId || userDoc.id,
-     subscriptionExpiry
-   };
-
-   // If this is a sub-user, overwrite businessName with the master’s
-   if (!req.session.user.isMaster) {
-     const masterDoc = await db.collection('users')
-                               .doc(req.session.user.accountId).get();
-     if (masterDoc.exists && masterDoc.data().businessName) {
-       req.session.user.businessName = masterDoc.data().businessName;
-     }
-   }
-
-      if (!req.session.user.isMaster) {
-  const permDoc = await db.collection('permissions')
-                          .doc(req.session.user.accountId).get();
-  const data = permDoc.exists ? permDoc.data() : {};
-  req.session.lockedRoutes    = data.lockedRoutes    || [];
-  req.session.blockedActions  = data.blockedActions  || {};   // ← NEW
-}
-      res.redirect('/');
-
-    } catch (error) {
-      console.error(error);
-      res.status(500).render('login', {
-        loginError: 'Something went wrong—please try again.',
-        identifier: req.body.identifier || ''
-      });
-    }
-  }
-);
-
-// GET /logout
-app.get('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
-});
-// GET /customerservice
-app.get('/customerservice', (req, res) => res.render('cs'));
-
-// GET /documentation
-app.get('/documentation', (req, res) => res.render('documentations'));
+const registerRoutes = require('./routes/register');
+app.use('/', registerRoutes);
+const loginRoutes = require('./routes/login')(redisClient);
+app.use('/', loginRoutes);
 
 /* ─────────── USER MANAGEMENT ROUTES (Master Only) ─────────── */
-// GET /create-user
-app.get('/create-user', isAuthenticated, async (req, res) => {
-  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
-  try {
-    const snapshot = await db.collection('users')
-      .where('accountId','==',req.session.user.accountId)
-      .get();
-    const users = snapshot.docs.map(doc => {
-      const d = doc.data();
-      return { id: doc.id, name: d.name, email: d.email, isMaster: d.isMaster, subUserId: d.subUserId };
-    });
-    res.render('createuser', { users });
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
-});
+const userManagementRoutes = require('./routes/userManagement');
+app.use('/', userManagementRoutes);
 
-// POST /create-user
-app.post('/create-user', isAuthenticated, async (req, res) => {
-  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
-  try {
-    const subUsersQuery = await db.collection('users')
-      .where('accountId','==',req.session.user.accountId)
-      .where('isMaster','==',false)
-      .get();
-    if (subUsersQuery.size >= 2) return res.status(400).send('Sub‑user limit reached. Maximum 2 sub‑users allowed.');
-
-    const { name, password, confirmPassword, subUserId } = req.body;
-    if (password !== confirmPassword) return res.status(400).send('Passwords do not match');
-    if (!subUserId.trim()) return res.status(400).send('Sub‑user ID is required');
-
-    const exist = await db.collection('users')
-      .where('subUserId','==',subUserId)
-      .where('accountId','==',req.session.user.accountId)
-      .get();
-    if (!exist.empty) return res.status(400).send('Sub‑user ID already exists.');
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await db.collection('users').add({
-      name, password: hashedPassword, isMaster: false,
-      accountId: req.session.user.accountId, subUserId,
-      createdAt: new Date()
-    });
-    res.redirect('/');
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
-});
-
-// POST /edit-user
-app.post('/edit-user', isAuthenticated, async (req, res) => {
-  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
-  try {
-    const { userId, name, password, confirmPassword } = req.body;
-    if (password && password !== confirmPassword) return res.status(400).send('Passwords do not match');
-
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists || userDoc.data().accountId !== req.session.user.accountId)
-      return res.status(403).send('Access denied');
-
-    const updateData = { name };
-    if (password) updateData.password = await bcrypt.hash(password, 10);
-
-    await userRef.update(updateData);
-    res.redirect('/create-user');
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
-});
-
-// POST /delete-user
-app.post('/delete-user', isAuthenticated, async (req, res) => {
-  if (!req.session.user.isMaster) return res.status(403).send('Access denied');
-  try {
-    const { userId } = req.body;
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists || userDoc.data().accountId !== req.session.user.accountId)
-      return res.status(403).send('Access denied');
-    await userRef.delete();
-    res.redirect('/create-user');
-  } catch (error) {
-    res.status(500).send(error.toString());
-  }
-});
-
-// ─────────── PERMISSION MANAGEMENT (Master Only) ───────────
-// GET /permission
-app.get('/permission',
+/* ───── Permission routes (factory) ───── */
+const makePermissionRoutes = require('./routes/permission');   // step 1 – import factory
+const permissionRoutes = makePermissionRoutes({                // step 2 – build router
   isAuthenticated,
-  restrictRoute('/permission'),
-  async (req, res) => {
-    if (!req.session.user.isMaster) return res.status(403).send('Access denied');
-    try {
-      const doc = await db.collection('permissions')
-                          .doc(req.session.user.accountId)
-                          .get();
-      const lockedRoutes   = doc.exists ? (doc.data().lockedRoutes   || []) : [];
-      const blockedActions = doc.exists ? (doc.data().blockedActions || {}) : [];
-
-      const availableRoutes = [
-        { path:'/profit',        label:'Profit Report' },
-        { path:'/sales',         label:'Sales Report',   canLockActions:true },
-        { path:'/expense',       label:'Expense Report', canLockActions:true },
-        { path:'/add-product',   label:'Add Product' },
-        { path:'/view-products', label:'View Products',  canLockActions:true }
-      ];
-
-      res.render('permission', {
-        lockedRoutes,
-        blockedActions,
-        availableRoutes,
-        success : req.query.success,
-        user    : req.session.user          // <- ✅  add this line
-      });
-    } catch (e) {
-      res.status(500).send(e.toString());
-    }
+  restrictRoute,
+  cacheDel
 });
-/* ─────────── PERMISSION SAVE ─────────── */
-app.post(
-  '/permission',
-  isAuthenticated,
-  restrictRoute('/permission'),
-  async (req, res) => {
-    if (!req.session.user.isMaster)
-      return res.status(403).send('Access denied');
+app.use('/', permissionRoutes);
 
-    try {
-      /* 1️⃣  Whole-route locks --------------------------------------- */
-      let lockedRoutes = req.body.lockedRoutes || [];
-      if (!Array.isArray(lockedRoutes))
-        lockedRoutes = [lockedRoutes];
-
-      /* 2️⃣  Fine-grained locks  e.g.  "edit@@/sales" ----------------- */
-      const raw = Array.isArray(req.body.actionLocks)
-                    ? req.body.actionLocks
-                    : (req.body.actionLocks ? [req.body.actionLocks] : []);
-
-      const blockedActions = {};          // { '/sales': ['edit'], … }
-      raw.forEach(tok => {
-        const [action, route] = tok.split('@@');
-        if (!blockedActions[route]) blockedActions[route] = [];
-        blockedActions[route].push(action);
-      });
-
-      /* 3️⃣  Write — **NO merge**  (old routes disappear) ------------- */
-      await db.collection('permissions')
-              .doc(req.session.user.accountId)
-              .set({ lockedRoutes, blockedActions });   // ← important change
-
-      await cacheDel(`permissions_${req.session.user.accountId}`);
-      return res.redirect('/permission?success=1');
-
-    } catch (e) {
-      console.error('Save-permission error:', e);
-      return res.status(500).send(e.toString());
-    }
-  }
-);
-
-/* ─────────── PROTECTED APP ROUTES ─────────── */
 /* ─────────── PUBLIC LANDING ────────── */
-// (Insert this near the very top of your route section)
-app.get('/', (req, res) => {
-  // Logged-in users get forwarded to their dashboard
-  if (req.session?.user) return res.redirect('/dashboard');
-  // Everyone else sees the beautiful marketing page
-  res.render('landing');         // v is already supplied by the global middleware
-});
-
+const staticPages = require('./routes/staticPages');
+app.use('/', staticPages);
 
 /* ─────────── DASHBOARD (was GET "/") ─────────── */
 // -- identical logic, ONLY the path changed to "/dashboard" --
@@ -1464,9 +777,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })
     );
     const defaultDate = `${istNow.getFullYear()}-${pad(istNow.getMonth()+1)}-${pad(istNow.getDate())}`;
-
     const saleDate  = req.query.saleDate || defaultDate;
-
     // Fetch products + batches
     const productsSnap = await db.collection('products').where('accountId','==',accountId).get();
     const products = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1509,7 +820,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     ]);
     const sales = salesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const expenses = expSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
     let openingBalance=0, openingTime='', closingTime='';
     if (obDoc.exists) {
       const ob = obDoc.data();
@@ -1517,7 +827,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       openingTime    = ob.openingTime || '';
       closingTime    = ob.closingTime || '';
     }
-
     // Summaries
    let totalProfit = 0,
     totalSales = 0,
@@ -1525,7 +834,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     totalOnlineSales = 0,
     totalNotPaidSales = 0,
     totalGstPayable = 0;          // ➊  add this
-
     sales.forEach(s => {
       totalProfit += s.profit;
       const amt = s.retailPrice * s.saleQuantity;
@@ -1576,7 +884,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       const diff = new Date(req.session.user.subscriptionExpiry) - new Date();
       subscriptionRemaining = Math.max(Math.ceil(diff / (1000*60*60*24)), 0);
     }
-
    res.render('index', {
   products, sales, expenses, saleDate, categories,
   openingBalance, openingTime, closingTime,
@@ -1587,7 +894,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   totalGstPayable,
   subscriptionRemaining,
   user: req.session.user,
-
   /* NEW ▼ passes the in-progress number (or null) to every template */
   currentInvoiceNo : req.session.currentInvoiceNo || null
 });
@@ -1617,7 +923,6 @@ app.get(
           nextY = parseInt(y, 10);
       if (nextM > 12) { nextM = 1; nextY++; }
       const nextMonth = `${nextY}-${pad(nextM)}-01`;
-
 const todayYM   = `${currentYear}-${currentMonth}`;   // "YYYY-MM"
 const isFuture  = monthParam > todayYM;   
 
@@ -1644,11 +949,8 @@ const recurringMonthly = recurringMonthSnap.docs
   .filter(t => !t.deleted);          // ⬅️  hide soft-deleted rows
 /* use the helper so half-paid rows count only once */
 const totalExpense = expenses.reduce((s, e) => s + paidPortion(e), 0);
-
 const recTotal = recurringMonthly.reduce((s, t) => s + paidPortion(t), 0);
-
 const grandTotal = totalExpense + recTotal;
-
       const groupedExpenses = {};
       expenses.forEach(e => {
         const created = (e.createdAt.toDate) ? e.createdAt.toDate() : new Date(e.createdAt);
@@ -1676,9 +978,7 @@ app.post('/add-recurring-expense', isAuthenticated, async (req, res) => {
   try {
     const accountId = req.session.user.accountId;
 const { recurringReason } = req.body;
-
 const DEFAULT_STATUS = 'Not Paid';
-
 /* ① create the master template */
 const tplRef = await db.collection('recurringExpenses').add({
   accountId,
@@ -1693,7 +993,6 @@ for (let i = 0; i < 24; i++) {                       // 2-year horizon
   const dt   = new Date(today.getFullYear(), today.getMonth() + i, 1);
   const ym   = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2,'0')}`;
   const id   = `${accountId}_${ym}_${tplRef.id}`;
-
   batch.set(
     db.collection('recurringMonthly').doc(id),
     {
@@ -1709,267 +1008,25 @@ for (let i = 0; i < 24; i++) {                       // 2-year horizon
   );
 }
 await batch.commit();
-
 /* ③ back to the UI */
 const month = req.body.month || new Date().toISOString().substring(0,7);
 res.redirect(`/expense?month=${month}`);
-
   } catch (err) {
     res.status(500).send(err.toString());
   }
 });
 
-// GET /add-product – render form
-app.get('/add-product', isAuthenticated, restrictRoute('/add-product'), async (req, res) => {
-  try {
-    const accountId     = req.session.user.accountId;
-    const selectedCat   = req.query.category     || '';
-    const selectedUnit  = req.query.selectedUnit || '';
-    const sortOrder     = req.query.sortOrder    || 'asc';
-
-    const [categories, units] = await Promise.all([
-      getCategories(accountId),
-      getUnits(accountId)
-    ]);
-
-    let q = db.collection('products').where('accountId','==',accountId);
-    if (selectedCat.trim() !== '') q = q.where('category','==',selectedCat);
-    q = q.orderBy('productName', sortOrder);
-    const snap = await q.get();
-    const existingProducts = snap.docs.map(d => ({ id: d.id, name: d.data().productName }));
-
-    res.render('addProduct', {
-      success: req.query.success,
-      errorMessage: null,
-      categories,
-      units,
-      existingProducts,
-      selectedCategory: selectedCat,
-      selectedUnit,
-      sortOrder
-    });
-  } catch (err) {
-    res.status(500).send(err.toString());
-  }
-});
-
-/* ─────────── POST /add-product – create or update ─────────── */
-app.post(
-  '/add-product',
+/* ─────────── ADD-PRODUCT ROUTES (externalised) ─────────── */
+const makeAddProductRoutes = require('./routes/addProduct');
+const addProductRoutes     = makeAddProductRoutes({
+  db,
   isAuthenticated,
-  restrictRoute('/add-product'),
-  async (req, res) => {
-    try {
-      const accountId = req.session.user.accountId;
-      const {
-        existingProduct,
-        productName    = '',        // default to empty string
-        wholesalePrice,
-        retailPrice,
-        quantity,
-        inclusiveTax,
-        selectedCategory,
-        newCategory,
-        selectedUnit,
-        newUnit
-      } = req.body;
-const wp = +parseFloat(wholesalePrice);
-const rp = +parseFloat(retailPrice);
-const qty = +parseFloat(quantity);
-
-/* NEW ▸ inclusive-tax validation */
-let taxPct = null;
-if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
-  taxPct = +parseFloat(inclusiveTax);
-  if (!Number.isFinite(taxPct) || taxPct < 0 || taxPct > 100)
-    return res.status(400).send('Inclusive-Tax % must be between 0 and 100');
-}
-
-if (!Number.isFinite(wp) || wp <= 0 ||
-    !Number.isFinite(rp) || rp <= 0 ||
-    !Number.isFinite(qty) || qty <= 0)
-  return res.status(400).send('Prices and quantity must be > 0');
-      let category = newCategory?.trim()
-        ? newCategory.trim()
-        : (selectedCategory || '');
-
-      // normalise runs of spaces, then trim
-      category = category.replace(/\s+/g, ' ').trim();
-
-      // title-case for storage (e.g. "drinks" → "Drinks")
-      if (category) {
-        category = category[0].toUpperCase() + category.slice(1).toLowerCase();
-      }
-      /* ──────────────────────────────────────────────────────────────
-         ✨ DUPLICATE CATEGORY GUARD  (case- & space-insensitive)
-         – Runs only when the user typed a brand-new category.
-         – Uses the existing helper  normalizeName()  and  getCategories().
-      ────────────────────────────────────────────────────────────── */
-      if (newCategory?.trim()) {
-        const existingCats = await getCategories(accountId);   // cached helper
-        const isDup = existingCats.some(
-          c => normalizeName(c) === normalizeName(category)
-        );
-
-        if (isDup) {
-          return res
-            .status(400)
-            .send('Category already exists — choose a different name.');
-        }
-      }
-
-     /* ──────────────────────────
-         Unit normalisation & guard
-      ────────────────────────── */
-      const unitRawInput = newUnit?.trim() || selectedUnit || '';
-
-      // collapse extra spaces, trim, then lower-case for storage
-      let unit = unitRawInput.replace(/\s+/g, ' ').trim().toLowerCase();
-
-      /* ✨ DUPLICATE UNIT GUARD  (case- & space-insensitive)
-         – Runs only when the user typed a brand-new unit.
-         – Re-uses  normalizeName()  and  getUnits().
-      */
-      if (newUnit?.trim()) {
-        const existingUnits = await getUnits(accountId);      // cached helper
-        const isDupUnit = existingUnits.some(
-          u => normalizeName(u) === normalizeName(unit)
-        );
-
-        if (isDupUnit) {
-          return res
-            .status(400)
-            .send('Unit already exists — choose a different name.');
-        }
-      }
-      /* --------------------------------------------------------------
-         0. Validation
-      -------------------------------------------------------------- */
-      if (existingProduct === 'new' && !productName.trim())
-        return res.status(400).send('Product name is required');
-
-      /* --------------------------------------------------------------
-         1. Duplicate-detection helpers
-      -------------------------------------------------------------- */
-      const nameKey = normalizeName(productName);  // now 100 % safe
-      let productRef  = null;
-      let productSnap = null;
-
-      if (existingProduct && existingProduct !== 'new') {
-        /* --------------------------------------------------------------
-           1A.  UPDATE path — explicit product selected
-        -------------------------------------------------------------- */
-        productRef  = db.collection('products').doc(existingProduct);
-        productSnap = await productRef.get();
-        if (!productSnap.exists)
-          return res.status(404).send('Selected product not found');
-
-      } else {
-        /* --------------------------------------------------------------
-           1B.  CREATE / implicit-update path — need dup-check
-        -------------------------------------------------------------- */
-        const fastDup = await db.collection('products')
-          .where('accountId', '==', accountId)
-          .where('nameKey',   '==', nameKey)
-          .limit(1)
-          .get();
-
-        if (!fastDup.empty) {
-          productRef  = fastDup.docs[0].ref;
-          productSnap = fastDup.docs[0];
-
-        } else {
-          /* ─── Legacy fallback – scan once, patch missing nameKey ─── */
-          const all = await db.collection('products')
-            .where('accountId','==', accountId)
-            .select('productName')        // lighter payload
-            .get();
-
-          const legacy = all.docs.find(d =>
-            normalizeName(d.data().productName) === nameKey
-          );
-
-          if (legacy) {
-            await legacy.ref.update({ nameKey });  // back-fill
-            productRef  = legacy.ref;
-            productSnap = legacy;
-          }
-        }
-      }
-      /* --------------------------------------------------------------
-         2. UPDATE flow
-      -------------------------------------------------------------- */
-      if (productRef && productSnap) {
-        const d    = productSnap.data();
-        const curQ = d.quantity || 0;
-        const newQ = curQ + qty;
-
-        const newWholesale = +(
-  ((curQ * d.wholesalePrice) + (qty * wp)) / newQ
-).toFixed(2);
-const newRetail = +(
-  ((curQ * d.retailPrice) + (qty * rp)) / newQ
-).toFixed(2);
-
-       await productRef.update({
-  quantity      : newQ,
-  wholesalePrice: newWholesale,
-  retailPrice   : newRetail,
-  profitMargin  : newRetail - newWholesale,
-  updatedAt     : new Date(),
-  ...(unit       && { unit }),
-  ...(category   && { category }),
-  // ⬇️  only overwrite when the user actually entered a value
-  ...(taxPct !== null && { inclusiveTax: taxPct })
+  restrictRoute,
+  getCategories,
+  getUnits,
+  normalizeName
 });
-      /* --------------------------------------------------------------
-         3. CREATE flow
-      -------------------------------------------------------------- */
-      } else {
-        const data = {
-  productName     : productName.trim(),
-  nameKey,
-  wholesalePrice  : wp,
-  retailPrice     : rp,
-  quantity        : qty,
-  profitMargin    : rp - wp,
-  category,
-  unit,
-  createdAt       : new Date(),
-  accountId,
-  ...(taxPct !== null && { inclusiveTax: taxPct }), // ✅ persist GST %
-
-  /* ── legacy compat fields (unchanged) ── */
-  oldestWholesale : wp,
-  oldestBatchQty  : qty,
-  secondWholesale : null,
-  oldestRetail    : rp,
-  secondRetail    : null
-};
-
-        productRef  = await db.collection('products').add(data);
-        productSnap = { id: productRef.id, data: () => data };
-      }
-      /* --------------------------------------------------------------
-         4. Always create a NEW stock batch
-      -------------------------------------------------------------- */
-      await db.collection('stockBatches').add({
-        productId        : productRef.id,
-        productName      : productSnap.data().productName,
-        purchasePrice    : wp,
-        salePrice        : rp,
-        quantity         : qty,
-        remainingQuantity: qty,
-        batchDate        : new Date(),
-        accountId,
-        unit
-      });
-      res.redirect('/add-product?success=1');
-    } catch (err) {
-      res.status(500).send(err.toString());
-    }
-  }
-);
+app.use('/', addProductRoutes);
 
 // GET /view-products
 app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), async (req, res) => {
@@ -1978,19 +1035,16 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
     const filterCategory = req.query.filterCategory || '';
     const stockThreshold = req.query.stockThreshold || '';
     const sortOrder = req.query.sortOrder || 'asc';
-
     let q = db.collection('products').where('accountId','==',accountId);
     if (filterCategory.trim() !== '') q = q.where('category','==',filterCategory);
     if (stockThreshold.trim() !== '') q = q.where('quantity','<',parseInt(stockThreshold));
     q = q.orderBy('productName', sortOrder);
-
     const snap = await q.get();
     const products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const productIds = products.map(p => p.id);
     const batchesMap = {};
     if (productIds.length > 0) {
       const chunkSize = 10;   // ↑ fewer round-trips, same RAM usage
-
       const batchPromises = [];
       for (let i = 0; i < productIds.length; i += chunkSize) {
         const chunk = productIds.slice(i, i+chunkSize);
@@ -2008,7 +1062,6 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
       });
     }
     products.forEach(p => p.batches = batchesMap[p.id] || []);
-
     const categories = await getCategories(accountId);
     res.render('viewProducts', { products, categories, filterCategory, stockThreshold, sortOrder, blockedActions : req.session.blockedActions || {}  });
   } catch (err) {
@@ -2016,105 +1069,16 @@ app.get('/view-products', isAuthenticated, restrictRoute('/view-products'), asyn
   }
 });
 
-/* ─────────── DOWNLOAD PRODUCTS → EXCEL ─────────── */
-// GET /download-products
-app.get('/download-products', isAuthenticated, restrictRoute('/view-products'), async (req, res) => {
-  try {
-    const accountId                  = req.session.user.accountId;
-    const { filterCategory='', stockThreshold='', sortOrder='asc' } = req.query;
-
-    /* 1. replicate the same Firestore query used in /view-products */
-    let q = db.collection('products').where('accountId','==',accountId);
-    if (filterCategory.trim() !== '')
-      q = q.where('category','==',filterCategory);
-    if (stockThreshold.trim() !== '')
-      q = q.where('quantity','<',parseFloat(stockThreshold));
-    q = q.orderBy('productName', sortOrder);
-
-    const prodSnap  = await q.get();
-    const products  = prodSnap.docs.map(d => ({ id:d.id, ...d.data() }));
-    const productIds= products.map(p=>p.id);
-
-    /* 2. pull batches so we can compute avg profit */
-    const batchesMap = {};
-    if (productIds.length) {
-      const batchPromises = [];
-      for (let i=0; i<productIds.length; i+=10) {
-        const slice = productIds.slice(i,i+10);
-        batchPromises.push(
-          db.collection('stockBatches')
-            .where('productId','in',slice)
-            .get()
-        );
-      }
-      const batchSnaps = await Promise.all(batchPromises);
-      batchSnaps.forEach(s=>{
-        s.docs.forEach(b=>{
-          const d=b.data(); const pid=d.productId;
-          if (!batchesMap[pid]) batchesMap[pid]=[];
-          batchesMap[pid].push(d);
-        });
-      });
-    }
-
-    /* 3. create workbook */
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Products');
-
-    ws.columns = [
-      { header:'Serial',          key:'serial',          width:8  },
-      { header:'Product Name',    key:'productName',     width:30 },
-      { header:'Wholesale ₹',     key:'wholesalePrice',  width:14 },
-      { header:'Retail ₹',        key:'retailPrice',     width:12 },
-      { header:'Quantity',        key:'quantity',        width:10 },
-      { header:'Unit',            key:'unit',            width:8  },
-      { header:'Profit /Unit ₹',  key:'profitMargin',    width:16 },
-      { header:'Avg Profit ₹',    key:'avgProfit',       width:14 },
-      { header:'Category',        key:'category',        width:16 }
-    ];
-
-    products.forEach((p, idx) => {
-      /* compute average profit exactly like the page does */
-      let avgProfit = 0;
-      const batches = batchesMap[p.id] || [];
-      if (batches.length) {
-        const tQty  = batches.reduce((s,b)=>s+(+b.quantity||0), 0);
-        const tProf = batches.reduce((s,b)=>
-                      s + ((+b.salePrice - +b.purchasePrice)*(+b.quantity||0)), 0);
-        avgProfit = tQty ? tProf / tQty : 0;
-      } else {
-        avgProfit = (+p.retailPrice - +p.wholesalePrice);
-      }
-
-      ws.addRow({
-        serial: idx + 1,
-
-        productName   : p.productName,
-        wholesalePrice: (+p.wholesalePrice).toFixed(2),
-        retailPrice   : (+p.retailPrice).toFixed(2),
-        quantity      : (+p.quantity).toFixed(2),
-        unit          : p.unit || '',
-        profitMargin  : (+p.profitMargin).toFixed(2),
-        avgProfit     : avgProfit.toFixed(2),
-        category      : p.category || ''
-      });
-    });
-
-    /* 4. stream to client */
-    res.setHeader('Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition',
-      `attachment; filename="products_${Date.now()}.xlsx"`);
-
-    await wb.xlsx.write(res);
-    res.end();
-  } catch (err) {
-    res.status(500).send(err.toString());
-  }
+/* ─────────── DOWNLOAD PRODUCTS ROUTES (externalised) ─────────── */
+const makeProductDownloadRoutes = require('./routes/productDownload');
+const productDownloadRoutes     = makeProductDownloadRoutes({
+  db,
+  isAuthenticated,
+  restrictRoute
 });
+app.use('/', productDownloadRoutes);
 
 /* ─────────── STOCK BATCH MANAGEMENT ─────────── */
-// POST /delete-stock-batch/:batchId
 // POST /delete-stock-batch/:batchId
 app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-products','delete'), async (req, res) => {
   try {
@@ -2123,14 +1087,11 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-
     const batchDoc    = await batchRef.get();
     if (!batchDoc.exists) return res.status(404).send('Stock batch not found');
     if (batchDoc.data().accountId !== req.session.user.accountId) return res.status(403).send('Access denied');
-
     // Grab parent productId
     const productId = batchDoc.data().productId;
-
     // Delete the batch & recalc
     await batchRef.delete();
     await recalcProductFromBatches(productId);
-
     // If AJAX, send back updated product JSON
     if (req.xhr) {
       const prodSnap = await db.collection('products').doc(productId).get();
@@ -2159,7 +1120,6 @@ app.post('/delete-stock-batch/:batchId', isAuthenticated, restrictAction('/view-
    • Otherwise we create a standalone transaction (old behaviour).
    ----------------------------------------------------------------*/
 async function recalcProductFromBatches(productId, tx = null) {
-
   const work = async (transaction) => {
     /* 1️⃣  Read every batch that still belongs to this product */
     const batchQuery = db.collection('stockBatches')
@@ -2173,18 +1133,15 @@ async function recalcProductFromBatches(productId, tx = null) {
     batchSnap.docs.forEach(doc => {
       const d   = doc.data();
       const qty = +d.remainingQuantity || 0;
-
       totalRemaining += qty;
       totalWholesale += qty * (+d.purchasePrice);
       totalRetail    += qty * (+d.salePrice);
     });
-
     /* 2️⃣  Protect against divide-by-zero */
     const safeDivide  = (num, den) => den > 0 ? +(num / den).toFixed(2) : 0;
     const newWholesale= safeDivide(totalWholesale, totalRemaining);
     const newRetail   = safeDivide(totalRetail,    totalRemaining);
     const profitMargin= +(newRetail - newWholesale).toFixed(2);
-
     /* 3️⃣  Persist the freshly-computed figures */
     transaction.update(
       db.collection('products').doc(productId),
@@ -2206,47 +1163,18 @@ async function recalcProductFromBatches(productId, tx = null) {
   }
 }
 
-// GET /edit-stock-batch/:batchId
-app.get('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
-  try {
-    const { batchId } = req.params;
-    const batchRef    = db.collection('stockBatches').doc(batchId);
-    const batchSnap   = await batchRef.get();
-    if (!batchSnap.exists) {
-      return res.status(404).send('Stock batch not found');
-    }
-    if (batchSnap.data().accountId !== req.session.user.accountId) {
-      return res.status(403).send('Access denied');
-    }
-
-    // load categories and units for the dropdowns
-    const [categories, units] = await Promise.all([
-      getCategories(req.session.user.accountId),
-      getUnits(req.session.user.accountId)
-    ]);
-
-  // build a mutable batch object
-const batchData = { id: batchSnap.id, ...batchSnap.data() };
-
-// fall back to parent-product fields when missing
-const productRef  = db.collection('products').doc(batchData.productId);
-const productSnap = await productRef.get();
-if (productSnap.exists) {
-  const pData = productSnap.data();
-  batchData.category = batchData.category || pData.category || '';
-  if (batchData.inclusiveTax === undefined && pData.inclusiveTax !== undefined) {
-    batchData.inclusiveTax = pData.inclusiveTax;         // ★ NEW: pre-fill GST %
-  }
-}
-    res.render('editStockBatch', {
-      batch:      batchData,
-      categories,
-      units
-    });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
+/* ─────────── EDIT STOCK BATCH ROUTES (externalised) ─────────── */
+const makeEditStockBatchRoutes = require('./routes/editStockBatch');
+const editStockBatchRoutes     = makeEditStockBatchRoutes({
+  db,
+  isAuthenticated,
+  getCategories,
+  getUnits,
+  normalizeName,
+  recalcProductFromBatches
 });
+app.use('/', editStockBatchRoutes);
+
 
 // POST /api/edit-stock-batch-field/:batchId
 app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated,restrictAction('/view-products','edit'), async (req, res) => {
@@ -2257,7 +1185,6 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated,restrictAction(
     const batchSnap = await batchRef.get();
     if (!batchSnap.exists) throw new Error('Batch not found');
     if (batchSnap.data().accountId !== req.session.user.accountId) throw new Error('Access denied');
-
     // build update
     const update = { updatedAt: new Date() };
     if (field === 'purchasePrice' || field === 'salePrice') {
@@ -2270,7 +1197,6 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated,restrictAction(
       throw new Error('Invalid field');
     }
     await batchRef.update(update);
-
     // re‑compute profitMargin on this batch only
     const updated = (await batchRef.get()).data();
     const profitMargin = updated.salePrice - updated.purchasePrice;
@@ -2303,154 +1229,6 @@ app.post('/api/edit-stock-batch-field/:batchId', isAuthenticated,restrictAction(
     res.json({ success: false, error: err.toString() });
   }
 });
-
-// POST /edit-stock-batch/:batchId
-app.post('/edit-stock-batch/:batchId', isAuthenticated, async (req, res) => {
-  try {
-    const { batchId }   = req.params;
-    const {
-      productName, purchasePrice, salePrice, quantity, inclusiveTax,
-      newCategory, selectedCategory, newUnit, selectedUnit
-    } = req.body;
-
-    /* 0. permissions --------------------------------------------------- */
-    const batchRef  = db.collection('stockBatches').doc(batchId);
-    const batchSnap = await batchRef.get();
-    if (!batchSnap.exists)                   return res.status(404).send('Stock batch not found');
-    if (batchSnap.data().accountId !== req.session.user.accountId)
-      return res.status(403).send('Access denied');
-
-    const accountId   = req.session.user.accountId;
-    const productId   = batchSnap.data().productId;
-    const newName     = productName.trim();
-    const newNameKey  = normalizeName(newName);
-
-    /* 1. apply field edits to this *batch* ----------------------------- */
-    const pp  = +parseFloat(purchasePrice);
-    const sp  = +parseFloat(salePrice);
-    const qty = +parseFloat(quantity);
-
-    // 🚨 VALIDATION — all numbers must be positive
-if (!Number.isFinite(pp)  || pp  <= 0 ||
-    !Number.isFinite(sp)  || sp  <= 0 ||
-    !Number.isFinite(qty) || qty <= 0) {
-  return res.status(400).send('Prices and quantity must be greater than zero');
-}
-// NEW ➜ Inclusive-Tax % validation (0–100 or blank)
-let taxPct = null;
-if (inclusiveTax && inclusiveTax.toString().trim() !== '') {
-  taxPct = +parseFloat(inclusiveTax);
-  if (!Number.isFinite(taxPct) || taxPct < 0 || taxPct > 100) {
-    return res.status(400).send('Inclusive-Tax % must be between 0 and 100');
-  }
-}
-    /* ──────────────────────────
-       Category normalisation & guard
-    ────────────────────────── */
-    const catInput = newCategory?.trim() || selectedCategory || '';
-
-    // collapse spaces → trim → Title-case for storage
-    let category = catInput.replace(/\s+/g, ' ').trim();
-    if (category) {
-      category = category[0].toUpperCase() + category.slice(1).toLowerCase();
-    }
-
-    /* ✨ DUPLICATE CATEGORY check (case- & space-insensitive) */
-    if (newCategory?.trim()) {
-      const existingCats = await getCategories(accountId);      // helper
-      const dupCat = existingCats.some(
-        c => normalizeName(c) === normalizeName(category)
-      );
-      if (dupCat) {
-        return res
-          .status(400)
-          .send('Category already exists — choose a different name.');
-      }
-    }
-    /* ──────────────────────────
-       Unit normalisation & guard
-    ────────────────────────── */
-    const unitInput = newUnit?.trim() || selectedUnit || '';
-    let unit = unitInput.replace(/\s+/g, ' ').trim().toLowerCase();
-
-    /* ✨ DUPLICATE UNIT check (case- & space-insensitive) */
-    if (newUnit?.trim()) {
-      const existingUnits = await getUnits(accountId);          // helper
-      const dupUnit = existingUnits.some(
-        u => normalizeName(u) === normalizeName(unit)
-      );
-      if (dupUnit) {
-        return res
-          .status(400)
-          .send('Unit already exists — choose a different name.');
-      }
-    }
-
-/* ----- keep previously-sold units intact ----- */
-const oldQty    = batchSnap.data().quantity          || 0;
-const oldRemain = batchSnap.data().remainingQuantity ?? oldQty;
-const deltaQty  = qty - oldQty;
-const newRemain = Math.max(0, +(oldRemain + deltaQty).toFixed(3)); // NEW – never negative
-
-
-await batchRef.update({
-  productName      : newName,
-  purchasePrice    : pp,
-  salePrice        : sp,
-  quantity         : qty,
-  remainingQuantity: newRemain,
-  profitMargin     : +(sp - pp).toFixed(2),
-...(unit     && { unit }),   
-  ...(category && { category }),
-  updatedAt        : new Date()
-});
-
-    /* 2. 🆕 merge-duplicates if another product already has newNameKey -- */
-    const dupSnap = await db.collection('products')
-      .where('accountId','==',accountId)
-      .where('nameKey','==',newNameKey)
-      .limit(1).get();
-
-    let targetProdId = productId;                 // assume we keep the same doc
-    if (!dupSnap.empty && dupSnap.docs[0].id !== productId) {
-      /* a duplicate exists → we’ll keep *that* doc and migrate batches */
-      const keeperId = dupSnap.docs[0].id;
-      const batchList = await db.collection('stockBatches')
-                                .where('productId','==',productId)
-                                .get();
-
-      const moveOps = db.batch();
-      batchList.docs.forEach(doc => {
-        moveOps.update(doc.ref, { productId: keeperId });
-      });
-      await moveOps.commit();
-
-      // delete the now-orphaned product doc
-      await db.collection('products').doc(productId).delete();
-      targetProdId = keeperId;
-    }
-
-    /* 3. refresh the surviving product doc ---------------------------- */
-    const prodRef = db.collection('products').doc(targetProdId);
-await prodRef.set({
-  productName : newName,
-  nameKey     : newNameKey,
-
-  // persist the normalised values we already calculated above
-  ...(unit      && { unit }),          // ← “kg”, “pcs”, etc. (already lower-cased)
-  ...(category  && { category }),      // ← title-cased category
-
-  ...(taxPct !== null && { inclusiveTax: taxPct }),  // keep GST % when supplied
-  updatedAt   : new Date()
-}, { merge: true });
-
-        await recalcProductFromBatches(targetProdId);
-      res.redirect('/view-products');
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
 /* ────────────────────────────────────────────────────────────────
    GET /sales  – Sales & Expense report
    • Table rows honour *all* filters (saleDate, month, status)
@@ -2467,7 +1245,6 @@ app.get(
 let { saleDate, month, status } = req.query;   // ← month is now mutable
       /* ─── 0. Work out the month window we’ll “lock” the badges to ─── */
       let monthStart, monthEnd;
-
       if (month) {                                        // user picked a month
         monthStart = `${month}-01`;
         const [y, m] = month.split('-');
@@ -2475,7 +1252,6 @@ let { saleDate, month, status } = req.query;   // ← month is now mutable
             nextY = parseInt(y, 10);
         if (nextM > 12) { nextM = 1; nextY++; }
         monthEnd = `${nextY}-${pad(nextM)}-01`;
-
       } else if (saleDate) {                              // single-day filter
         const [y, m] = saleDate.split('-');
         monthStart = `${y}-${m}-01`;
@@ -2483,7 +1259,6 @@ let { saleDate, month, status } = req.query;   // ← month is now mutable
             nextY  = parseInt(y, 10);
         if (nextM > 12) { nextM = 1; nextY++; }
         monthEnd = `${nextY}-${pad(nextM)}-01`;
-
       } else {                                           // default = current month
         const today = new Date();
         const curYM = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
@@ -2510,13 +1285,10 @@ let expenseQ = db.collection('expenses')
    3. (no filter)                → **current month** view  ← NEW
 ----------------------------------------------------------- */
 if (saleDate) {
-
   // 1️⃣ single day
   salesQ   = salesQ  .where('saleDate', '==', saleDate);
   expenseQ = expenseQ.where('saleDate', '==', saleDate);
-
 } else if (month) {
-
   // 2️⃣ explicit month from query-string
   salesQ   = salesQ .where('saleDate', '>=', monthStart)
                     .where('saleDate', '<',  monthEnd);
@@ -2541,7 +1313,7 @@ if (status && status.trim() && status !== 'All') {
                             .where('accountId', '==', accountId)
                             .where('saleDate',  '>=', monthStart)
                             .where('saleDate',  '<',  monthEnd);
-
+                            
       const monthExpQ   = db.collection('expenses')
                             .where('accountId', '==', accountId)
                             .where('saleDate',  '>=', monthStart)
@@ -2559,14 +1331,12 @@ if (status && status.trim() && status !== 'All') {
       const sales          = tableSalesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const expenses       = tableExpSnap .docs.map(d => ({ id: d.id, ...d.data() }));
       const monthSales     = monthSalesSnap.docs.map(d => d.data());
-      const monthExpenses  = monthExpSnap .docs.map(d => d.data());
 
     /* ─── 4. Compute MONTH-locked badge totals ─── */
 const monthRevenueAmount = monthSales.reduce((sum, s) =>
   sum + (s.totalSale !== undefined
            ? parseFloat(s.totalSale)
            : s.retailPrice * s.saleQuantity), 0);
-
 const monthGrossProfit   = monthSales.reduce((sum, s) => sum + s.profit, 0);
 const monthExpenseTotal  = await computeMonthTotal(accountId, month);
 const monthNetProfit     = monthGrossProfit - monthExpenseTotal;
@@ -2620,77 +1390,14 @@ const monthGstPayable    = monthSales.reduce((sum, s) =>
   }
 );
 
-/* ─────────── DOWNLOAD SALES → EXCEL ─────────── */
-// GET /download-sales
-app.get('/download-sales', isAuthenticated, restrictRoute('/sales'), async (req, res) => {
-  try {
-    const accountId           = req.session.user.accountId;
-    const { saleDate, month, status } = req.query;
-
-    /* 1. build the same query logic used in /sales */
-    let q = db.collection('sales')
-              .where('accountId', '==', accountId)
-              .orderBy('createdAt', 'desc');
-
-    if (saleDate) {
-      q = q.where('saleDate', '==', saleDate);
-    } else if (month) {
-      const [y, m] = month.split('-');
-      const start  = `${month}-01`;
-      let nextM    = parseInt(m, 10) + 1,
-          nextY    = parseInt(y, 10);
-      if (nextM > 12) { nextM = 1; nextY++; }
-      const end = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
-      q = q.where('saleDate', '>=', start).where('saleDate', '<', end);
-    }
-    if (status && status.trim() && status !== 'All') {
-      q = q.where('status', '==', status);
-    }
-
-    const snap  = await q.get();
-    const sales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-    /* 2. create the workbook */
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Sales');
-
-    ws.columns = [
-      { header: 'Sale Date',       key: 'saleDate',        width: 12 },
-      { header: 'Product',         key: 'productName',     width: 32 },
-      { header: 'Wholesale ₹',     key: 'wholesalePrice',  width: 14 },
-      { header: 'Retail ₹',        key: 'retailPrice',     width: 12 },
-      { header: 'Quantity',        key: 'saleQuantity',    width: 10 },
-      { header: 'Unit',            key: 'unit',            width: 8  },
-      { header: 'Total Sale ₹',    key: 'totalSale',       width: 14 },
-      { header: 'Profit / Unit ₹', key: 'profitPerUnit',   width: 16 },
-      { header: 'Total Profit ₹',  key: 'profit',          width: 14 },
-        { header: 'GST Payable ₹',   key: 'gstPayable',      width: 14 },
-      { header: 'Status',          key: 'status',          width: 24 },
-      { header: 'Extra Info',      key: 'extraInfo',       width: 32 },
-      { header: 'Created At',      key: 'createdAt',       width: 22 }
-    ];
-
-  sales.forEach(s => ws.addRow({
-  ...s,
-  totalSale   : s.totalSale || (s.retailPrice * s.saleQuantity),
-  gstPayable  : s.gstPayable !== undefined ? s.gstPayable : '',
-  createdAt   : (s.createdAt?.toDate ? s.createdAt.toDate()
-                                     : new Date(s.createdAt))
-                .toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-}));
-
-    /* 3. stream it to the client */
-    res.setHeader('Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition',
-      `attachment; filename="sales_${Date.now()}.xlsx"`);
-
-    await wb.xlsx.write(res);
-    res.end();
-  } catch (err) {
-    res.status(500).send(err.toString());
-  }
+/* ─────────── DOWNLOAD SALES ROUTES (externalised) ─────────── */
+const makeSalesDownloadRoutes = require('./routes/salesDownload');
+const salesDownloadRoutes     = makeSalesDownloadRoutes({
+  db,
+  isAuthenticated,
+  restrictRoute
 });
+app.use('/', salesDownloadRoutes);
 
 /* ─────────── AJAX inline edit   /api/edit-sale ─────────── */
 app.post('/api/edit-sale', isAuthenticated, restrictAction('/sales','edit'),    async (req, res) => {
@@ -2721,7 +1428,6 @@ if (field === 'status') {
     req.session.user.accountId,
     data.saleDate.substring(0, 7)
   );
-
   return res.json({
     success   : true,
     updatedRow: update,
@@ -2753,7 +1459,6 @@ if (field === 'extraInfo') {
     monthTotal
   });
 }
-
     /* ------------------------------------------------------------------
        2️⃣ We’re changing either **saleQuantity** or **totalSale**
           → need to return/consume stock, recalc FIFO & profit
@@ -2818,7 +1523,6 @@ if (field === 'extraInfo') {
           // remainingQuantity is **absolute** capped value
           remainingQuantity: capped
         });
-
         u.qtyUsed -= ret;
         give     -= ret;
       }
@@ -2910,357 +1614,44 @@ app.post('/delete-product/:productId', isAuthenticated, restrictAction('/view-pr
   }
 });
 
-// GET /profit
-app.get('/profit', isAuthenticated, restrictRoute('/profit'), async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    let salesQuery   = db.collection('sales').where('accountId','==',accountId);
-    let expenseQuery = db.collection('expenses').where('accountId','==',accountId);
-    let recQuery     = db.collection('recurringMonthly').where('accountId','==',accountId);
-
-    const { month, year } = req.query;
-
-    /* ---------- date filter logic (unchanged) ---------- */
-    if (month) {
-      const [y,m] = month.split('-');
-      const startDate = `${month}-01`;
-      let nextM=parseInt(m,10)+1, nextY=parseInt(y,10);
-      if(nextM>12){ nextM=1; nextY++; }
-      const nextMonth = `${nextY}-${pad(nextM)}-01`;
-      salesQuery   = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',nextMonth);
-      expenseQuery = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',nextMonth);
-    } else if (year) {
-      const startDate = `${year}-01-01`;
-      const endDate   = `${parseInt(year)+1}-01-01`;
-      salesQuery   = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
-      expenseQuery = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
-    } else {
-      const currentYear = new Date().getFullYear();
-      const startDate = `${currentYear}-01-01`;
-      const endDate   = `${currentYear+1}-01-01`;
-      salesQuery   = salesQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
-      expenseQuery = expenseQuery.where('saleDate','>=',startDate).where('saleDate','<',endDate);
-    }
-    /* ---------- fetch ---------- */
-/* Fetch data – include recurring snapshot rows */
-const [salesSnap, expSnap, recSnap] = await Promise.all([
-  salesQuery.get(),
-  expenseQuery.get(),
-  recQuery.get()
-]);
-const todayYM  = new Date().toISOString().substring(0,7);   // "YYYY-MM"
-const recRows  = recSnap.docs
-  .map(d => d.data())
-  .filter(d => !d.deleted && d.month <= todayYM);
-function paidPortion (row) {
-  const status = row.expenseStatus || '';
-  const cost   = +row.expenseCost || 0;
-
-  switch (status) {
-    case 'Not Paid':
-      return 0;
-
-    case 'Half Cash + Not Paid':
-    case 'Half Online + Not Paid':
-      return row.expenseDetail1 !== undefined
-             ? (+row.expenseDetail1 || 0)
-             : cost / 2;
-
-    /* fully settled in every other case */
-    default:
-      return cost;
-  }
-}
-   const sales    = salesSnap.docs.map(d=>d.data());
-    const expenses = expSnap.docs.map(d=>d.data());
-
-    /* ---------- totals ---------- */
-    const totalProfit      = sales.reduce((sum,s)=> sum + s.profit,0);
-const totalExpenses = [...expenses, ...recRows]
-  .reduce((sum, e) => sum + paidPortion(e), 0);
-
-    const totalGstPayable  = sales.reduce((sum,s)=> sum + (s.gstPayable||0),0);
-
-    const netProfit        = totalProfit - totalExpenses - totalGstPayable;
-
-    /* ---------- month buckets ---------- */
-    const profitByMonth = {};
-    sales.forEach(s=>{
-      const m = s.saleDate.substring(0,7);
-      if (!profitByMonth[m]) profitByMonth[m]={ profit:0, expenses:0, gst:0, netProfit:0 };
-      profitByMonth[m].profit += s.profit;
-      profitByMonth[m].gst    += (s.gstPayable||0);
-    });
-    expenses.forEach(e=>{
-      const m = e.saleDate.substring(0,7);
-      if (!profitByMonth[m]) profitByMonth[m]={ profit:0, expenses:0, gst:0, netProfit:0 };
- profitByMonth[m].expenses += paidPortion(e);
-
-    });
-    recRows.forEach(r => {
-  const m = r.month;                 // already "YYYY-MM"
-  if (!profitByMonth[m])
-    profitByMonth[m] = { profit:0, expenses:0, gst:0, netProfit:0 };
-  profitByMonth[m].expenses += paidPortion(r);
+/* ─────────── PROFIT ROUTES (externalised) ─────────── */
+const makeProfitRoutes = require('./routes/profit');
+const profitRoutes     = makeProfitRoutes({
+  db,
+  isAuthenticated,
+  restrictRoute
 });
-    Object.entries(profitByMonth).forEach(([m, row]) => {
-  row.netProfit = row.profit - row.expenses - row.gst;
+app.use('/', profitRoutes);
 
-  // if everything is 0.00 remove the key ⇒ it won’t appear in the table
-  if (row.profit === 0 && row.expenses === 0 && row.gst === 0) {
-    delete profitByMonth[m];
-  }
+/* ─────────── SUBSCRIPTION & PAYMENT ROUTES (externalised) ─────────── */
+const makeSubscriptionRoutes = require('./routes/subscription');
+const subscriptionRoutes     = makeSubscriptionRoutes({
+  db,                 // Firestore instance
+  isAuthenticated,    // middleware
+  razorpay,           // pre-initialised Razorpay client
+  crypto              // Node crypto (for HMAC verify)
 });
+app.use('/', subscriptionRoutes);
 
-    /* ---------- render ---------- */
-    res.render('profit',{
-      sales, expenses,
-      totalProfit,
-      totalExpenses,
-      totalGstPayable,
-      netProfit,
-      profitByMonth,
-      monthFilter: month || '',
-      yearFilter : req.query.year || ''
-    });
-  } catch (err) {
-    res.status(500).send(err.toString());
-  }
+
+/* ─────────── PROFILE ROUTES (externalised) ─────────── */
+const makeProfileRoutes = require('./routes/profile');
+const profileRoutes     = makeProfileRoutes({
+  db,
+  isAuthenticated,
+  requireMaster
 });
+app.use('/', profileRoutes);
 
-/* ─────────── SUBSCRIPTION & PAYMENT ROUTES ─────────── */
-// GET /pricing
-app.get('/pricing', (req, res) => {
-  // now all users—subscribed or not—can view pricing
-  res.render('pricing', { user: req.session.user || null });
+/* ─────────── BILLING ROUTES (externalised) ─────────── */
+const makeBillingRoutes = require('./routes/billing');
+const billingRoutes     = makeBillingRoutes({
+  db,
+  isAuthenticated,
+  requireMaster
 });
+app.use('/', billingRoutes);
 
-/* ───── GET /subscribe/monthly  (secure) ───── */
-app.get('/subscribe/monthly', isAuthenticated, async (req, res) => {
-  const amount   = 499 * 100;            // ₹499 → paise
-  const currency = 'INR';
-  const receipt  = `receipt_monthly_${Date.now()}`;
-
-  try {
-    const order = await razorpay.orders.create({ amount, currency, receipt });
-
-    /* 🔐 Persist order – plan lives server-side only */
-    await db.collection('paymentOrders').doc(order.id).set({
-      userId : req.session.user.id,
-      plan   : 'Monthly',
-      days   : 30,
-      amount,
-      currency,
-      paid   : false,
-      createdAt : new Date()
-    });
-
-    /* No plan variable sent to client anymore */
-    res.render('payment', { order, user: req.session.user });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-/* ───── GET /subscribe/half-yearly  (secure) ───── */
-app.get('/subscribe/half-yearly', isAuthenticated, async (req, res) => {
-  const amount   = 2699 * 100;
-  const currency = 'INR';
-  const receipt  = `receipt_halfyearly_${Date.now()}`;
-  try {
-    const order = await razorpay.orders.create({ amount, currency, receipt });
-    await db.collection('paymentOrders').doc(order.id).set({
-      userId : req.session.user.id,
-      plan   : 'Half-Yearly',
-      days   : 182,
-      amount,
-      currency,
-      paid   : false,
-      createdAt : new Date()
-    });
-    res.render('payment', { order, user: req.session.user });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-/* ───── GET /subscribe/yearly  (secure) ───── */
-app.get('/subscribe/yearly', isAuthenticated, async (req, res) => {
-  const amount   = 4799 * 100;
-  const currency = 'INR';
-  const receipt  = `receipt_yearly_${Date.now()}`;
-  try {
-    const order = await razorpay.orders.create({ amount, currency, receipt });
-    await db.collection('paymentOrders').doc(order.id).set({
-      userId : req.session.user.id,
-      plan   : 'Yearly',
-      days   : 365,
-      amount,
-      currency,
-      paid   : false,
-      createdAt : new Date()
-    });
-    res.render('payment', { order, user: req.session.user });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-/* ───── POST /payment-success  (hardened) ───── */
-app.post('/payment-success', isAuthenticated, async (req, res) => {
-  try {
-    const {
-      razorpay_payment_id,
-      razorpay_order_id,
-      razorpay_signature
-    } = req.body;
-
-    if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature)
-      return res.status(400).send('Missing payment details');
-
-    /* 1️⃣  Verify HMAC signature */
-    const shasum = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
-    shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    if (shasum.digest('hex') !== razorpay_signature)
-      return res.status(400).send('Payment signature invalid – request denied.');
-
-    /* 2️⃣  Fetch the order we saved during /subscribe/* */
-    const orderRef = db.collection('paymentOrders').doc(razorpay_order_id);
-    const orderSnap = await orderRef.get();
-    if (!orderSnap.exists)
-      return res.status(400).send('Order not recognised');
-
-    const order = orderSnap.data();
-    if (order.paid)
-      return res.status(400).send('Order already processed');
-    if (order.userId !== req.session.user.id)
-      return res.status(403).send('Order does not belong to current user');
-
-    /* 3️⃣  OPTIONAL – you can call Razorpay Orders API here to
-           verify that order.status === 'paid' & amount === order.amount */
-
-    /* 4️⃣  Extend subscription */
-    const days = order.days;                     // 30 / 182 / 365
-    const now  = new Date();
-
-    const userRef  = db.collection('users').doc(req.session.user.id);
-    const userSnap = await userRef.get();
-    const curExp   = userSnap.data().subscriptionExpiry
-                      ? new Date(userSnap.data().subscriptionExpiry.toDate
-                                   ? userSnap.data().subscriptionExpiry.toDate()
-                                   : userSnap.data().subscriptionExpiry)
-                      : now;
-    const newExp = curExp > now ? curExp : now;
-    newExp.setDate(newExp.getDate() + days);
-
-    await userRef.update({ subscriptionExpiry: newExp });
-    req.session.user.subscriptionExpiry = newExp;
-
-    /* 5️⃣  Mark order consumed */
-    await orderRef.update({
-      paid       : true,
-      paymentId  : razorpay_payment_id,
-      paidAt     : new Date()
-    });
-
-    res.redirect('/');
-  } catch (e) {
-    console.error('/payment-success error:', e);
-    res.status(500).send('Payment processing failed, please contact support.');
-  }
-});
-/* ─────────── PROFILE & BILLING (Master Only) ─────────── */
-// GET /profile
-/* ─────────── GET /profile – editable version ─────────── */
-app.get('/profile', isAuthenticated, requireMaster, async (req, res) => {
-  try {
-    const doc = await db.collection('users').doc(req.session.user.id).get();
-    if (!doc.exists) return res.status(404).send('User not found');
-
-    const userData = doc.data();
-    if (userData.subscriptionExpiry) {
-      userData.subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function')
-        ? userData.subscriptionExpiry.toDate()
-        : new Date(userData.subscriptionExpiry);
-    }
-    res.render('profile', {
-      user        : userData,
-      csrfToken   : req.csrfToken(),
-      success     : req.query.success || false,
-      errorMessage: null
-    });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-/* ─────────── POST /profile – save edits ─────────── */
-app.post('/profile', isAuthenticated, requireMaster, async (req, res) => {
-  try {
-    const {
-  name         = '',
-  businessName = '',
-  phone        = '',
-  address      = '',
-  location     = '',
-  gstNumber    = ''
-} = req.body;
-
-
-    /* simple length validations (mirrors registration rules) */
-    if (name.trim().length < 2)
-      return res.redirect('/profile?error=Name%20must%20be%20at%20least%202%20characters');
-
-    if (businessName.length > 80 || address.length > 200)
-      return res.redirect('/profile?error=Field%20length%20limit%20exceeded');
-    if (gstNumber && !/^[0-9A-Z]{15}$/.test(gstNumber.trim()))
-  return res.redirect('/profile?error=Invalid%20GST%20number%20format');
-
-
-    /* update Firestore */
-    const update = {
-  name        : name.trim(),
-  businessName: businessName.trim(),
-  phone       : phone.trim(),
-  address     : address.trim(),
-  location    : location.trim(),
-  ...(gstNumber.trim() && { gstNumber: gstNumber.trim().toUpperCase() }),
-  updatedAt   : new Date()
-};
-
-    await db.collection('users').doc(req.session.user.id).update(update);
-
-    /* keep session in sync so header shows new name immediately */
-    Object.assign(req.session.user, update);
-
-    res.redirect('/profile?success=1');
-  } catch (e) {
-    console.error('/profile POST error:', e);
-    res.status(500).render('profile', {
-      user        : req.body,
-      csrfToken   : req.csrfToken(),
-      success     : false,
-      errorMessage: 'Something went wrong. Please try again.'
-    });
-  }
-});
-
-// GET /billing
-app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
-  try {
-    const doc = await db.collection('users').doc(req.session.user.id).get();
-    if (!doc.exists) return res.status(404).send('User not found');
-    const userData = doc.data();
-    if (userData.subscriptionExpiry) {
-      userData.subscriptionExpiry = (typeof userData.subscriptionExpiry.toDate === 'function')
-        ? userData.subscriptionExpiry.toDate()
-        : new Date(userData.subscriptionExpiry);
-    }
-    res.render('billing', { user: userData });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
 
 /* ------------------------------------------------------------------
    Fallback route for <form action="/update-opening-balance"> … </form>
@@ -3287,140 +1678,13 @@ app.get('/billing', isAuthenticated, requireMaster, async (req, res) => {
     }
   });
 
-/* ─────────── EMPLOYEE REPORTING ─────────── */
-// GET /employees
-app.get('/employees', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    const [reportsSnap, employeesSnap] = await Promise.all([
-      db.collection('employeeReports')
-        .where('accountId','==',accountId)
-        .orderBy('reportDate','desc')
-        .get(),
-      db.collection('employees')
-        .where('accountId','==',accountId)
-        .orderBy('name','asc')
-        .get()
-    ]);
-    const reports   = reportsSnap.docs.map(d=>({ id:d.id, ...d.data() }));
-    const employees = employeesSnap.docs.map(d=>({ id:d.id, ...d.data() }));
-    res.render('employees', { reports, employees });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
+/* ─────────── EMPLOYEE ROUTES (externalised) ─────────── */
+const makeEmployeeRoutes = require('./routes/employeeReporting');
+const employeeRoutes     = makeEmployeeRoutes({
+  db,
+  isAuthenticated
 });
-
-// POST /employee/checkin
-app.post('/employee/checkin', isAuthenticated, async (req, res) => {
-  try {
-    const { employeeId, reportTime, reportDate } = req.body;
-    const accountId = req.session.user.accountId;
-    const existing = await db.collection('employeeReports')
-      .where('accountId','==',accountId)
-      .where('employeeId','==',employeeId)
-      .where('reportDate','==',reportDate)
-      .get();
-    if (!existing.empty) return res.status(400).send('Check-in already recorded');
-
-    const empDoc = await db.collection('employees').doc(employeeId).get();
-    if (!empDoc.exists) return res.status(400).send('Employee not found');
-
-    await db.collection('employeeReports').add({
-      employeeId,
-      employeeName: empDoc.data().name,
-      reportTime,
-      leaveTime: '',
-      reportDate,
-      accountId,
-      createdAt: new Date()
-    });
-    res.redirect('/employees');
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-// POST /employee/checkout
-app.post('/employee/checkout', isAuthenticated, async (req, res) => {
-  try {
-    const { employeeId, leaveTime, reportDate } = req.body;
-    const accountId = req.session.user.accountId;
-    const snap = await db.collection('employeeReports')
-      .where('accountId','==',accountId)
-      .where('employeeId','==',employeeId)
-      .where('reportDate','==',reportDate)
-      .get();
-    if (snap.empty) return res.status(400).send('No check-in record found');
-    const doc = snap.docs[0];
-    await doc.ref.update({ leaveTime, updatedAt: new Date() });
-    res.redirect('/employees');
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-// GET /employeeReport
-app.get('/employeeReport', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    let reportsQuery = db.collection('employeeReports').where('accountId','==',accountId).orderBy('reportDate','desc');
-    const { month } = req.query;
-    if (month && month.trim()) {
-      const [y,m] = month.split('-');
-      const startDate = `${month}-01`;
-      let nextM=parseInt(m,10)+1, nextY=parseInt(y,10);
-      if(nextM>12){ nextM=1; nextY++; }
-      const nextMonth=`${nextY}-${pad(nextM)}-01`;
-      reportsQuery = reportsQuery.where('reportDate','>=',startDate).where('reportDate','<',nextMonth);
-    }
-    const snap = await reportsQuery.get();
-    const reports = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-    res.render('employeedReport', { reports, month: month||'' });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-// GET /create-employee
-app.get('/create-employee', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    const snap = await db.collection('employees').where('accountId','==',accountId).orderBy('name','asc').get();
-    const employees = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-    res.render('createEmployee', { employees });
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-// POST /create-employee
-app.post('/create-employee', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    const { name } = req.body;
-    await db.collection('employees').add({ name, accountId, createdAt: new Date() });
-    res.redirect('/create-employee');
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
-
-// POST /delete-employee
-app.post('/delete-employee', isAuthenticated, async (req, res) => {
-  try {
-    const accountId = req.session.user.accountId;
-    const { employeeId } = req.body;
-    const empRef = db.collection('employees').doc(employeeId);
-    const empDoc= await empRef.get();
-    if (!empDoc.exists || empDoc.data().accountId !== accountId) {
-      return res.status(403).send('Access denied or Employee not found');
-    }
-    await empRef.delete();
-    res.redirect('/create-employee');
-  } catch (e) {
-    res.status(500).send(e.toString());
-  }
-});
+app.use('/', employeeRoutes);
 
 /* ─────────── AJAX  POST  /api/sale  (always returns JSON) ─────────── */
 app.post('/api/sale', isAuthenticated, async (req, res) => {
@@ -3799,7 +2063,6 @@ for (const bu of missing) {
   });
 }
 
-
         await saleRef.delete();           // 1️⃣ remove sale first
     await recalcProductFromBatches(productId);   // 2️⃣ then correct stock
 /* ▼ NEW – re-compute month running total */
@@ -3809,7 +2072,6 @@ await Promise.all([
   cacheDel(`products_${sale.accountId}`),      // full list
   cacheDel(`product_${productId}`)             // single-item cache
 ]);
-
 
 /* 1️⃣  Fresh month aggregate */
 const monthTotal = await computeMonthTotal(
@@ -3830,708 +2092,51 @@ res.json({ success: true, summary, monthTotal });
   }
 });
 
-// GET /tnc – Terms & Conditions
-app.get('/terms-and-conditions', (req, res) => {
-  res.render('tnc', { host: req.get('host') });
+/* ─────────── PERFORMANCE ROUTES (externalised) ─────────── */
+const makePerformanceRoutes = require('./routes/performance');   // ← path & name
+const performanceRoutes     = makePerformanceRoutes({            // ← factory call
+  db,
+  isAuthenticated
 });
-// GET /privacy
-app.get('/privacy', (req, res) => {
-  res.render('privacy');
-});
-/* ─────────── Health check ─────────── */
-app.get('/healthz', (req, res) => res.status(200).send('OK'));
+app.use('/', performanceRoutes);
 
-/* ─────────── PERFORMANCE INSIGHTS ─────────── */
-// GET /performance
-app.get('/performance',
+/* ─────────── STATS ROUTES (externalised) ─────────── */
+const makeStatsRoutes = require('./routes/stats');        // NEW
+const statsRoutes     = makeStatsRoutes({                 // NEW
+  db,
   isAuthenticated,
-  async (req, res) => {
-    try {
-      const accountId = req.session.user.accountId;
-      /* ───── 1. Determine date window ───── */
-      const today  = new Date();
-      const curYM  = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
-      const {
-        month   = '',
-        from    = '',
-        to      = '',
-        year    = '',
-        top: topParam = ''
-      } = req.query;
+  restrictRoute
+});
+app.use('/', statsRoutes); 
 
-      let startDate, endDate, periodLabel;
+/* ─────────── PASSWORD RESET ROUTES (externalised) ─────────── */
+const makePasswordRoutes = require('./routes/passwordReset');   // NEW
+const passwordRoutes     = makePasswordRoutes({                 // NEW
+  db,
+  bcrypt,
+  crypto,
+  transporter
+});
+app.use('/', passwordRoutes);                                   // NEW
 
-      if (month) {                                          // single month
-        startDate   = `${month}-01`;
-        const [y,m] = month.split('-');
-        let nextM = parseInt(m,10)+1, nextY=parseInt(y,10);
-        if (nextM>12){ nextM=1; nextY++; }
-        endDate     = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = new Date(`${month}-01`).toLocaleString('default',{ month:'long', year:'numeric' });
-
-      } else if (from && to) {                              // month‑range
-        startDate   = `${from}-01`;
-        const [ty,tm] = to.split('-');
-        let nextM = parseInt(tm,10)+1, nextY=parseInt(ty,10);
-        if (nextM>12){ nextM=1; nextY++; }
-        endDate     = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = `${from} → ${to}`;
-
-      } else if (year) {                                    // whole year
-        startDate   = `${year}-01-01`;
-        endDate     = `${parseInt(year,10)+1}-01-01`;
-        periodLabel = `Year ${year}`;
-
-      } else {                                             // default = current month
-        startDate   = `${curYM}-01`;
-        let nextM = today.getMonth()+2, nextY=today.getFullYear();
-        if (nextM>12){ nextM=1; nextY++; }
-        endDate     = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = new Date(startDate).toLocaleString('default',{ month:'long', year:'numeric' });
-      }
-      /* Top‑N (default 10) */
-      const topN = Math.max(parseInt(topParam,10)||10, 1);
-
-      /* ───── 2. Fetch sales in window ───── */
-      let q = db.collection('sales')
-                .where('accountId','==',accountId)
-                .where('saleDate','>=',startDate)
-                .where('saleDate','<', endDate);
-      const snap  = await q.get();
-      const sales = snap.docs.map(d => d.data());
-
-      /* ───── 3. Aggregate by product ───── */
-      const map = {};
-      sales.forEach(s=>{
-        const pid = s.productId;
-        if (!map[pid]) map[pid] = {
-          productName : s.productName,
-          unitsSold   : 0,
-          revenue     : 0,
-          profit      : 0
-        };
-        const row = map[pid];
-        const qty = +s.saleQuantity;
-        row.unitsSold += qty;
-        row.revenue   += (s.totalSale !== undefined
-                          ? +parseFloat(s.totalSale)
-                          : s.retailPrice * qty);
-        row.profit    += +s.profit;
-      });
-
-      const arr = Object.values(map);
-
-      const topSelling = [...arr]
-        .sort((a,b)=>b.unitsSold - a.unitsSold)
-        .slice(0,topN);
-
-      const topRevenue = [...arr]
-        .sort((a,b)=>b.revenue - a.revenue)
-        .slice(0,topN);
-
-      const topProfit  = [...arr]
-        .sort((a,b)=>b.profit - a.profit)
-        .slice(0,topN);
-
-      /* ───── 4. Render ───── */
-      res.render('performance', {
-        topSelling,
-        topRevenue,
-        topProfit,
-        periodLabel,
-        month, from, to, year,
-        topN
-      });
-
-    } catch (err) {
-      console.error('/performance error:', err);
-      res.status(500).send(err.toString());
-    }
-  }
-);
-/* ─────────── STATS DASHBOARD ─────────── */
-// GET /stats
-app.get(
-  '/stats',
+/* ─────────── INVOICE ROUTES (externalised) ─────────── */
+const makeInvoiceRoutes = require('./routes/invoice');      // NEW
+const invoiceRoutes     = makeInvoiceRoutes({               // NEW
+  db,
   isAuthenticated,
-  restrictRoute('/stats'),          // keep if you use route-locking
-  async (req, res) => {
-    try {
-      const accountId = req.session.user.accountId;
-
-      /* helpers */
-      const pad   = n => String(n).padStart(2, '0');
-      const today = new Date();
-      const ymNow = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
-      const {
-        month = '', from = '', to = '', year = '', top: topParam = ''
-      } = req.query;
-
-      /* ──────────────────────────────────────────────────────────
-         1️⃣  KPI window → **always** current month (ymNow)
-         2️⃣  Chart window → entire calendar year (chartYear)
-      ────────────────────────────────────────────────────────── */
-      const kpiStart = `${ymNow}-01`;
-      let kNextM = today.getMonth() + 2, kNextY = today.getFullYear();
-      if (kNextM > 12) { kNextM = 1; kNextY++; }
-      const kpiEnd = `${kNextY}-${pad(kNextM)}-01`;
-
-      const chartYear = year
-        ? +year
-        : (month ? +month.split('-')[0] : today.getFullYear());
-
-      const yearStart = `${chartYear}-01-01`;
-      const yearEnd   = `${chartYear + 1}-01-01`;
-
-      const topN = Math.max(parseInt(topParam, 10) || 10, 1);
-
-      /* ──────────────────────────────────────────────────────────
-         Parallel fetch:
-           • monthSalesSnap / monthExpSnap / monthRecSnap  → KPI + Top-N
-           • yearSalesSnap  / yearExpSnap  / yearRecSnap   → 12-month trends
-      ────────────────────────────────────────────────────────── */
-      const [
-        monthSalesSnap, monthExpSnap, monthRecSnap,
-        yearSalesSnap,  yearExpSnap,  yearRecSnap
-      ] = await Promise.all([
-        // current-month data (KPI + Top-N)
-        db.collection('sales')
-          .where('accountId','==',accountId)
-          .where('saleDate','>=',kpiStart)
-          .where('saleDate','<', kpiEnd)
-          .get(),
-        db.collection('expenses')
-          .where('accountId','==',accountId)
-          .where('saleDate','>=',kpiStart)
-          .where('saleDate','<', kpiEnd)
-          .get(),
-        db.collection('recurringMonthly')
-          .where('accountId','==',accountId)
-          .get(),
-
-        // full-year window (trend charts)
-        db.collection('sales')
-          .where('accountId','==',accountId)
-          .where('saleDate','>=',yearStart)
-          .where('saleDate','<', yearEnd)
-          .get(),
-        db.collection('expenses')
-          .where('accountId','==',accountId)
-          .where('saleDate','>=',yearStart)
-          .where('saleDate','<', yearEnd)
-          .get(),
-        db.collection('recurringMonthly')
-          .where('accountId','==',accountId)
-          .get()
-      ]);
-      /* ──────────────────────────────────────────────────────────
-         Shared helper – convert an expense row to “what’s paid”
-      ────────────────────────────────────────────────────────── */
-      const paidPortion = row => {
-        const s = row.expenseStatus || '';
-        const c = +row.expenseCost || 0;
-        switch (s) {
-          case 'Not Paid'               : return 0;
-          case 'Half Cash + Not Paid'   :
-          case 'Half Online + Not Paid' :
-            return row.expenseDetail1 !== undefined
-                   ? (+row.expenseDetail1 || 0)
-                   : c / 2;
-          default                       : return c;
-        }
-      };
-
-      /* ───────────  KPI  &  Top-N  (current month)  ─────────── */
-      const sales      = monthSalesSnap.docs.map(d => d.data());
-      const expenses   = monthExpSnap .docs.map(d => d.data());
-
-      const recRowsNow = monthRecSnap.docs
-        .map(d => d.data())
-        .filter(r => !r.deleted && r.month === ymNow);
-
-      const totalRevenue    = sales.reduce((s,x)=>
-                              s + (x.totalSale !== undefined
-                                    ? +x.totalSale
-                                    : x.retailPrice * x.saleQuantity), 0);
-      const totalProfit     = sales.reduce((s,x)=>s + x.profit, 0);
-      const totalExpenses   = [...expenses, ...recRowsNow]
-                              .reduce((s,x)=>s + paidPortion(x), 0);
-      const totalGstPayable = sales.reduce((s,x)=>s + (+x.gstPayable||0), 0);
-      const netProfit       = totalProfit - totalExpenses - totalGstPayable;
-
-      /* --- Top-N products (still current-month only) --- */
-      const pMap = {};
-      sales.forEach(s => {
-        const k = s.productId;
-        if (!pMap[k])
-          pMap[k] = { productName:s.productName, unitsSold:0, revenue:0, profit:0 };
-        const row = pMap[k];
-        const qty = +s.saleQuantity;
-        const amt = (s.totalSale !== undefined) ? +s.totalSale : s.retailPrice * qty;
-        row.unitsSold += qty;
-        row.revenue   += amt;
-        row.profit    += s.profit;
-      });
-      const pArr      = Object.values(pMap);
-      const topSelling= [...pArr].sort((a,b)=>b.unitsSold - a.unitsSold).slice(0, topN);
-      const topRevenue= [...pArr].sort((a,b)=>b.revenue   - a.revenue ).slice(0, topN);
-      const topProfit = [...pArr].sort((a,b)=>b.profit    - a.profit  ).slice(0, topN);
-
-      /* ─────────── 12-month trend buckets (chartYear) ─────────── */
-      const yearSales    = yearSalesSnap.docs.map(d => d.data());
-      const yearExpenses = yearExpSnap .docs.map(d => d.data());
-      const yearRecRows  = yearRecSnap .docs
-        .map(d => d.data())
-        .filter(r => !r.deleted && r.month.startsWith(String(chartYear)));
-
-      const monthlyProfit  = {};
-      const monthlyExpense = {};
-      const monthlyGst     = {};
-      for (let m = 1; m <= 12; m++) {
-        const ym = `${chartYear}-${pad(m)}`;
-        monthlyProfit [ym] = 0;
-        monthlyExpense[ym] = 0;
-        monthlyGst    [ym] = 0;
-      }
-      yearSales.forEach(s => {
-        const ym = s.saleDate.slice(0, 7);
-        if (monthlyProfit[ym] !== undefined) {
-          monthlyProfit[ym] += s.profit;
-          monthlyGst   [ym] += (+s.gstPayable || 0);
-        }
-      });
-      [...yearExpenses, ...yearRecRows].forEach(e => {
-        const ym = e.saleDate ? e.saleDate.slice(0,7) : e.month;
-        if (monthlyExpense[ym] !== undefined) {
-          monthlyExpense[ym] += paidPortion(e);
-        }
-      });
-      /* ─────────── Period label logic (unchanged UI) ─────────── */
-      let periodLabel, uiMonth = month, uiFrom = from, uiTo = to, uiYear = year;
-      if (month) {
-        periodLabel = new Date(`${month}-01`)
-                        .toLocaleString('default',{ month:'long', year:'numeric' });
-      } else if (from && to) {
-        periodLabel = `${from} → ${to}`;
-      } else if (year) {
-        periodLabel = `Year ${year}`;
-      } else {
-        periodLabel = new Date(`${ymNow}-01`)
-                        .toLocaleString('default',{ month:'long', year:'numeric' });
-        uiMonth = ymNow;            // default filter pre-select
-      }
-
-      /* ─────────── Render ─────────── */
-      res.render('stats', {
-        topSelling, topRevenue, topProfit,
-        monthlyProfit, monthlyExpense, monthlyGst,
-        totalRevenue, totalExpenses, totalGstPayable, netProfit,
-        periodLabel,
-        month:uiMonth, from:uiFrom, to:uiTo, year:uiYear, topN,
-        chartYear                     // sent to EJS for the JS payload
-      });
-
-    } catch (err) {
-      console.error('/stats error:', err);
-      res.status(500).send(err.toString());
-    }
-  }
-);
-
-/* ─────────── PASSWORD RESET ROUTES (MASTER-ONLY) ─────────── */
-// GET /forgot-password
-app.get('/forgot-password', (req, res) => {
-  if (req.session?.user) return res.redirect('/');
-  res.render('forgotPassword', { sent: false, error: null });
+  getNextInvoiceNo                                       // helper already in app.js
 });
+app.use('/', invoiceRoutes);
 
-// POST /forgot-password
-app.post('/forgot-password', async (req, res) => {
-  try {
-    const emailRaw = req.body.email || '';
-    const email    = emailRaw.trim().toLowerCase();
-    if (!email) {
-      return res.status(400).render('forgotPassword',
-        { sent: false, error: 'Please enter your registered email.' });
-    }
-    // master-account lookup
-    const snap = await db.collection('users')
-                         .where('email',    '==', email)
-                         .where('isMaster', '==', true)
-                         .limit(1).get();
-    /* Always show success even if no match → no user enumeration */
-    if (snap.empty) return res.render('forgotPassword', { sent: true, error: null });
-
-    const userDoc = snap.docs[0];
-
-// generate raw token + SHA-256 hash (store only the hash)
-const rawToken = crypto.randomBytes(32).toString('hex');
-const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-const expires   = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-await db.collection('passwordResets').doc(tokenHash).set({
-  userId    : userDoc.id,
-  email,
-  expiresAt : expires,
-  used      : false,
-  createdAt : new Date()
-});
-
-const link = `${process.env.BASE_URL || 'http://localhost:3000'}/reset-password/${rawToken}`;
-    // fire the email
-    await transporter.sendMail({
-      to      : email,
-      from    : process.env.EMAIL_USER,
-      subject : 'Reset your DashInsight master password',
-      html    : `
-        <p>Hi ${userDoc.data().name},</p>
-        <p>You (or someone using your email) requested a password reset.</p>
-        <p><a href="${link}">Click here to choose a new password</a><br>
-           (this link is valid for 1 hour and can be used once).</p>
-        <p>If you didn’t request this, just ignore the email.</p>`
-    });
-
-    res.render('forgotPassword', { sent: true, error: null });
-  } catch (err) {
-    console.error('/forgot-password error:', err);
-    res.status(500).render('forgotPassword',
-      { sent: false, error: 'Something went wrong. Please try again.' });
-  }
-});
-
-// GET /reset-password/:token
-app.get('/reset-password/:token', async (req, res) => {
-  try {
-   const rawToken   = req.params.token;
-const tokenHash  = crypto.createHash('sha256').update(rawToken).digest('hex');
-const doc        = await db.collection('passwordResets').doc(tokenHash).get();
-
-    if (!doc.exists) {
-      return res.status(400).render('resetPassword',
-        { token: '', invalid: true, error: 'Invalid or expired link.' });
-    }
-    const data = doc.data();
-    if (data.used || data.expiresAt.toDate() < new Date()) {
-      return res.status(400).render('resetPassword',
-        { token: '', invalid: true, error: 'Link has expired. Request a new one.' });
-    }
-res.render('resetPassword', {               // token → rawToken
-  token: rawToken,
-  invalid: false,
-  error: null
-});
-  } catch (err) {
-    res.status(500).send(err.toString());
-  }
-});
-
-// POST /reset-password
-app.post('/reset-password', async (req, res) => {
-  try {
-    const { token, password, confirmPassword } = req.body;
-    if (!password || password !== confirmPassword) {
-      return res.status(400).render('resetPassword',
-        { token, invalid: false, error: 'Passwords do not match.' });
-    }
-
-    const tokenRef  = db.collection('passwordResets').doc(token);
-    const tokenSnap = await tokenRef.get();
-    if (!tokenSnap.exists) {
-      return res.status(400).render('resetPassword',
-        { token: '', invalid: true, error: 'Invalid or expired link.' });
-    }
-
-    const tData = tokenSnap.data();
-    if (tData.used || tData.expiresAt.toDate() < new Date()) {
-      return res.status(400).render('resetPassword',
-        { token: '', invalid: true, error: 'Link has expired. Request a new one.' });
-    }
-
-    // update master password
-    const hashed = await bcrypt.hash(password, 10);
-    await db.collection('users').doc(tData.userId).update({ password: hashed });
-
-    // mark token consumed
-    await tokenRef.update({ used: true, usedAt: new Date() });
-
-    res.redirect('/login');
-  } catch (err) {
-    console.error('/reset-password error:', err);
-    res.status(500).render('resetPassword',
-      { token, invalid: false, error: 'Something went wrong. Please try again.' });
-  }
-});
-
-/* ─────────── SINGLE INVOICE (HTML-for-print) ─────────── */
-
-// GET /invoice/:saleId
-app.get(
-  '/invoice/:saleId',
-  isAuthenticated,                    // same guard you use elsewhere
-  async (req, res) => {
-    try {
-      const { saleId } = req.params;
-
-      // 1️⃣  Fetch the sale row
-      const saleSnap = await db.collection('sales').doc(saleId).get();
-      if (!saleSnap.exists)
-        return res.status(404).send('Sale not found');
-
-      const sale = { id: saleSnap.id, ...saleSnap.data() };
-
-      if (sale.accountId !== req.session.user.accountId)
-        return res.status(403).send('Access denied');
-
-      // 2️⃣  Pull business header
-      const userDoc = await db.collection('users')
-                              .doc(req.session.user.accountId).get();
-      const shop    = userDoc.exists ? userDoc.data() : {};
-
-      // 3️⃣  GST % helper
-      const gstPct = (sale.outputTax && sale.totalSale)
-        ? ((sale.outputTax / sale.totalSale) * 100).toFixed(2)
-        : '';
-
-      // 4️⃣  Render
-      res.render('invoice', {
-        sale,
-        gstPct,
-        shop,
-        v: res.locals.v,
-        csrfToken: req.csrfToken()
-      });
-    } catch (e) {
-      res.status(500).send(e.toString());
-    }
-  }
-);
-
-// GET /invoice-number/:invoiceNo  – print ALL sales that share this number
-app.get(
-  '/invoice-number/:invoiceNo',
+/* ─────────── GST ROUTES (externalised) ─────────── */
+const makeGstRoutes = require('./routes/gst');       // NEW LINE
+const gstRoutes     = makeGstRoutes({                // NEW LINE
+  db,                                                 // Firestore instance
   isAuthenticated,
-  async (req, res) => {
-    try {
-      const { invoiceNo } = req.params;
-      const accountId     = req.session.user.accountId;
-
-      // 1️⃣ Fetch every sale row that belongs to this invoice
-      const snap = await db.collection('sales')
-                           .where('accountId','==',accountId)
-                           .where('invoiceNo','==',invoiceNo)
-                           .orderBy('createdAt','asc')
-                           .get();
-      if (snap.empty) return res.status(404).send('Invoice not found');
-
-      const items = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-
-      // 2️⃣ Business header
-      const shopDoc = await db.collection('users').doc(accountId).get();
-      const shop    = shopDoc.exists ? shopDoc.data() : {};
-
-      // 3️⃣ Totals
-      const totalSale = items.reduce((t,i)=>t + (+i.totalSale), 0);
-      const outputTax = items.reduce((t,i)=>t + (+i.outputTax||0), 0);
-
-      res.render('invoiceMulti', {
-        items,
-        invoiceNo,
-        saleDate : items[0].saleDate,
-        createdAt: items[0].createdAt,
-        totalSale,
-        outputTax,
-        shop,
-        v: res.locals.v,
-        csrfToken: req.csrfToken()
-      });
-
-    } catch (e) {
-      res.status(500).send(e.toString());
-    }
-  }
-);
-/* ─────────── GST SUMMARY HELPER ─────────── *
-   Returns an array like
-   [
-     { month:'2025-06', taxable:₹, output:₹, input:₹, net:₹ },
-     …
-   ]
-   The month window and ordering exactly match your other
-   “profit” & “stats” pages, so one line of UI is enough.
-* --------------------------------------------------- */
-async function getGstSummary(accountId, startDate, endDate) {
-  const salesSnap = await db.collection('sales')
-    .where('accountId','==',accountId)
-    .where('saleDate','>=',startDate)
-    .where('saleDate','<', endDate)
-    .get();
-
-  const bucket = {};                // { YYYY-MM : { taxable, output, input } }
-
-  salesSnap.docs.forEach(doc => {
-    const s = doc.data();
-    const ym = s.saleDate.substring(0,7);
-    if (!bucket[ym]) bucket[ym] = { taxable:0, output:0, input:0 };
-    bucket[ym].taxable += +(s.totalSale || s.retailPrice * s.saleQuantity);
-    bucket[ym].output  += +(s.outputTax  || 0);
-    bucket[ym].input   += +(s.inputTax   || 0);
-  });
-
-  return Object.entries(bucket)          // [[ym,obj], …]
-    .sort(([a],[b]) => a.localeCompare(b))
-    .map(([month, v]) => ({
-      month,
-      taxable : +v.taxable.toFixed(2),
-      output  : +v.output .toFixed(2),
-      input   : +v.input  .toFixed(2),
-      net     : +(v.output - v.input).toFixed(2)
-    }));
-}
-
-/* ─────────── GST SUMMARY  /gst  ─────────── */
-app.get(
-  '/gst',
-  isAuthenticated,
-  restrictRoute('/gst'),          // keep this if you use route-locking
-  async (req, res) => {
-    try {
-      const accountId = req.session.user.accountId;
-
-      /* Re-use the exact window logic from /stats so UX is identical */
-      const pad = n => String(n).padStart(2,'0');
-      const today = new Date();
-      const curYM = `${today.getFullYear()}-${pad(today.getMonth()+1)}`;
-
-      const { month='', from='', to='', year='' } = req.query;
-      let startDate, endDate, periodLabel;
-
-      if (month) {                                    // single month
-        startDate = `${month}-01`;
-        const [y,m] = month.split('-');
-        let nextM=parseInt(m,10)+1, nextY=parseInt(y,10);
-        if (nextM>12){ nextM=1; nextY++; }
-        endDate   = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = new Date(startDate)
-                        .toLocaleString('default',{ month:'long', year:'numeric' });
-
-      } else if (from && to) {                        // month-range
-        startDate = `${from}-01`;
-        const [ty,tm] = to.split('-');
-        let nextM=parseInt(tm,10)+1, nextY=parseInt(ty,10);
-        if (nextM>12){ nextM=1; nextY++; }
-        endDate   = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = `${from} → ${to}`;
-
-      } else if (year) {                              // whole year
-        startDate = `${year}-01-01`;
-        endDate   = `${parseInt(year,10)+1}-01-01`;
-        periodLabel = `Year ${year}`;
-
-      } else {                                       // default = current month
-        startDate = `${curYM}-01`;
-        let nextM=today.getMonth()+2, nextY=today.getFullYear();
-        if (nextM>12){ nextM=1; nextY++; }
-        endDate = `${nextY}-${pad(nextM)}-01`;
-        periodLabel = new Date(startDate)
-                        .toLocaleString('default',{ month:'long', year:'numeric' });
-      }
-
-      const rows = await getGstSummary(accountId, startDate, endDate);
-      const totals = rows.reduce((t,r)=>({
-        taxable: t.taxable + r.taxable,
-        output : t.output  + r.output,
-        input  : t.input   + r.input,
-        net    : t.net     + r.net
-      }), {taxable:0,output:0,input:0,net:0});
-
-     res.render('gst', {
-        rows,
-        totals,
-        periodLabel,
-        month,
-        from,
-        to,
-        year,
-        user : req.session.user            // ← makes <%= user.businessName %> work
-      });
-    } catch (err) {
-      console.error('/gst error:', err);
-      res.status(500).send(err.toString());
-    }
-  }
-);
-
-//* ─────────── START THE SERVER (memory-aware) ─────────── */
-const PORT = process.env.PORT || 3000;
-
-/* ── Compute a safe worker count ──────────────────────────────────────────
-   • Render dynos = 512 MiB RAM by default (exposed in RENDER_MEMORY_LIMIT_MIB)
-   • 1 worker of this app ≈ 70 MiB RSS (measured).
-   • Keep a 25 % head-room → usable = 0.75 × memLimit.
-   • workers = min(CPU cores, floor(usable / 70 MiB)).
-   • You can still hard-set WEB_CONCURRENCY in the Render dashboard.
-   ---------------------------------------------------------------------- */
-const MB                = 1024 * 1024;
-const memLimitMiB       = parseInt(process.env.RENDER_MEMORY_LIMIT_MIB || 512, 10);
-const approxPerWorkerMiB= 70;                       // tweak if profiling changes
-const maxByRam          = Math.floor((memLimitMiB * 0.75) / approxPerWorkerMiB) || 1;
-const cpuCount          = os.cpus().length;
-
-const CPUS = Math.max(
-  1,
-  parseInt(process.env.WEB_CONCURRENCY || Math.min(cpuCount, maxByRam), 10)
-);
-
-/* ────────── MODE A – cluster (≥2 workers) ────────── */
-if (CPUS > 1 && cluster.isPrimary) {
-  logger.info(`🛡  Master ${process.pid} starting ${CPUS} worker(s)…`);
-
-  for (let i = 0; i < CPUS; i++) cluster.fork();
-
-  /* simple respawn – keeps the dyno alive */
-cluster.on('exit', (worker, code, signal) => {
-  logger.warn(`⚠️  Worker ${worker.process.pid} exited (${signal || code}); restarting…`);
-  setTimeout(() => cluster.fork(), 2000);   // single, delayed fork
+  restrictRoute
 });
+app.use('/', gstRoutes);   
 
-/* ────────── MODE B – single-process fallback ────────── */
-} else {
-  if (cluster.isPrimary) {
-    logger.info('ℹ️  Running in single-process mode (memory-safe)');
-  }
-
-  const server = http.createServer(app).listen(PORT, () => {
-    logger.info(`✅  PID ${process.pid} listening on :${PORT}`);
-  });
-
-  /* ─── graceful shutdown + hard-kill safeguard ─── */
-  let killTimer = null;
-
-  const graceful = async (reason) => {
-    if (killTimer) return;                       // already running – ignore duplicate
-    logger.warn(`⏳  PID ${process.pid} shutting down – ${reason}`);
-
-    killTimer = setTimeout(() => {
-      logger.error('❌  Force-killing stuck process (grace period elapsed)');
-      process.exit(1);
-    }, 30_000).unref();
-
-    server.close(() => logger.info('HTTP closed'));
-
-    await Promise.allSettled([
-      redisClient.quit().catch(() => {}),
-      admin.app().delete().catch(() => {})
-    ]);
-
-    clearTimeout(killTimer);
-    process.exit(0);
-  };
-
-  process
-    .on('SIGTERM', () => graceful('SIGTERM'))
-    .on('SIGINT',  () => graceful('SIGINT'))
-    .on('uncaughtException', (err) => {
-      console.error('❌  Uncaught exception:', err);
-      graceful('uncaughtException');
-    });
-}
+/* ───── Boot-strap server (moved out) ───── */
+const startServer = require('./routes/startServer');
+startServer({ app, logger, redisClient, admin });

@@ -82,27 +82,32 @@
           </div>
         </div>
 
-        <!-- Category -->
-        <div class="form-row">
-          <div class="form-group">
-            <label for="selectedCategory">Choose Category</label>
-            <select id="selectedCategory" name="selectedCategory">
-              <option value="">-- Select Category --</option>
-              <% categories.forEach(cat => { %>
-                <option value="<%= attr(cat) %>"
-                        <%= batch.category === cat ? 'selected' : '' %>>
-                  <%= cat %>
-                </option>
-              <% }) %>
-            </select>
-          </div>
+      <!-- Category -->
+<div class="form-row">
+  <div class="form-group">
+    <label for="selectedCategory">Choose Category</label>
+    <select id="selectedCategory" name="selectedCategory">
+      <option value="">-- Select Category --</option>
+      <% 
+        // Sort categories alphabetically A–Z
+        categories.sort((a, b) => a.localeCompare(b)); 
+        categories.forEach(cat => { 
+      %>
+        <option value="<%= attr(cat) %>"
+                <%= batch.category === cat ? 'selected' : '' %>>
+          <%= cat %>
+        </option>
+      <% }) %>
+    </select>
+  </div>
 
-          <div class="form-group">
-            <label for="newCategory">Or Create Category</label>
-            <input type="text" id="newCategory" name="newCategory"
-                   placeholder="New category" maxlength="40">
-          </div>
-        </div>
+  <div class="form-group">
+    <label for="newCategory">Or Create Category</label>
+    <input type="text" id="newCategory" name="newCategory"
+           placeholder="New category" maxlength="40">
+  </div>
+</div>
+
 
         <!-- Unit -->
         <div class="form-row">
