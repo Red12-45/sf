@@ -186,12 +186,6 @@ redisClient
   });
 redisClient.connect().catch(console.error);     // kick off the first connect
 
-/* ─────────── Dual-store session middleware ───────────
-   • Uses Redis when it is ‘ready’.
-   • Instantly switches to MemoryStore when Redis drops.
-   • Swaps back to Redis the moment `.ready` fires again.
-   • Zero code changes anywhere else – req.session works as before.
-────────────────────────────────────────────────────────*/
 const MemoryStore = session.MemoryStore;
 const memoryStore = new MemoryStore({
   checkPeriod: 15 * 60 * 1000   // wipe expired sessions every 15 min
@@ -420,7 +414,6 @@ const transporter = nodemailer.createTransport({
 });
 
 
-
 async function getNextInvoiceNo(accountId) {
   const SHARDS = 10;
   const rand   = Math.floor(Math.random() * SHARDS).toString(); // '0' … '9'
@@ -441,10 +434,6 @@ async function getNextInvoiceNo(accountId) {
   return 'INV-' + String(total).padStart(6, '0');
 }
 
-/* ─────────── STOCK BATCH HELPER (transaction-aware) ───────────
-   • If a Firestore transaction object is supplied, we reuse it.
-   • Otherwise we create a standalone transaction (old behaviour).
-   ----------------------------------------------------------------*/
 async function recalcProductFromBatches(productId, tx = null) {
   const work = async (transaction) => {
     /* 1️⃣  Read every batch that still belongs to this product */
@@ -512,8 +501,6 @@ const getUnits = async accountId => {
   )];
   return uniq;                          // no Redis layer
 };
-
-/* ─────────── DAILY SUMMARY (used by Ajax & dashboard) ─────────── */
 
 async function computeDailySummary(accountId, saleDate) {
   /* 0. HOT-CACHE (30 s) – most dashboards reload within this */
@@ -591,11 +578,7 @@ async function computeDailySummary(accountId, saleDate) {
   await cacheSet(ck, result, 30);
   return result;
 }
-/* ────────────────────────────────────────────────────────────────
-   computeMonthTotal(accountId, month)          ★ NEW 2025-06-21 ★
-   Returns the grand total (regular + recurring) for the month,
-   skipping rows whose status is “Not Paid”.
-   ----------------------------------------------------------------*/
+
 async function computeMonthTotal(accountId, month) {
   const start = `${month}-01`;
   const [y, m] = month.split('-');
@@ -622,9 +605,6 @@ const recTotal = recSnap.docs
   return +(expenseTotal + recTotal).toFixed(2);
 }
 
-/* ===============================================================
-   paidPortion(row) – return only what’s already paid
-   =============================================================== */
 function paidPortion (row) {
   const status = row.expenseStatus || '';
   const cost   = +row.expenseCost || 0;
@@ -644,9 +624,7 @@ function paidPortion (row) {
       return cost;
   }
 }
-// processSale — creates one sale, updates stock/batches and
-//               returns the saved document               (AJAX + full-page)
-// ────────────────────────────────────────────────────────────────
+
 async function processSale(body, user) {
   /* 0️⃣  PRE-WORK ────────── */
   const accountId = user.accountId;
@@ -759,7 +737,6 @@ if (typeof product.inclusiveTax === 'number') {
   await cacheDel(`dailySum_${accountId}_${saleData.saleDate}`);
   return saleData;
 }
-
 
 const registerRoutes = require('./routes/register');
 app.use('/', registerRoutes);
