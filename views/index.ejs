@@ -508,42 +508,40 @@
     </h2>
 
     <table id="expenseTable">
-      <thead>
-        <tr>
-          <th>Expense Reason</th>
-          <th>Expense Cost</th>
-          <th>Payment Method</th>
-          <th>Detail&nbsp;1</th>
-          <th>Detail&nbsp;2</th>
-          <th>GST Payable</th>
-          <th>Time</th>
-          <th>Action</th>
-        </tr>
-      </thead>
+  <thead>
+  <tr>
+    <th>Expense Reason</th>
+    <th>Expense Cost</th>
+    <th>Payment Method</th>
+    <th>Detail&nbsp;1</th>
+    <th>Detail&nbsp;2</th>
+    <th>Time</th>
+    <th>Action</th>
+  </tr>
+</thead>
+
       <tbody>
         <% expenses.forEach(expense => { %>
-          <tr>
-            <td><%= expense.expenseReason %></td>
-            <td><%= expense.expenseCost.toFixed(2) %></td>
-            <td><%= expense.expenseStatus %></td>
-            <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : '-' %></td>
-            <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : '-' %></td>
-            <td><%= expense.gstPayable !== undefined
-                    ? expense.gstPayable.toFixed(2)
-                    : '-' %></td>
-            <td>
-              <%
-                const expenseTime = expense.createdAt.toDate
-                  ? expense.createdAt.toDate().toLocaleTimeString()
-                  : new Date(expense.createdAt).toLocaleTimeString();
-              %>
-              <%= expenseTime %>
-            </td>
-            <td style="text-align:center;">
-              <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
-                 data-id="<%= expense.id %>"></i>
-            </td>
-          </tr>
+         <tr>
+  <td><%= expense.expenseReason %></td>
+  <td><%= expense.expenseCost.toFixed(2) %></td>
+  <td><%= expense.expenseStatus %></td>
+  <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : '-' %></td>
+  <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : '-' %></td>
+  <td>
+    <%
+      const expenseTime = expense.createdAt.toDate
+        ? expense.createdAt.toDate().toLocaleTimeString()
+        : new Date(expense.createdAt).toLocaleTimeString();
+    %>
+    <%= expenseTime %>
+  </td>
+  <td style="text-align:center;">
+    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
+       data-id="<%= expense.id %>"></i>
+  </td>
+</tr>
+
         <% }); %>
       </tbody>
     </table>
@@ -1010,7 +1008,6 @@ function refreshExpenseHeader () {
   };
 
  /* ——— SALE FORM ——— */
-/* ——— SALE FORM ——— */
 document.getElementById('saleForm').addEventListener('submit', async e => {
   if (e.submitter?.classList.contains('noAjax')) return;   // normal post
   e.preventDefault();
@@ -1034,72 +1031,73 @@ document.getElementById('saleForm').addEventListener('submit', async e => {
       opt.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
     }
 
-    /* build a new row and prepend it – every dynamic value is escaped */
-    const row = document.createElement('tr');
-    const pillClass = {
-      'Paid Cash'  : 'status-cash',
-      'Paid Online': 'status-online',
-      'Not Paid'   : 'status-notpaid'
-    }[s.status] || 'status-mixed';
+/* build a new row and prepend it */
+/* build a new row and prepend it – HTML now escaped */
+/* build a new row and prepend it – every dynamic value is escaped */
+const row = document.createElement('tr');
+const pillClass = {
+  'Paid Cash'  : 'status-cash',
+  'Paid Online': 'status-online',
+  'Not Paid'   : 'status-notpaid'
+}[s.status] || 'status-mixed';
 
-    row.innerHTML = `
-      <td>${escapeHtml(s.productName)}</td>
-      <td>${cash(s.wholesalePrice)}</td>
-      <td>${cash(s.retailPrice)}</td>
-      <td>${qty(s.saleQuantity)}</td>
-      <td>${escapeHtml(s.unit || '-')}</td>
-      <td>${cash(s.totalSale)}</td>
-      <td>${cash(s.profitPerUnit)}</td>
-      <td>${cash(s.profit)}</td>
-      <td>${s.gstPayable !== undefined ? cash(s.gstPayable) : '-'}</td>
-      <td>
-        <span class="status-pill ${pillClass}">${escapeHtml(s.status)}</span>
-        ${(s.paymentDetail1 || s.paymentDetail2)
-            ? `<div class="status-details-inline">
-                 ${s.paymentDetail1 ? `<span><strong>Detail1:</strong> ₹${cash(s.paymentDetail1)}</span>` : ''}
-                 ${s.paymentDetail2 ? `<span><strong>Detail2:</strong> ₹${cash(s.paymentDetail2)}</span>` : ''}
-               </div>` : ''}
-      </td>
-      <td>${s.extraInfo ? escapeHtml(s.extraInfo) : '-'}</td>
-      <td>${new Date(s.createdAt).toLocaleTimeString('en-IN',
-            { hour12:false, timeZone:'Asia/Kolkata' })}</td>
-      <td style="text-align:center;">
-        <a href="/invoice/${escapeHtml(s.id)}"
-           target="_blank" rel="noopener noreferrer" class="print-btn"
-           title="Print this line only"><i class="fas fa-receipt"></i></a>&nbsp;
-        <a href="/invoice-number/${escapeHtml(s.invoiceNo)}"
-           target="_blank" rel="noopener noreferrer"
-           title="Print full invoice ${escapeHtml(s.invoiceNo)}"><i class="fas fa-file-invoice"></i></a>&nbsp;
-        <i class="fas fa-trash-alt delete-sale-btn"
-           data-id="${escapeHtml(s.id)}"
-           data-product-id="${escapeHtml(s.productId)}"
-           data-quantity="${escapeHtml(s.saleQuantity)}"
-           title="Delete sale"></i>
-      </td>`;
+row.innerHTML = `
+  <td>${escapeHtml(s.productName)}</td>
+  <td>${cash(s.wholesalePrice)}</td>
+  <td>${cash(s.retailPrice)}</td>
+  <td>${qty(s.saleQuantity)}</td>
+  <td>${escapeHtml(s.unit || '-')}</td>
+  <td>${cash(s.totalSale)}</td>
+  <td>${cash(s.profitPerUnit)}</td>
+  <td>${cash(s.profit)}</td>
+  <td>${s.gstPayable !== undefined ? cash(s.gstPayable) : '-'}</td>
+  <td>
+    <span class="status-pill ${pillClass}">${escapeHtml(s.status)}</span>
+    ${(s.paymentDetail1 || s.paymentDetail2)
+        ? `<div class="status-details-inline">
+             ${s.paymentDetail1 ? `<span><strong>Detail1:</strong> ₹${cash(s.paymentDetail1)}</span>` : ''}
+             ${s.paymentDetail2 ? `<span><strong>Detail2:</strong> ₹${cash(s.paymentDetail2)}</span>` : ''}
+           </div>` : ''}
+  </td>
+  <td>${s.extraInfo ? escapeHtml(s.extraInfo) : '-'}</td>
+  <td>${new Date(s.createdAt).toLocaleTimeString('en-IN',
+        { hour12:false, timeZone:'Asia/Kolkata' })}</td>
+  <td style="text-align:center;">
+    <a href="/invoice/${escapeHtml(s.id)}"
+       target="_blank" rel="noopener noreferrer" class="print-btn"
+       title="Print this line only"><i class="fas fa-receipt"></i></a>&nbsp;
+    <a href="/invoice-number/${escapeHtml(s.invoiceNo)}"
+       target="_blank" rel="noopener noreferrer"
+       title="Print full invoice ${escapeHtml(s.invoiceNo)}"><i class="fas fa-file-invoice"></i></a>&nbsp;
+    <i class="fas fa-trash-alt delete-sale-btn"
+       data-id="${escapeHtml(s.id)}"
+       data-product-id="${escapeHtml(s.productId)}"
+       data-quantity="${escapeHtml(s.saleQuantity)}"
+       title="Delete sale"></i>
+  </td>`;
+
+
+
 
     /* ensure table exists, then prepend */
-    ensureTableExists(
-      '.tables-content div:first-child',
-      '#salesTable',
-      `<thead>
-         <tr>
-           <th>Product</th><th>Wholesale</th><th>Sale Price</th>
-           <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
-           <th>Total Profit</th><th>GST Payable</th><th>Status</th>
-           <th>Info</th><th>Time</th><th>Action</th>
-         </tr>
-       </thead>`
-    );
+  ensureTableExists(
+  '.tables-content div:first-child',
+  '#salesTable',
+  `<thead>
+     <tr>
+       <th>Product</th><th>Wholesale</th><th>Sale Price</th>
+       <th>Qty</th><th>Unit</th><th>Total Sale</th><th>Profit/Unit</th>
+       <th>Total Profit</th><th>GST Payable</th><th>Status</th>
+       <th>Info</th><th>Time</th><th>Action</th>
+     </tr>
+   </thead>`
+);
 
     document.querySelector('#salesTable tbody').prepend(row);
 
     /* refresh UI */
     refreshSummary(res.summary);
-
-    /* 🔄 RESET form + restore full product list */
     e.target.reset();
-    filterProductOptions(false);          // 👈 NEW: unhide every option
-
     updateSaleCalculations();
     statusSelect.dispatchEvent(new Event('change'));
 
@@ -1124,34 +1122,62 @@ document.getElementById('expenseForm').addEventListener('submit', async e => {
     const res = await postJSON('/api/expense', obj);   // res.expenses ⇢ array
 
     /* 2. render every row that came back (works for 1-N inserts) */
-    res.expenses.forEach(ex => {
-      /* make sure the expense table exists BEFORE each prepend */
-      ensureTableExists(
-        '.tables-content div:nth-child(2)',
-        '#expenseTable',
-        `<thead>
-          <tr>
-            <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
-            <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-          </tr>
-        </thead>`
-      );
+/* 2. render every row that came back (works for 1-N inserts) */
+res.expenses.forEach(ex => {
+  /* make sure the expense table exists BEFORE each prepend */
+  ensureTableExists(
+    '.tables-content div:nth-child(2)',
+    '#expenseTable',
+  `<thead>
+  <tr>
+    <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
+    <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
+  </tr>
+</thead>`
+  );
 
-      /* build row and prepend it */
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${escapeHtml(ex.expenseReason)}</td>
-        <td>${cash(ex.expenseCost)}</td>
-        <td>${escapeHtml(ex.expenseStatus)}</td>
-        <td>${ex.expenseDetail1 ? cash(ex.expenseDetail1) : '-'}</td>
-        <td>${ex.expenseDetail2 ? cash(ex.expenseDetail2) : '-'}</td>
-        <td>${new Date(ex.createdAt).toLocaleTimeString()}</td>
-        <td style="text-align:center;">
-          <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
-             data-id="${escapeHtml(ex.id)}"></i>
-        </td>`;
-      document.querySelector('#expenseTable tbody').prepend(row);
-    });
+  /* ───────────────────────────────
+     Timestamp → IST string (robust)
+     ─────────────────────────────── */
+/* ───────────────────────────────
+   Timestamp → IST string (robust)
+   ─────────────────────────────── */
+const ts = ex.createdAt;
+let d;                                       // final Date object
+
+if (ts instanceof Date) {
+  d = ts;                                    // already a Date
+} else if (ts && typeof ts === 'object') {
+  if ('_seconds' in ts)        d = new Date(ts._seconds * 1000);
+  else if ('seconds' in ts)    d = new Date(ts.seconds  * 1000);
+  else if (typeof ts.toDate === 'function') d = ts.toDate();
+}
+
+if (!d || isNaN(d)) d = new Date(ts);        // fallback
+
+const timeIST = d.toLocaleTimeString('en-IN', {
+  hour12  : true,             // ← CHANGED: show “am/pm”
+  timeZone: 'Asia/Kolkata'
+});
+
+
+  /* build row and prepend it */
+  const row = document.createElement('tr');
+row.innerHTML = `
+  <td>${escapeHtml(ex.expenseReason)}</td>
+  <td>${cash(ex.expenseCost)}</td>
+  <td>${escapeHtml(ex.expenseStatus)}</td>
+  <td>${ex.expenseDetail1 ? cash(ex.expenseDetail1) : '-'}</td>
+  <td>${ex.expenseDetail2 ? cash(ex.expenseDetail2) : '-'}</td>
+  <td>${timeIST}</td>
+  <td style="text-align:center;">
+    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
+       data-id="${escapeHtml(ex.id)}"></i>
+  </td>`;
+
+  document.querySelector('#expenseTable tbody').prepend(row);
+});
+
 
     /* 3. housekeeping */
     refreshExpenseHeader();                     // rebuild “Expense Amount: ₹…”

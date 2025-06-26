@@ -214,14 +214,29 @@ module.exports = function makeExpenseRoutes ({
         };
       });
 
-      const month   = req.body.saleDate.substring(0,7);
-      const monthTotal = await computeMonthTotal(req.session.user.accountId, month);
+     await cacheDel(`dailySum_${req.session.user.accountId}_${req.body.saleDate}`);
 
-      return res.json({
-        success   : true,
-        monthTotal,
-        expenses  : addedExpenses
-      });
+/* 1️⃣  Fresh daily summary (force = true bypasses any residual cache) */
+const { summary } = await computeDailySummary(
+  req.session.user.accountId,
+  req.body.saleDate,
+  true                                // ← force fresh calculation
+);
+
+/* 2️⃣  Fresh month aggregate */
+const month     = req.body.saleDate.substring(0, 7);   // "YYYY-MM"
+const monthTotal= await computeMonthTotal(
+  req.session.user.accountId,
+  month
+);
+
+/* 3️⃣  Send everything the browser needs */
+return res.json({
+  success   : true,
+  summary,          // ← NEW
+  monthTotal,
+  expenses  : addedExpenses
+});
 
     } catch (err) {
       console.error('/api/expense error:', err);
@@ -318,17 +333,27 @@ module.exports = function makeExpenseRoutes ({
 
         await expRef.delete();
 
-        const { summary } = await computeDailySummary(
-          exp.accountId,
-          exp.saleDate
-        );
+  /* ▼ PURGE hot-cache, recompute, and reply */
 
-        const monthTotal = await computeMonthTotal(
-          exp.accountId,
-          exp.saleDate.substring(0, 7)
-        );
+/* 0️⃣  Kick the Redis key so the next read is fresh            */
+await cacheDel(`dailySum_${exp.accountId}_${exp.saleDate}`);
 
-        return res.json({ success: true, summary, monthTotal });
+/* 1️⃣  Fresh daily summary (force = true bypasses any cache)   */
+const { summary } = await computeDailySummary(
+  exp.accountId,
+  exp.saleDate,
+  true                           // ← force fresh calculation
+);
+
+/* 2️⃣  Fresh month aggregate                                    */
+const monthTotal = await computeMonthTotal(
+  exp.accountId,
+  exp.saleDate.substring(0, 7)   // "YYYY-MM"
+);
+
+/* 3️⃣  Send the up-to-date numbers back                         */
+return res.json({ success: true, summary, monthTotal });
+
 
       } catch (e) {
         return res.json({ success: false, error: e.toString() });

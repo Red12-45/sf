@@ -502,11 +502,14 @@ const getUnits = async accountId => {
   return uniq;                          // no Redis layer
 };
 
-async function computeDailySummary(accountId, saleDate) {
-  /* 0. HOT-CACHE (30 s) – most dashboards reload within this */
+async function computeDailySummary (accountId, saleDate, force = false) {
+  /* 0. HOT-CACHE (30 s) – skip when caller forces a fresh read */
   const ck = `dailySum_${accountId}_${saleDate}`;
-  const cached = await cacheGet(ck);
-  if (cached) return cached;            // hit ➜ <0.5 ms path
+  if (!force) {
+    const cached = await cacheGet(ck);      // <0.5 ms fast-path
+    if (cached) return cached;
+  }
+
   /* 1. ORIGINAL Firestore work (unchanged logic) */
   const [salesSnap, expSnap, obDoc] = await Promise.all([
     db.collection('sales')
@@ -519,19 +522,23 @@ async function computeDailySummary(accountId, saleDate) {
       .get(),
     db.collection('openingBalances').doc(`${accountId}_${saleDate}`).get()
   ]);
+
   const s = {
     totalProfit:0, totalSales:0,
     totalCashSales:0, totalOnlineSales:0, totalNotPaidSales:0,
     totalCashExpenses:0, totalOnlineExpenses:0,
     totalGstPayable:0
   };
+
   salesSnap.forEach(doc => {
     const d   = doc.data();
     const amt = d.totalSale !== undefined
                   ? +parseFloat(d.totalSale)
                   : d.retailPrice * d.saleQuantity;
+
     s.totalProfit += d.profit;
     s.totalSales  += amt;
+
     switch (d.status) {
       case 'Paid Cash':               s.totalCashSales   += amt; break;
       case 'Paid Online':             s.totalOnlineSales += amt; break;
@@ -551,6 +558,7 @@ async function computeDailySummary(accountId, saleDate) {
     }
     s.totalGstPayable += (d.gstPayable || 0);
   });
+
   expSnap.forEach(doc => {
     const d = doc.data();
     switch (d.expenseStatus) {
@@ -573,11 +581,15 @@ async function computeDailySummary(accountId, saleDate) {
   s.finalCash      = +((+openingBal) + s.totalCashSales - s.totalCashExpenses).toFixed(2);
   s.totalSales     = +s.totalSales.toFixed(2);
   s.totalProfit    = +s.totalProfit.toFixed(2);
+
   const result = { summary: s, openingBalance: openingBal };
-  /* 2. STORE in Redis (30 s TTL) */
+
+  /* 2. STORE in Redis (30 s TTL) – overwrites any stale value */
   await cacheSet(ck, result, 30);
+
   return result;
 }
+
 
 async function computeMonthTotal(accountId, month) {
   const start = `${month}-01`;
