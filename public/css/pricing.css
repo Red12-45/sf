@@ -1027,3 +1027,92 @@ ul {
         width: 100%;
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* DARK THEME  –  auto-applies when the user’s OS is set to dark mode */
+/* ------------------------------------------------------------------ */
+@media (prefers-color-scheme: dark) {
+
+    /* 2-A  ›› Variable overrides */
+    :root {
+        /* Brand colors – keep hue but brighten for dark bg */
+        --primary-color: #8b8dff;
+        --primary-dark:  #6a6cf1;
+        --primary-light: #a7a9ff;
+        --primary-lighter: rgba(139, 141, 255, 0.12);
+
+        --secondary-color: #34d399;
+        --secondary-dark:  #059669;
+        --secondary-light: rgba(52, 211, 153, 0.12);
+
+        --accent-color:  #fbbf24;
+        --accent-dark:   #f59e0b;
+        --accent-light:  rgba(251, 191, 36, 0.12);
+
+        /* Neutral palette flipped for contrast */
+        --dark-color:   #0f172a;   /* new page background */
+        --light-color:  #1e293b;   /* cards / inner surfaces */
+
+        --gray-50:  #1e293b;
+        --gray-100: #1f2937;
+        --gray-200: #374151;
+        --gray-300: #4b5563;
+        --gray-400: #9ca3af;
+        --gray-500: #d1d5db;
+        --gray-600: #e5e7eb;
+        --gray-700: #f3f4f6;
+        --gray-800: #fafafa;
+        --gray-900: #ffffff;
+    }
+
+    /* 2-B  ›› Global surface + text */
+    body {
+        background-color: var(--dark-color);
+        color: var(--gray-500);
+    }
+
+    /* 2-C  ›› Navigation */
+    .navbar,
+    .nav-menu.active {
+        background-color: rgba(15, 23, 42, 0.95);
+    }
+    .navbar-scrolled {
+        background-color: rgba(15, 23, 42, 0.98);
+    }
+    .nav-link { color: var(--gray-400); }
+    .nav-link:hover,
+    .nav-link.active { color: var(--primary-color); }
+
+    /* 2-D  ›› Cards & inner containers */
+    .plan-inner,
+    .faq-item,
+    .satisfaction-guarantee,
+    .footer,
+    .pricing-plan.hover .plan-inner,
+    .pricing-plan:hover .plan-inner {
+        background-color: var(--light-color);
+    }
+    .divider {
+        background-image: linear-gradient(to right, transparent, var(--gray-300), transparent);
+    }
+
+    /* 2-E  ›› Buttons */
+    .btn-primary {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+        color: #ffffff;
+    }
+    .btn-outline {
+        color: var(--primary-color);
+        border-color: var(--gray-400);
+    }
+    .btn-outline:hover {
+        background-color: var(--primary-lighter);
+        border-color: var(--primary-light);
+    }
+
+    /* 2-F  ›› Footer text tweaks */
+    .footer-link,
+    .copyright { color: var(--gray-400); }
+    .footer-link:hover { color: #ffffff; }
+}

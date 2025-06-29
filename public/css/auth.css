@@ -708,34 +708,17 @@ input::placeholder {
     }
 }
 
-@media (max-width: 576px) {
-    .form-container {
-        padding: var(--space-md);
-    }
-    
-    .form-options {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--space-sm);
-    }
-    
-    .welcome-text h2 {
-        font-size: 1.8rem;
-    }
-    
-    .social-icon {
-        width: 48px;
-        height: 48px;
-    }
-    
-    .btn-submit {
-        padding: 14px;
-    }
-    
-    .form-header {
-        margin-bottom: var(--space-md);
-    }
+/* Extra-small phones ≤ 480 px  – single-column, image hidden */
+@media (max-width: 480px) {
+  body           { padding: var(--space-sm); }
+  .container     { flex-direction: column; width: 100%; max-width: 100%; border-radius: 0; }
+  .image-container{ display: none; }
+  .form-container{ padding: var(--space-lg) var(--space-md); }
+  .form-header h1{ font-size: 1.75rem; }
+  .welcome-text  { padding: 0; }
+  .form-group input{ padding: 14px 16px; }
 }
+
 
 /* Focus visible for accessibility */
 *:focus-visible {

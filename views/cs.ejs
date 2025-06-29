@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Customer Support | SalesFlow</title>
+    <!-- Let browsers know this document is dark-theme -->
+    <meta name="color-scheme" content="dark">
     <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
     <link rel="stylesheet" href="/css/cs.css?v=<%= v %>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -32,102 +34,103 @@
         <i class="fas fa-tags"></i>
         <span>Pricing</span>
       </a>
+    </div>
 
-    
-
+    <!-- Mobile toggle button -->
     <button class="mobile-menu-btn">
       <i class="fas fa-bars"></i>
     </button>
   </div>
 </nav>
 
+<section class="support-options">
+  <div class="container">
+      <h2>How Can We Help You Today?</h2>
 
-    <section class="support-options">
-        <div class="container">
-            <h2>How Can We Help You Today?</h2>
-            <div class="options-grid">
+      <div class="options-grid">
+          <div class="option-card">
+              <div class="icon">
+                  <i class="fas fa-envelope"></i>
+              </div>
+              <h3>Email Support</h3>
+              <p>Send us an email and we'll get back to you within 24 hours.</p>
+              <p class="support-email">noklangbangthai@gmail.com</p>
+              <a href="mailto:noklangbangthai@gmail.com" class="btn btn-primary">Email Us</a>
+          </div>
 
-                <div class="option-card">
-                    <div class="icon">
-                        <i class="fas fa-envelope"></i>
-                    </div>
-                    <h3>Email Support</h3>
-                    <p>Send us an email and we'll get back to you within 24 hours.</p>
-                    <p class="support-email">noklangbangthai@gmail.com</p>
-                    <a href="mailto:noklangbangthai@gmail.com" class="btn btn-primary">Email Us</a>
-                </div>
+          <div class="option-card">
+              <div class="icon">
+                  <i class="fas fa-phone-alt"></i>
+              </div>
+              <h3>Phone Support</h3>
+              <p>Give us a call for direct assistance with complex issues.</p>
+              <p class="support-phone">+91 8798117511</p>
+              <a href="tel:+918798117511" class="btn btn-primary">Call Now</a>
+          </div>
+      </div>
+  </div>
+</section>
 
-                <div class="option-card">
-                    <div class="icon">
-                        <i class="fas fa-phone-alt"></i>
-                    </div>
-                    <h3>Phone Support</h3>
-                    <p>Give us a call for direct assistance with complex issues.</p>
-                    <p class="support-phone">+91 8798117511</p>
-                    <a href="tel:+918798117511" class="btn btn-primary">Call Now</a>
-                </div>
+<section class="contact">
+  <div class="container">
+      <div class="contact-info">
+          <h2>Contact Information</h2>
 
-            </div>
-        </div>
-    </section>
+          <div class="info-item">
+              <i class="fas fa-map-marker-alt"></i>
+              <p>Full Nagarjan, Reza ki, Ground Floor</p>
+          </div>
 
-    <section class="contact">
-        <div class="container">
-            <div class="contact-info">
-                <h2>Contact Information</h2>
-                <div class="info-item">
-                    <i class="fas fa-map-marker-alt"></i>
-                    <p>Full Nagarjan, Reza ki, Ground Floor</p>
-                </div>
-                <div class="info-item">
-                    <i class="fas fa-envelope"></i>
-                    <p><a href="mailto:noklangbangthai@gmail.com">noklangbangthai@gmail.com</a></p>
-                </div>
-                <div class="info-item">
-                    <i class="fas fa-phone-alt"></i>
-                    <p><a href="tel:+918798117511">+91 8798117511</a></p>
-                </div>
-                <div class="info-item">
-                    <i class="fas fa-clock"></i>
-                    <p>Monday - Saturday: 9am - 6pm IST<br>Weekend: 10am - 4pm IST</p>
-                </div>
-            </div>
-        </div>
-    </section>
-    <footer>
-        <div class="container">
-            <div class="bottom-footer">
-                <div class="copyright">
-                    <p>© 2025 SalesFlow. All rights reserved.</p>
-                </div>
-                <div class="footer-legal-links">
-                    <a href="/privacy" class="legal-link">
-                        <i class="fas fa-shield-alt"></i>
-                        <span>Privacy Policy</span>
-                    </a>
-                    <a href="/terms-and-conditions" class="legal-link">
-                        <i class="fas fa-file-contract"></i>
-                        <span>Terms & Conditions</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </footer>
-    <script>
-        // Toggle mobile menu
-        document.querySelector('.mobile-menu-btn').addEventListener('click', function() {
-            document.querySelector('.nav-links').classList.toggle('active');
-            document.querySelector('.auth-buttons').classList.toggle('active');
-        });
+          <div class="info-item">
+              <i class="fas fa-envelope"></i>
+              <p><a href="mailto:noklangbangthai@gmail.com">noklangbangthai@gmail.com</a></p>
+          </div>
 
-        // Accordion functionality (if you add accordions later)
-        document.querySelectorAll('.accordion-header').forEach(button => {
-            button.addEventListener('click', () => {
-                const accordionItem = button.parentNode;
-                accordionItem.classList.toggle('active');
-            });
-        });
-    </script>
-    
+          <div class="info-item">
+              <i class="fas fa-phone-alt"></i>
+              <p><a href="tel:+918798117511">+91 8798117511</a></p>
+          </div>
+
+          <div class="info-item">
+              <i class="fas fa-clock"></i>
+              <p>Monday – Saturday: 9 am – 6 pm IST<br>Weekend: 10 am – 4 pm IST</p>
+          </div>
+      </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+      <div class="bottom-footer">
+          <div class="copyright">
+              <p>© 2025 SalesFlow. All rights reserved.</p>
+          </div>
+
+          <div class="footer-legal-links">
+              <a href="/privacy" class="legal-link">
+                  <i class="fas fa-shield-alt"></i>
+                  <span>Privacy Policy</span>
+              </a>
+              <a href="/terms-and-conditions" class="legal-link">
+                  <i class="fas fa-file-contract"></i>
+                  <span>Terms & Conditions</span>
+              </a>
+          </div>
+      </div>
+  </div>
+</footer>
+
+<script>
+  /* Toggle mobile menu */
+  document.querySelector('.mobile-menu-btn').addEventListener('click', () => {
+      document.querySelector('.nav-links').classList.toggle('active');
+      document.querySelector('.auth-buttons')?.classList.toggle('active');
+  });
+
+  /* Accordion (if/when you add accordions) */
+  document.querySelectorAll('.accordion-header').forEach(btn => {
+      btn.addEventListener('click', () => btn.parentNode.classList.toggle('active'));
+  });
+</script>
 </body>
 </html>
