@@ -616,3 +616,167 @@ body {
     color: white;
     transform: scale(1.1);
 }
+
+/* ──────────────────────────────────────────────────────────────
+   DARK-MODE SUPPORT  –  View-Products only
+   Triggered whenever <html> OR <body> has the class “dark-mode”
+   (handled globally by public/js/theme.js)
+   ──────────────────────────────────────────────────────────── */
+html.dark-mode,
+body.dark-mode {
+  /* surface & layout colours */
+  --light-bg:   #121212;
+  --card-bg:    #1a1a1a;
+  --border-color:#2e2e2e;
+  --input-bg:   #222222;
+
+  /* text */
+  --text-dark:  #e5e7eb;
+  --text-light: #9ca3af;
+  --text-white: #f8fafc;
+
+  /* navigation + hilights */
+  --nav-bg:     #000000;
+  --nav-hover:  rgba(255,255,255,0.08);
+
+  /* softer shadows on dark */
+  --shadow-sm:  0 1px 2px   rgba(255,255,255,0.05);
+  --shadow-md:  0 4px 6px  -1px rgba(255,255,255,0.08);
+  --shadow-lg:  0 10px 15px -3px rgba(255,255,255,0.08);
+
+  background-color: var(--light-bg);
+  color: var(--text-dark);
+}
+
+/* ── layout surfaces ────────────────────────────────────────── */
+body.dark-mode .sidebar,
+body.dark-mode .main-content,
+body.dark-mode .page-container,
+body.dark-mode .products-table-container,
+body.dark-mode .batch-table-wrapper {
+  background-color: var(--card-bg);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── tables ─────────────────────────────────────────────────── */
+body.dark-mode .products-table,
+body.dark-mode .batch-table {
+  background-color: var(--card-bg);
+  color: var(--text-dark);
+}
+
+body.dark-mode .products-table thead th,
+body.dark-mode .batch-table thead th {
+  background: linear-gradient(to right,#2c5282,#3a7bd5);
+  color:#ffffff;
+}
+
+/* ── filter panel & blue-accent fixes ───────────────────────── */
+body.dark-mode .filter-container{
+  background-color: var(--card-bg);          /* match other panels   */
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+}
+
+/* brighten filter “Apply” button so it isn’t lost on dark */
+body.dark-mode .filter-button{
+  background-color: rgba(58,123,213,0.20);
+  color: var(--text-dark);
+}
+body.dark-mode .filter-button:hover{
+  background-color: var(--primary-color);
+  color:#ffffff;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   DARK-MODE POLISH  v2  – brighter labels, sidebar, blue text,
+   and batch-panel surface
+   ──────────────────────────────────────────────────────────── */
+
+/* ① Filter-panel labels, inputs & placeholder options */
+body.dark-mode .filter-group label,
+body.dark-mode .filter-group select,
+body.dark-mode .filter-group input,
+body.dark-mode .filter-group select option{
+  color: var(--text-dark);                 /* #e5e7eb – brighter */
+}
+
+/* ② Sidebar headings & links */
+body.dark-mode .sidebar-heading,
+body.dark-mode .sidebar-link{
+  color: var(--text-dark);                 /* brighter grey */
+}
+body.dark-mode .sidebar-link:hover,
+body.dark-mode .sidebar-link.active{
+  color: var(--text-white);
+}
+
+/* ③ Brighter blue for “Product Name”, price cells & batch title */
+body.dark-mode .product-name,
+body.dark-mode .price-cell,
+body.dark-mode .batches-title{
+  color: #9ac8ff;                          /* lighter blue */
+}
+
+/* ④ Stock-batches expandable panel surfaces */
+body.dark-mode .batches-container,
+body.dark-mode .batches-content{
+  background-color: var(--card-bg);        /* same dark card */
+}
+body.dark-mode .batch-table-wrapper{
+  border-color: var(--border-color);       /* subtle outline */
+}
+
+
+
+/* ── buttons & inline controls ─────────────────────────────── */
+body.dark-mode .filter-button,
+body.dark-mode .edit-button,
+body.dark-mode .delete-button,
+body.dark-mode .expand-button{
+  background-color:rgba(58,123,213,0.15);
+  color:var(--text-dark);
+}
+
+body.dark-mode .filter-button:hover,
+body.dark-mode .edit-button:hover,
+body.dark-mode .expand-button:hover{
+  background-color:var(--primary-color);
+  color:#ffffff;
+}
+
+/* ── form inputs ────────────────────────────────────────────── */
+body.dark-mode .filter-group select,
+body.dark-mode .filter-group input,
+body.dark-mode .batch-input{
+  background-color:var(--input-bg);
+  color:var(--text-dark);
+  border-color:var(--border-color);
+}
+
+body.dark-mode .edit-icon{color:var(--text-light);}
+
+/* ── badges & pills ─────────────────────────────────────────── */
+body.dark-mode .stock-badge{
+  background-color:rgba(239,68,68,0.2);
+  color:var(--danger-color);
+}
+
+body.dark-mode .stock-badge.empty{
+  background-color:rgba(148,163,184,0.12);
+  color:var(--text-light);
+}
+
+body.dark-mode .category-badge{
+  background-color:rgba(45,212,191,0.15);
+  color:#2dd4bf;
+}
+
+/* ── custom scrollbar (sidebar + main scroll areas) ─────────── */
+body.dark-mode .sidebar::-webkit-scrollbar-track,
+body.dark-mode .main-content::-webkit-scrollbar-track{
+  background:var(--card-bg);
+}
+body.dark-mode ::-webkit-scrollbar-thumb{
+  background:var(--primary-color);
+}

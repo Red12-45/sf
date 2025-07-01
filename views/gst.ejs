@@ -10,36 +10,177 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-
+      <script src="/js/theme.js?v=<%= v %>"></script>
   <!-- Global + page-specific CSS (create /public/css/gst.css later if you like) -->
   <link rel="stylesheet" href="/css/global.css?v=<%= v %>">
-  <link rel="stylesheet" href="/css/gst.css?v=<%= v %>">
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
 
   <!-- Minimal built-in style so the page still looks OK without extra CSS -->
   <style>
-    body{margin:0;display:flex;font-family:'Inter',sans-serif}
-    /* sidebar */
-    .sidebar{width:220px;background:#1f2937;color:#fff;min-height:100vh;padding:20px 15px;box-sizing:border-box}
-    .sidebar-logo{display:flex;align-items:center;margin-bottom:25px;font-size:1.1rem;font-weight:600}
-    .sidebar-logo i{margin-right:8px}
-    .sidebar-links a{display:flex;align-items:center;color:#cbd5e1;text-decoration:none;padding:8px 0;border-radius:4px;font-size:.95rem}
-    .sidebar-links a i{width:18px;margin-right:10px;text-align:center}
-    .sidebar-links a.active,.sidebar-links a:hover{background:#334155;color:#fff}
-    /* main */
-    main.page{flex:1;padding:25px;overflow:auto}
-    .page-title{margin-top:0;font-size:1.4rem}
-    .filter-bar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px}
-    .filter-bar label{font-size:.9rem}
-    .filter-bar input{margin-left:4px;padding:4px}
-    .btn{cursor:pointer;border:none;padding:6px 12px;border-radius:4px;font-weight:500}
-    .btn-primary{background:#2563eb;color:#fff}
-    /* table */
-    .table{width:100%;border-collapse:collapse;font-size:.92rem}
-    .table th,.table td{border:1px solid #e2e8f0;padding:8px 6px;text-align:left}
-    .table th.num,.table td.num{text-align:right}
-    tfoot th{background:#f8fafc}
-    .note{font-size:.8rem;color:#475569;margin-top:10px}
+   /* =========================================================
+   gst.css  –  full file (light ⬌ black-dark theme)
+   ========================================================= */
+
+/* ---------- Global tokens (LIGHT mode) ---------- */
+:root{
+  /* brand */
+  --brand:#2563eb;
+  --brand-light:#3b82f6;
+  --brand-dark:#1e40af;
+
+  /* text & surfaces */
+  --page-bg:#f5f7fa;
+  --sidebar-bg:#1f2937;
+  --card-bg:#ffffff;
+  --table-header:#f8fafc;
+
+  --text-main:#374151;
+  --text-sub:#94a3b8;
+  --text-invert:#ffffff;
+
+  --border:#e2e8f0;
+
+  /* misc */
+  --radius:.5rem;
+  --font:'Inter',sans-serif;
+  --transition:.3s ease;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -1px rgba(0,0,0,.06);
+}
+
+/* ---------- Reset & base ---------- */
+*{margin:0;padding:0;box-sizing:border-box;}
+
+body{
+  display:flex;min-height:100vh;font-family:var(--font);
+  background:var(--page-bg);color:var(--text-main);
+  transition:background-color var(--transition),color var(--transition);
+}
+
+/* ---------- Sidebar ---------- */
+.sidebar{
+  width:220px;min-height:100vh;
+  background:var(--sidebar-bg);color:var(--text-invert);
+  padding:20px 15px;box-shadow:var(--shadow-md);
+  display:flex;flex-direction:column;
+}
+.sidebar-logo{
+  display:flex;align-items:center;margin-bottom:25px;
+  font-size:1.15rem;font-weight:600;
+}
+.sidebar-logo i{margin-right:8px;}
+.sidebar-links{display:flex;flex-direction:column;gap:2px;}
+.sidebar-links a{
+  display:flex;align-items:center;gap:10px;
+  color:#cbd5e1;text-decoration:none;padding:8px 10px;
+  border-radius:4px;font-size:.95rem;transition:background var(--transition),color var(--transition);
+}
+.sidebar-links a i{width:18px;text-align:center;}
+.sidebar-links a:hover,
+.sidebar-links a.active{
+  background:#334155;color:#fff;
+}
+
+/* ---------- Main section ---------- */
+main.page{
+  flex:1;padding:25px;overflow:auto;
+}
+.page-title{
+  margin-top:0;font-size:1.4rem;font-weight:600;margin-bottom:1rem;
+}
+.page-title small{font-size:.9rem;font-weight:400;color:var(--text-sub);}
+
+/* ---------- Filter bar ---------- */
+.filter-bar{
+  display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;
+  align-items:flex-end;
+}
+.filter-bar label{
+  font-size:.9rem;color:var(--text-main);display:flex;flex-direction:column;gap:4px;
+}
+.filter-bar input{
+  padding:6px 8px;border:1px solid var(--border);border-radius:4px;
+  font-size:.95rem;transition:border var(--transition),background var(--transition);
+}
+.filter-bar input:focus{
+  outline:none;border-color:var(--brand);
+  box-shadow:0 0 0 3px rgba(37,99,235,.15);
+}
+.btn{
+  cursor:pointer;border:none;padding:8px 16px;border-radius:4px;
+  font-weight:500;font-size:.95rem;display:flex;align-items:center;gap:6px;
+  transition:background var(--transition),transform var(--transition),box-shadow var(--transition);
+}
+.btn-primary{background:var(--brand);color:#fff;}
+.btn-primary:hover{
+  background:var(--brand-dark);transform:translateY(-2px);
+  box-shadow:0 4px 10px rgba(37,99,235,.25);
+}
+
+/* ---------- Table ---------- */
+.table{
+  width:100%;border-collapse:collapse;font-size:.92rem;
+  box-shadow:var(--shadow-sm);border-radius:var(--radius);overflow:hidden;
+}
+.table th,
+.table td{
+  border:1px solid var(--border);
+  padding:10px 8px;text-align:left;
+}
+.table th{background:var(--table-header);font-weight:600;}
+.table th.num,
+.table td.num{text-align:right;}
+.table tbody tr:hover{background:rgba(0,0,0,.04);}
+tfoot th{background:var(--table-header);}
+
+/* ---------- Note ---------- */
+.note{font-size:.8rem;color:var(--text-sub);margin-top:12px;}
+
+/* ---------- Animation ---------- */
+@keyframes fadeIn{
+  from{opacity:0;transform:translateY(20px);}
+  to  {opacity:1;transform:translateY(0);}
+}
+main.page{animation:fadeIn .4s ease-out;}
+
+/* =========================================================
+   DARK-MODE – true-black palette
+   (applies when <html> or <body> has .dark-mode)
+   ========================================================= */
+html.dark-mode,
+body.dark-mode{
+  /* surfaces */
+  --page-bg:#000000;
+  --sidebar-bg:#000000;
+  --card-bg:#0d0d0d;
+  --table-header:#111111;
+
+  /* text */
+  --text-main:#fafafa;
+  --text-sub:#9ca3b8;
+
+  /* borders */
+  --border:#222222;
+
+  /* brand tint for focus ring */
+  --brand-light:rgba(59,130,246,.30);
+}
+
+/* dark-specific tweaks */
+body.dark-mode .sidebar-links a{color:var(--text-sub);}
+body.dark-mode .sidebar-links a:hover,
+body.dark-mode .sidebar-links a.active{
+  background:#111827;color:var(--text-invert);
+}
+body.dark-mode .filter-bar input{
+  background:#111111;color:var(--text-main);border-color:var(--border);
+}
+body.dark-mode .filter-bar input::placeholder{color:var(--text-sub);}
+body.dark-mode .table tbody tr:hover{background:#111111;}
+body.dark-mode input[type="month"]::-webkit-calendar-picker-indicator{
+  filter:invert(1) brightness(1.8);
+}
+
   </style>
 </head>
 

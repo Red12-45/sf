@@ -341,7 +341,8 @@ form textarea:focus {
 
 /* Button Styling */
 button {
-    background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+    /* darker 135° gradient from primary-dark to primary-color */
+    background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
     color: var(--text-white);
     padding: 0.75rem 1.5rem;
     border: none;
@@ -356,6 +357,7 @@ button {
     gap: 0.5rem;
     box-shadow: var(--shadow-md);
 }
+
 
 button:hover {
     transform: translateY(-2px);
@@ -445,22 +447,26 @@ table tr:hover {
 }
 
 /* Toggle Summary Button */
+/* Toggle Summary Button */
 .toggleSummary {
-    width: auto;          /* Instead of 100% */
-    display: inline-block; /* As wide as its content */
-    background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+    /* match the darker 135° gradient from primary-dark → primary-color */
+    background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
     color: var(--text-white);
+    width: auto;
+    display: inline-block;
     border: none;
     padding: 0.5rem 1rem;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: var(--transition);
     font-size: 0.9rem;
-  }
-  .toggleSummary:hover {
-    background: linear-gradient(to right, var(--primary-light), var(--secondary-color));
-  }
-  
+    box-shadow: var(--shadow-md);
+}
+.toggleSummary:hover {
+    /* subtle dim on hover */
+    filter: brightness(0.9);
+}
+
 
 /* Summary Content Box */
 .summaryContent {
@@ -733,4 +739,159 @@ table tr:hover {
 
 .date-info i {
   color: var(--accent-color);
+}
+/* ─── Dark-mode variable overrides (true-black theme) ──────────── */
+/* Triggered when either <body> or <html> has .dark-mode           */
+body.dark-mode {
+  /* surface colours */
+  --light-bg:   #121212;   /* page background – almost black    */
+  --card-bg:    #1a1a1a;   /* cards & sidebar background        */
+  --border-color:#2e2e2e;
+
+  /* form fields & table rows */
+  --input-bg:   #222222;
+
+  /* text colours */
+  --text-dark:  #e5e7eb;   /* primary copy – light grey         */
+  --text-light: #9ca3af;   /* sub-copy                          */
+  --text-white: #f8fafc;
+
+  /* navigation / sidebar */
+  --sidebar-bg: #000000;   /* pure black for sidebar/nav        */
+
+  /* subtle shadows on dark   */
+  --shadow-sm:  0 1px 2px   rgba(255,255,255,0.05);
+  --shadow-md:  0 4px 6px  -1px rgba(255,255,255,0.08);
+  --shadow-lg:  0 10px 15px -3px rgba(255,255,255,0.08);
+
+  background-color: var(--light-bg);   /* early paint fallback     */
+  color: var(--text-dark);
+}
+
+/* Ensures early-paint class on <html> also works */
+html.dark-mode body {
+  background-color: var(--light-bg);
+  color: var(--text-dark);
+}
+
+/* Inputs & selects adopt the new dark tokens */
+body.dark-mode form input[type="text"],
+body.dark-mode form input[type="number"],
+body.dark-mode form input[type="date"],
+body.dark-mode form input[type="month"],
+body.dark-mode form input[type="time"],
+body.dark-mode form select,
+body.dark-mode form textarea {
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-color: var(--border-color);
+}
+
+body.dark-mode form input::placeholder,
+body.dark-mode form textarea::placeholder {
+  color: var(--text-light);
+}
+
+/* Summary boxes match the rest of the dark surfaces */
+body.dark-mode .summaryBox,
+body.dark-mode .summaryContent {
+  background-color: var(--card-bg);
+  box-shadow: inset 0 0 0 1px var(--border-color);
+  border: 1px solid var(--border-color);
+}
+
+/* Scroll-bar track inside dark sidebar */
+body.dark-mode .sidebar::-webkit-scrollbar-track {
+  background: var(--card-bg);
+}
+/* ─── Dark-mode fixes: table stripes & filter header ───────────── */
+body.dark-mode table tr:nth-child(even) {
+  /* subtle charcoal stripe instead of bright white */
+  background-color: rgba(255,255,255,0.04);
+}
+
+body.dark-mode table tr:hover {
+  /* faint highlight on hover */
+  background-color: rgba(255,255,255,0.08);
+}
+
+/* Filter header card should match dark surfaces */
+/* ⇢ Filter header card in dark mode ⇠ */
+body.dark-mode .filter-header,
+body.dark-mode .filter-header .filter-title-with-badges,
+body.dark-mode .filter-header i {
+  background: var(--card-bg);
+  color: var(--text-white) !important;   /* force white for text + icon */
+  box-shadow: var(--shadow-sm);
+}
+
+html.dark-mode .filter-header,
+html.dark-mode .filter-header .filter-title-with-badges,
+html.dark-mode .filter-header i {
+  background: var(--card-bg);
+  color: var(--text-white) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─── Dark-mode: make edit icons & calendar glyph white ────────── */
+body.dark-mode td.editable .edit-icon,
+body.dark-mode td.editable-status .edit-icon {
+  color: #f8fafc;                 /* bright white icon */
+}
+
+/* Force the date- and month-picker icons to white in dark mode */
+body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator,
+body.dark-mode input[type="month"]::-webkit-calendar-picker-indicator {
+  /* brightness(0) makes the icon pure black, then invert(1) turns it pure white */
+  filter: brightness(0) invert(1) !important;
+}
+
+
+/* Force the native picker popups themselves into a dark theme */
+body.dark-mode input[type="date"],
+body.dark-mode input[type="month"] {
+  color-scheme: dark;
+}s
+
+/* Force dark-mode appearance on the native date & month picker popups */
+body.dark-mode input[type="date"],
+body.dark-mode input[type="month"] {
+  color-scheme: dark;
+}
+
+/* ─── Dark-mode polish: GST badge, date/month pickers, inline inputs ─── */
+
+/* 1️⃣  GST badge – brighter cyan on dark */
+body.dark-mode .summary-item.gst {
+  background: rgba(76,201,240,0.18);   /* soft cyan pill */
+  color: #4cc9f0;                      /* bright cyan text/icon */
+}
+
+/* 2️⃣  Ensure *all* calendar glyphs invert (date + month pickers) */
+body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator,
+body.dark-mode input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.5);
+}
+
+/* 3️⃣  Inline-edit fields – adopt dark input colours */
+body.dark-mode td.editable.editing   input,
+body.dark-mode td.editable-status.editing select,
+body.dark-mode td.editable-status.editing input,
+body.dark-mode .status-input {
+  background-color: var(--input-bg);
+  color: var(--text-dark);
+  border-color: var(--border-color);
+}
+/* ─── Dark-mode: Summary box & its panel must match card colour ─── */
+/* ─── Dark-mode: Only the summary panel matches dark surfaces ─── */
+body.dark-mode .summaryContent {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─── Dark-mode: Remove border around the summary button container ─── */
+body.dark-mode .summaryBox {
+  border: none !important;
+  box-shadow: none !important;
 }

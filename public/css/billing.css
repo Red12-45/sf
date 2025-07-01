@@ -1,453 +1,185 @@
-/* Reset and Base Styles */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Poppins', sans-serif;
-  }
-  
-  body {
-    background-color: #f8fafc;
-    color: #334155;
-    line-height: 1.6;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  /* Header and Navigation */
-  header {
-    background-color: #ffffff;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  
-  nav {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 15px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .logo a {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #3b82f6;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .nav-links {
-    display: flex;
-    gap: 30px;
-  }
-  
-  nav a {
-    color: #475569;
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  
-  nav a:hover {
-    color: #3b82f6;
-  }
-  
-  /* Main Container */
-  .billing-container {
-    max-width: 1000px;
-    margin: 40px auto;
-    padding: 0 20px;
-    flex: 1;
-  }
-  
-  h1 {
-    font-size: 2.25rem;
-    margin-bottom: 30px;
-    color: #1e293b;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  
-  h1 i {
-    color: #3b82f6;
-  }
-  
-  h2 {
-    font-size: 1.5rem;
-    margin: 40px 0 24px;
-    color: #334155;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  h2 i {
-    color: #3b82f6;
-  }
-  
-  /* Subscription Info Section */
-  .subscription-info {
-    background-color: #ffffff;
-    border-radius: 12px;
-    padding: 30px;
-    margin-bottom: 40px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-    border-left: 4px solid #3b82f6;
-  }
-  
-  .info-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 20px;
-    color: #3b82f6;
-  }
-  
-  .info-header h3 {
-    font-size: 1.3rem;
-    color: #1e293b;
-  }
-  
-  .current-plan {
-    background-color: #f8fafc;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 20px;
-    border: 1px solid #e2e8f0;
-  }
-  
-  .current-plan.expiring-soon {
-    border-color: #f59e0b;
-    background-color: #fffbeb;
-  }
-  
-  .days-left {
-    display: inline-block;
-    padding: 3px 10px;
-    background-color: #ecfdf5;
-    color: #059669;
-    border-radius: 999px;
-    font-size: 0.875rem;
-    margin-left: 10px;
-    font-weight: 500;
-  }
-  
-  .days-left.expired {
-    background-color: #fee2e2;
-    color: #ef4444;
-  }
-  
-  .expiry-warning {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 15px;
-    padding: 10px;
-    background-color: #fffbeb;
-    border-radius: 6px;
-    color: #d97706;
-    font-size: 0.9rem;
-  }
-  
-  .no-subscription {
-    background-color: #fef2f2;
-    border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 20px;
-    border: 1px solid #fecaca;
-    color: #ef4444;
-  }
-  
-  .no-subscription p:first-child {
-    font-weight: 500;
-    margin-bottom: 5px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  
-  .no-subscription p:last-child {
-    color: #64748b;
-  }
-  
-  .info-note {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    background-color: #f0f9ff;
-    border-radius: 8px;
-    font-size: 0.9rem;
-    color: #0369a1;
-  }
-  
-  .info-note i {
-    font-size: 1.2rem;
-    margin-top: 3px;
-  }
-  
-  /* Subscription Plans Section */
-  .subscription-plans {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 30px;
-    margin-top: 20px;
-  }
-  
-  .plan {
-    background-color: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
-    padding: 30px;
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-    border: 1px solid #e2e8f0;
-  }
-  
-  .plan:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-  }
-  
-  .plan a {
-    text-decoration: none;
-    color: inherit;
-    display: block;
-  }
-  
-  .plan h3 {
-    font-size: 1.5rem;
-    margin-bottom: 15px;
-    color: #1e293b;
-    font-weight: 600;
-  }
-  
-  .price {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #1e293b;
-    margin-bottom: 5px;
-  }
-  
-  .duration {
-    color: #64748b;
-    font-size: 1rem;
-    margin-bottom: 15px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  
-  .savings {
-    background-color: #ecfdf5;
-    color: #059669;
-    border-radius: 6px;
-    padding: 5px 10px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    display: inline-block;
-    margin-bottom: 15px;
-  }
-  
-  .features {
-    list-style: none;
-    margin: 20px 0;
-  }
-  
-  .features li {
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: #475569;
-  }
-  
-  .features li i {
-    color: #10b981;
-  }
-  
-  .cta-button {
-    background-color: #3b82f6;
-    color: white;
-    border-radius: 8px;
-    padding: 12px 20px;
-    text-align: center;
-    font-weight: 500;
-    margin-top: 20px;
-    transition: background-color 0.3s ease;
-  }
-  
-  .cta-button:hover {
-    background-color: #2563eb;
-  }
-  
-  .plan-badge {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    background-color: #3b82f6;
-    color: white;
-    font-size: 0.75rem;
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-weight: 500;
-  }
-  
-  /* Monthly Plan */
-  .plan.monthly {
-    border-top: 4px solid #60a5fa;
-  }
-  .plan.monthly .plan-badge {
-    background-color: #60a5fa;
-  }
-  .plan.monthly .cta-button {
-    background-color: #60a5fa;
-  }
-  .plan.monthly .cta-button:hover {
-    background-color: #3b82f6;
-  }
-  
-  /* Half-Yearly Plan */
-  .plan.half-yearly {
-    border-top: 4px solid #8b5cf6;
-  }
-  .plan.half-yearly .plan-badge {
-    background-color: #8b5cf6;
-  }
-  .plan.half-yearly .cta-button {
-    background-color: #8b5cf6;
-  }
-  .plan.half-yearly .cta-button:hover {
-    background-color: #7c3aed;
-  }
-  
-  /* Yearly Plan */
-  .plan.yearly {
-    border-top: 4px solid #10b981;
-    position: relative;
-  }
-  .plan.yearly .plan-badge {
-    background-color: #10b981;
-  }
-  .plan.yearly .cta-button {
-    background-color: #10b981;
-  }
-  .plan.yearly .cta-button:hover {
-    background-color: #059669;
-  }
-  
-  /* Payment Methods Section */
-  .payment-methods {
-    margin-top: 50px;
-    text-align: center;
-    padding: 20px;
-    background-color: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  }
-  
-  .payment-methods h3 {
-    margin-bottom: 15px;
-    color: #475569;
-    font-weight: 500;
-    font-size: 1.2rem;
-  }
-  
-  .payment-icons {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    font-size: 2rem;
-    color: #64748b;
-  }
-  
-  /* Footer */
-  footer {
-    background-color: #1e293b;
-    color: #e2e8f0;
-    padding: 25px 20px;
-    margin-top: 50px;
-  }
-  
-  .footer-content {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 20px;
-  }
-  
-  .footer-links {
-    display: flex;
-    gap: 20px;
-  }
-  
-  .footer-links a {
-    color: #cbd5e1;
-    text-decoration: none;
-    transition: color 0.3s ease;
-  }
-  
-  .footer-links a:hover {
-    color: #f8fafc;
-  }
-  
-  /* Responsive Adjustments */
-  @media (max-width: 768px) {
-    .subscription-plans {
-      grid-template-columns: 1fr;
-    }
-    
-    nav {
-      flex-direction: column;
-      gap: 15px;
-    }
-    
-    .nav-links {
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    
-    h1 {
-      font-size: 1.75rem;
-    }
-    
-    .footer-content {
-      flex-direction: column;
-      text-align: center;
-    }
-    
-    .payment-icons {
-      flex-wrap: wrap;
-    }
-  }
-  
-  /* Subtle Animation Effects */
-  @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.02); }
-    100% { transform: scale(1); }
-  }
-  
-  .plan:hover {
-    animation: pulse 2s infinite;
-  }
-  
-  .current-plan.expiring-soon {
-    animation: pulse 2s infinite;
-  }
+/* ==========================================================
+   billing.css  –  light + charcoal-dark theme  (2025-06-30)
+   ========================================================== */
+
+/*  RESET  */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);}
+
+/* ─────────────────────────
+   COLOR-TOKENS — LIGHT MODE
+   ───────────────────────── */
+:root{
+  /* brand */
+  --primary-dark :#1e3a8a;   /* indigo-900 */
+  --primary      :#2563eb;   /* blue-600   */
+  --primary-light:#3b82f6;   /* blue-500   */
+
+  --success:#10b981;
+  --warning:#f59e0b;
+  --danger :#ef4444;
+  --teal   :#2dd4bf;
+
+  /* neutrals */
+  --bg          :#f8fafc;
+  --bg-alt      :#f1f5f9;
+  --bg-card     :#ffffff;
+  --border      :#e2e8f0;
+  --border-light:#f1f5f9;
+
+  /* text */
+  --text        :#334155;
+  --text-dark   :#1e293b;
+  --text-light  :#64748b;
+  --text-muted  :#94a3b8;
+  --text-white  :#f8fafc;
+
+  /* misc */
+  --radius-sm:.25rem;--radius:.375rem;--radius-md:.5rem;--radius-lg:.75rem;--radius-xl:1rem;--radius-full:9999px;
+  --shadow-xs:0 1px 1px rgba(0,0,0,.04);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05);
+  --shadow-md:0 4px 6px rgba(0,0,0,.08);
+  --shadow-lg:0 10px 15px rgba(0,0,0,.12);
+}
+
+/* ─────────────────────────
+   DARK-MODE OVERRIDES
+   (.dark-mode goes on <html> & <body> via theme.js)
+   ───────────────────────── */
+.dark-mode{
+  --bg          :#0c0c0f;
+  --bg-alt      :#131417;
+  --bg-card     :#131417;
+  --border      :#2d333d;
+  --border-light:#1c1f25;
+
+  --text        :#e2e8f0;
+  --text-dark   :#e5e7eb;
+  --text-light  :#cbd5e1;
+  --text-muted  :#9ca3af;
+
+  /* keep the same brand blues */
+  --primary-dark:#1e3a8a;
+  --primary     :#2563eb;
+  --primary-light:#3b82f6;
+
+  --shadow-xs:0 1px 1px rgba(0,0,0,.35);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.45);
+  --shadow-md:0 4px 6px rgba(0,0,0,.55);
+  --shadow-lg:0 12px 18px rgba(0,0,0,.65);
+}
+
+/* ==========================================================
+   HEADER / NAV
+   ========================================================== */
+header{background:var(--bg-card);box-shadow:var(--shadow-xs);position:sticky;top:0;z-index:100;}
+nav{max-width:1200px;margin:0 auto;padding:15px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:15px;}
+.logo a{font-size:1.5rem;font-weight:600;color:var(--primary);text-decoration:none;display:flex;align-items:center;gap:8px;}
+.nav-links{display:flex;gap:30px;flex-wrap:wrap;justify-content:center;}
+nav a{color:var(--text-light);text-decoration:none;font-weight:500;display:flex;align-items:center;gap:6px;transition:.2s;}
+nav a:hover{color:var(--primary);}
+
+/* ==========================================================
+   MAIN CONTAINER
+   ========================================================== */
+.billing-container{max-width:1000px;margin:40px auto;padding:0 20px;flex:1;}
+h1{font-size:2.25rem;margin-bottom:30px;color:var(--text-dark);font-weight:600;display:flex;align-items:center;gap:12px;}
+h1 i{color:var(--primary);}
+h2{font-size:1.5rem;margin:40px 0 24px;color:var(--text);font-weight:500;display:flex;align-items:center;gap:10px;}
+h2 i{color:var(--primary);}
+
+/* ==========================================================
+   SUBSCRIPTION INFO CARD
+   ========================================================== */
+.subscription-info{background:var(--bg-card);border-left:4px solid var(--primary);border-radius:var(--radius-lg);padding:30px;margin-bottom:40px;box-shadow:var(--shadow-md);}
+.info-header{display:flex;align-items:center;gap:10px;margin-bottom:20px;color:var(--primary);}
+.info-header h3{font-size:1.3rem;color:var(--text-dark);}
+.current-plan{background:var(--bg-alt);border:1px solid var(--border);border-radius:var(--radius-md);padding:20px;margin-bottom:20px;}
+.current-plan.expiring-soon{border-color:var(--warning);background:#fffbeb;}
+.days-left{display:inline-block;padding:3px 10px;background:#ecfdf5;color:#059669;border-radius:var(--radius-full);font-size:.875rem;margin-left:10px;font-weight:500;}
+.days-left.expired{background:#fee2e2;color:var(--danger);}
+.expiry-warning{display:flex;align-items:center;gap:10px;margin-top:15px;padding:10px;background:#fffbeb;border-radius:var(--radius);color:#d97706;font-size:.9rem;}
+.no-subscription{background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-md);padding:20px;margin-bottom:20px;color:var(--danger);}
+.no-subscription p:first-child{font-weight:500;margin-bottom:5px;display:flex;align-items:center;gap:8px;}
+.no-subscription p:last-child{color:var(--text-light);}
+/*── DARK-MODE override for the info note ─────────────────────────*/
+.dark-mode .info-note {
+    background-color: #12263a;   /* deep navy-teal, far less glare   */
+    color: #7dd3fc;              /* light-cyan text for good contrast */
+}
+
+.dark-mode .info-note i {
+    color: #38bdf8;              /* matching icon tint               */
+}
+
+
+/* ==========================================================
+   PLANS GRID
+   ========================================================== */
+.subscription-plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:30px;margin-top:20px;}
+.plan{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:30px;position:relative;box-shadow:var(--shadow-md);transition:.3s;overflow:hidden;}
+.plan:hover{transform:translateY(-5px);box-shadow:var(--shadow-lg);animation:pulse 2s infinite;}
+.plan a{text-decoration:none;color:inherit;display:block;}
+.plan h3{font-size:1.5rem;margin-bottom:15px;color:var(--text-dark);font-weight:600;}
+.price{font-size:2rem;font-weight:700;color:var(--text-dark);margin-bottom:5px;}
+.duration{display:flex;align-items:center;gap:6px;color:var(--text-light);font-size:1rem;margin-bottom:15px;}
+.savings{background:#ecfdf5;color:#059669;border-radius:var(--radius);padding:5px 10px;font-size:.85rem;font-weight:500;display:inline-block;margin-bottom:15px;}
+/*── DARK-MODE override for “Save …%” badge ─────────────────────────*/
+.dark-mode .savings {
+    background-color: #042f2e;   /* deep teal — low-glare        */
+    color: #6ee7b7;              /* soft mint text for contrast  */
+}
+
+.features{list-style:none;margin:20px 0;padding:0;}
+.features li{display:flex;align-items:center;gap:10px;margin-bottom:10px;color:var(--text);}
+.features li i{color:var(--success);}
+.cta-button{background:var(--primary);color:#fff;border-radius:var(--radius-md);padding:12px 20px;text-align:center;font-weight:500;margin-top:20px;transition:.2s;}
+.cta-button:hover{background:var(--primary-dark);}
+.plan-badge{position:absolute;top:15px;right:15px;background:var(--primary);color:#fff;font-size:.75rem;padding:4px 12px;border-radius:var(--radius-full);font-weight:500;}
+
+/* colour accents per plan */
+.plan.monthly{border-top:4px solid #60a5fa;}
+.plan.monthly .plan-badge,
+.plan.monthly .cta-button{background:#60a5fa;}
+.plan.monthly .cta-button:hover{background:var(--primary);}
+.plan.half-yearly{border-top:4px solid #8b5cf6;}
+.plan.half-yearly .plan-badge,
+.plan.half-yearly .cta-button{background:#8b5cf6;}
+.plan.half-yearly .cta-button:hover{background:#7c3aed;}
+.plan.yearly{border-top:4px solid var(--success);}
+.plan.yearly .plan-badge,
+.plan.yearly .cta-button{background:var(--success);}
+.plan.yearly .cta-button:hover{background:#059669;}
+
+/* ==========================================================
+   PAYMENT METHODS (optional)
+   ========================================================== */
+.payment-methods{margin-top:50px;text-align:center;padding:20px;background:var(--bg-card);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);}
+.payment-methods h3{margin-bottom:15px;color:var(--text-light);font-weight:500;font-size:1.2rem;}
+.payment-icons{display:flex;justify-content:center;gap:20px;font-size:2rem;color:var(--text-muted);flex-wrap:wrap;}
+
+/* ==========================================================
+   FOOTER
+   ========================================================== */
+footer{background:#1e293b;color:#e2e8f0;padding:25px 20px;margin-top:50px;}
+.footer-content{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:20px;}
+.footer-links{display:flex;gap:20px;}
+.footer-links a{color:#cbd5e1;text-decoration:none;transition:.2s;}
+.footer-links a:hover{color:#f8fafc;}
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+@media(max-width:768px){
+  nav{flex-direction:column;gap:15px;}
+  .nav-links{flex-wrap:wrap;justify-content:center;}
+  h1{font-size:1.75rem;}
+  .subscription-plans{grid-template-columns:1fr;}
+  .footer-content{flex-direction:column;text-align:center;}
+}
+
+/* ==========================================================
+   ANIMATIONS
+   ========================================================== */
+@keyframes pulse{0%{transform:scale(1);}50%{transform:scale(1.02);}100%{transform:scale(1);}}
+.current-plan.expiring-soon{animation:pulse 2s infinite;}

@@ -191,3 +191,125 @@ nav{
   .charts-wrapper{grid-template-columns:1fr!important}
   .chart-card{height:480px}
 }
+/* ──────────────────────────────────────────────────────────────
+   DARK-MODE SUPPORT – Stats Dashboard
+   Trigger = “dark-mode” on <html> or <body>   (handled by theme.js)
+   ──────────────────────────────────────────────────────────── */
+
+html.dark-mode,
+body.dark-mode{
+  /* global palette overrides */
+  --bg-light:#121212;
+  --card-bg:#1a1a1a;
+  --white:#1a1a1a;              /* nav + filter-panel base */
+  --text:#e5e7eb;
+  --text-light:#a1a1aa;
+  --primary-light:rgba(67,97,238,.18);
+  --success-light:rgba(56,176,0,.18);
+  --warning-light:rgba(255,170,0,.18);
+  --danger-light:rgba(239,71,111,.18);
+
+  background:var(--bg-light);
+  color:var(--text);
+}
+
+/* ── NAVIGATION ─────────────────────────────────────────────── */
+body.dark-mode nav{
+  background:#000;
+  box-shadow:0 2px 15px rgba(0,0,0,.65);
+}
+body.dark-mode .nav-brand,
+body.dark-mode .nav-links a{
+  color:var(--text-light);
+}
+body.dark-mode .nav-links a:hover,
+body.dark-mode .nav-links a.active{
+  background:var(--primary-light);
+  color:#fff;
+}
+
+/* ── FILTER PANEL ───────────────────────────────────────────── */
+body.dark-mode .filter-panel{
+  background:var(--card-bg);
+  box-shadow:0 10px 25px rgba(0,0,0,.45);
+}
+body.dark-mode .filter-panel h2{
+  color:#9ac8ff;                             /* brighter blue  */
+}
+/* labels stay transparent */
+body.dark-mode .form-field label {
+  color:var(--text);
+  background: transparent;
+}
+/* ── FILTER PANEL ── */
+body.dark-mode .form-field input,
+body.dark-mode .form-field select {
+  color: var(--text);
+  background: #222; /* inputs */
+  border-color: #2e2e2e;
+}
+
+/* ── Dark-mode month-picker icon ── */
+body.dark-mode .form-field input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+  cursor: pointer;
+}
+
+/* Firefox support */
+body.dark-mode .form-field input[type="month"]::-moz-calendar-picker-indicator {
+  filter: invert(1) brightness(1.2);
+  cursor: pointer;
+}
+
+/* Force the native picker panel to use light theme (black text on white) */
+body.dark-mode .form-field input[type="month"] {
+  /* This makes the drop-down panel render in light mode */
+  color-scheme: only light;
+}
+
+
+/* ── KPI CARDS ──────────────────────────────────────────────── */
+body.dark-mode .kpi-card{
+  background:var(--card-bg);
+  box-shadow:0 10px 25px rgba(0,0,0,.45);
+}
+body.dark-mode .kpi-content h3{ color:var(--text-light); }
+body.dark-mode .kpi-value{ color:#f1f5f9; }
+body.dark-mode .kpi-icon{ background:var(--primary-light); }
+
+/* ── CHART CARDS ────────────────────────────────────────────── */
+body.dark-mode .chart-card{
+  background:var(--card-bg);
+  box-shadow:0 10px 25px rgba(0,0,0,.45);
+}
+body.dark-mode .chart-card h2{ color:#9ac8ff; }
+body.dark-mode .chart-card h2 i{
+  background:var(--primary-light);
+  color:#9ac8ff;
+}
+
+/* ── TOGGLE BUTTONS (layout & type) ─────────────────────────── */
+body.dark-mode .layout-btn,
+body.dark-mode .global-type-btn,
+body.dark-mode .chart-type-btn{
+  background:#222;
+  border-color:#2e2e2e;
+  color:var(--text-light);
+}
+body.dark-mode .layout-btn:hover,
+body.dark-mode .global-type-btn:hover,
+body.dark-mode .chart-type-btn:hover{
+  background:var(--primary-light);
+  color:#9ac8ff;
+}
+body.dark-mode .layout-btn[aria-pressed="true"],
+body.dark-mode .global-type-btn[aria-pressed="true"],
+body.dark-mode .chart-type-btn[aria-pressed="true"]{
+  background:#4361ee;
+  color:#fff;
+  border-color:#4361ee;
+}
+
+/* ── SCROLLBAR (whole page) ────────────────────────────────── */
+body.dark-mode ::-webkit-scrollbar-track{ background:#1a1a1a }
+body.dark-mode ::-webkit-scrollbar-thumb{ background:#4361ee }

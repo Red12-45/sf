@@ -9,7 +9,14 @@
   <title>SalesFlow Dashboard</title>
   
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/css/index.css?v=<%= v %>">
+ <!-- EARLY theme bootstrap – absolutely zero flash anywhere -->
+
+
+<!-- Main stylesheet & full theme logic -->
+<link rel="stylesheet" href="/css/index.css?v=<%= v %>">
+<script src="/js/theme.js?v=<%= v %>"></script>
+
+
 </head>
 
 <body>
@@ -65,22 +72,29 @@
         </div>
       </div>
 
-      <div class="nav-right">
-        <% if (user && user.isMaster) { %>
-          <a href="/profile" class="nav-icon-btn">
-            <i class="fas fa-user"></i>
-          </a>
-        <% } %>
-        
-        <a href="/customerservice" class="nav-icon-btn">
-          <i class="fas fa-headset"></i>
-        </a>
-        
-        <a href="/logout" class="logout-btn">
-          <i class="fas fa-sign-out-alt"></i>
-          <span>Logout</span>
-        </a>
-      </div>
+   <div class="nav-right">
+  <% if (user && user.isMaster) { %>
+    <a href="/profile" class="nav-icon-btn">
+      <i class="fas fa-user"></i>
+    </a>
+  <% } %>
+
+  <a href="/customerservice" class="nav-icon-btn">
+    <i class="fas fa-headset"></i>
+  </a>
+
+  <!-- ▼ NEW: Dark-mode toggle button ▼ -->
+  <button id="darkModeToggle" class="nav-icon-btn dark-mode-toggle" type="button" title="Toggle dark mode">
+    <i class="fas fa-moon"></i>
+  </button>
+  <!-- ▲ NEW button ends here ▲ -->
+
+  <a href="/logout" class="logout-btn">
+    <i class="fas fa-sign-out-alt"></i>
+    <span>Logout</span>
+  </a>
+</div>
+
     </div>
     
     <button class="mobile-menu-btn">
@@ -1377,9 +1391,9 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 
 
-</body>
 
 </body>
+
 </html>
 
 

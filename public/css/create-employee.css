@@ -1,155 +1,137 @@
-/* create-employee.css */
+/* ==========================================================
+   create-employee.css  – light + charcoal-dark theme (2025-06-30)
+   ========================================================== */
 
-/* Reset styles */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  
-  /* Global body styles */
-  body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
-    color: #333;
-  }
-  
-  /* Navigation Bar Styles */
-  nav {
-    background-color: #2c3e50;
-    color: #fff;
-    padding: 1rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .nav-brand {
-    font-size: 1.5rem;
-    display: flex;
-    align-items: center;
-  }
-  
-  .nav-brand i {
-    margin-right: 0.5rem;
-  }
-  
-  .nav-links a {
-    color: #fff;
-    text-decoration: none;
-    margin-left: 1rem;
-    font-size: 1rem;
-  }
-  
-  .nav-links a:hover {
-    text-decoration: underline;
-  }
-  
-  /* Main Container */
-  .container {
-    max-width: 800px;
-    margin: 2rem auto;
-    background: #fff;
-    padding: 2rem;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-  }
-  
-  /* Heading Styles */
-  h1, h2 {
-    margin-bottom: 1rem;
-    color: #2c3e50;
-  }
-  
-  h1 {
-    font-size: 2rem;
-  }
-  
-  h2 {
-    font-size: 1.5rem;
-  }
-  
-  /* Form Styles */
-  form {
-    margin-bottom: 2rem;
-  }
-  
-  form div {
-    margin-bottom: 1rem;
-  }
-  
-  form label {
-    display: block;
-    font-weight: bold;
-    margin-bottom: 0.5rem;
-  }
-  
-  form input[type="text"],
-  form input[type="date"],
-  form input[type="time"],
-  form select {
-    width: 100%;
-    padding: 0.5rem;
-    font-size: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-  }
-  
-  form input[type="text"]:focus,
-  form input[type="date"]:focus,
-  form input[type="time"]:focus,
-  form select:focus {
-    border-color: #3498db;
-    outline: none;
-  }
-  
-  form button {
-    width: 100%;
-    padding: 0.75rem;
-    font-size: 1rem;
-    background-color: #3498db;
-    color: #fff;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-  
-  form button:hover {
-    background-color: #2980b9;
-  }
-  
-  /* Table Styles */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 2rem;
-  }
-  
-  table thead {
-    background-color: #3498db;
-    color: #fff;
-  }
-  
-  table th,
-  table td {
-    padding: 0.75rem;
-    text-align: left;
-    border: 1px solid #ddd;
-  }
-  
-  table tbody tr:nth-child(even) {
-    background-color: #f9f9f9;
-  }
-  
-  /* Responsive Adjustments */
-  @media (max-width: 600px) {
-    .nav-links a {
-      margin-left: 0.5rem;
-      font-size: 0.9rem;
-    }
-    
-    .container {
-      padding: 1rem;
-    }
-  }
-  
+/*  RESET  */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;scroll-padding-top:72px;}
+body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);}
+
+/* ─────────────────────────
+   COLOR-TOKENS — BRIGHT MODE
+   ───────────────────────── */
+:root{
+  /* brand blues */
+  --primary-dark :#1e3a8a;
+  --primary      :#2563eb;
+  --primary-light:#3b82f6;
+
+  --success:#10b981;
+  --danger :#ef4444;
+
+  /* neutrals */
+  --bg        :#f5f7fa;
+  --bg-alt    :#ffffff;
+  --border    :#e0e0e0;
+
+  /* text */
+  --text      :#333;
+  --text-light:#6c757d;
+
+  /* misc */
+  --radius:.5rem;--radius-sm:.25rem;--shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow-md:0 4px 8px rgba(0,0,0,.1);--shadow-lg:0 12px 18px rgba(0,0,0,.14);
+}
+
+/* ─────────────────────────
+   DARK-MODE OVERRIDES
+   (triggered by .dark-mode on <html> + <body>)
+   ───────────────────────── */
+.dark-mode{
+  --bg        :#0c0c0f;
+  --bg-alt    :#131417;
+  --border    :#2d333d;
+
+  --text      :#e2e8f0;
+  --text-light:#9ca3af;
+
+  /* keep brand blues unchanged */
+}
+
+/* ==========================================================
+   NAV BAR
+   ========================================================== */
+nav{background:linear-gradient(135deg,var(--primary)0%,var(--primary-light)100%);color:#fff;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-md);}
+.nav-brand{display:flex;align-items:center;font-size:1.5rem;font-weight:600;}
+.nav-brand i{margin-right:.8rem;font-size:1.8rem;animation:bounce 2s infinite;}
+@keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+.nav-links{display:flex;gap:1rem;flex-wrap:wrap;}
+.nav-links a{display:flex;align-items:center;padding:.6rem 1rem;border-radius:.4rem;color:rgba(255,255,255,.85);transition:.2s;}
+.nav-links a i{margin-right:.5rem;}
+.nav-links a:hover{background:rgba(255,255,255,.18);color:#fff;}
+
+/* ==========================================================
+   CONTAINER & HEADINGS
+   ========================================================== */
+.container{max-width:900px;margin:2rem auto;padding:0 1.5rem;flex:1;animation:fadeIn .45s ease-out;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+h1{font-size:2.2rem;color:var(--primary);text-align:center;margin-bottom:2rem;position:relative;padding-bottom:.5rem;}
+h1::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:60px;height:4px;background:var(--primary);border-radius:2px;}
+h2{font-size:1.6rem;color:var(--primary);display:flex;align-items:center;margin:2rem 0 1.4rem;}
+h2::before{content:'\f0ae';font-family:'Font Awesome 6 Free';font-weight:900;margin-right:.8rem;font-size:1.4rem;}
+
+/* ==========================================================
+   FORM
+   ========================================================== */
+form{background:var(--bg-alt);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:2rem;margin-bottom:3rem;transition:.25s;}
+form:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg);}
+form div{margin-bottom:1.5rem;}
+label{display:block;margin-bottom:.5rem;font-weight:500;color:var(--text-light);}
+input[type="text"]{width:100%;padding:.8rem 1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:1rem;transition:.2s;}
+input[type="text"]:focus{outline:none;border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(37,99,235,.18);}
+button[type="submit"]{width:100%;padding:1rem;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--success)0%,#22c55e 100%);color:#fff;font-size:1rem;font-weight:500;display:flex;align-items:center;justify-content:center;transition:.2s;cursor:pointer;}
+button[type="submit"] i{margin-right:.5rem;}
+button[type="submit"]:hover{background:linear-gradient(135deg,#059669 0%,var(--success)100%);}
+button[type="submit"]:active{transform:translateY(1px);}
+
+/* ==========================================================
+   TABLE
+   ========================================================== */
+table{width:100%;border-collapse:collapse;background:var(--bg-alt);border-radius:var(--radius);box-shadow:var(--shadow-md);overflow:hidden;}
+thead{background:color-mix(in srgb,var(--primary)15%,transparent);}
+th,td{padding:1rem;border-bottom:1px solid var(--border);}
+th{color:var(--primary-dark);font-weight:600;border-bottom:2px solid var(--primary-light);}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr{transition:.2s;}
+tbody tr:hover{background:color-mix(in srgb,var(--primary)5%,transparent);}
+
+/* delete button */
+.delete-btn{display:inline-flex;align-items:center;padding:.5rem 1rem;font-size:.9rem;border:none;border-radius:var(--radius-sm);background:var(--danger);color:#fff;cursor:pointer;transition:.2s;}
+.delete-btn i{margin-right:.5rem;}
+.delete-btn:hover{background:#d32f2f;}
+
+/* ==========================================================
+   EMPTY STATE
+   ========================================================== */
+.empty{display:flex;flex-direction:column;align-items:center;padding:2rem;background:var(--bg-alt);border-radius:var(--radius);box-shadow:var(--shadow-md);color:var(--text-light);font-style:italic;}
+.empty i{font-size:2rem;margin-bottom:1rem;color:var(--border);}
+
+/* ==========================================================
+   FOCUS & PLACEHOLDER
+   ========================================================== */
+input:focus,button:focus{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.23);}
+::placeholder{color:#b0b0b0;opacity:1;}
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+@media(max-width:768px){
+  nav{flex-direction:column;align-items:flex-start;padding:1rem;}
+  .nav-brand{margin-bottom:1rem;}
+  .nav-links{width:100%;justify-content:space-between;}
+  .container{padding:0 1rem;margin:1rem auto;}
+  h1{font-size:1.8rem;}
+  form,table{padding:1.5rem;}
+  th,td{padding:.75rem .5rem;}
+}
+@media(max-width:480px){
+  .nav-links{flex-direction:column;gap:.6rem;}
+  .nav-links a{width:100%;justify-content:center;}
+  form{padding:1.25rem;}
+  .delete-btn{padding:.5rem;}
+  .delete-btn span{display:none;}
+}
+
+/* ==========================================================
+   JS-hooked HOVER (optional; keeps original behaviour)
+   ========================================================== */
+tbody tr.hovered{background:color-mix(in srgb,var(--primary)5%,transparent);}

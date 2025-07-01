@@ -1,383 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+   
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Create Employee</title>
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
+   <script src="/js/theme.js?v=<%= v %>"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* ====== GLOBAL STYLES ====== */
-    :root {
-      /* Color Palette */
-      --primary-color: #5469d4;
-      --primary-dark: #4054b2;
-      --primary-light: #7b8ce4;
-      --secondary-color: #ff7043;
-      --success-color: #2ac769;
-      --danger-color: #e53935;
-      --warning-color: #ffa726;
-      --info-color: #29b6f6;
-      --text-color: #333333;
-      --text-light: #6c757d;
-      --background-light: #f8f9fa;
-      --background-white: #ffffff;
-      --background-dark: #343a40;
-      --border-color: #e0e0e0;
-      
-      /* Gradients */
-      --gradient-primary: linear-gradient(135deg, #5469d4 0%, #7b8ce4 100%);
-      --gradient-success: linear-gradient(135deg, #23bd65 0%, #4cd080 100%);
-      --gradient-danger: linear-gradient(135deg, #e53935 0%, #ff6b6b 100%);
-      
-      /* Shadows */
-      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
-      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
-      --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-      --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.05);
-      
-      /* Animations */
-      --transition-speed: 0.3s;
-    }
-    
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Poppins', sans-serif;
-      background-color: #f5f7fa;
-      color: var(--text-color);
-      line-height: 1.6;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    /* ====== HEADER & NAVIGATION ====== */
-    nav {
-      background: var(--gradient-primary);
-      color: white;
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: sticky;
-      top: 0;
-      z-index: 1000;
-      box-shadow: var(--shadow-md);
-    }
-    
-    .nav-brand {
-      display: flex;
-      align-items: center;
-      font-size: 1.5rem;
-      font-weight: 600;
-    }
-    
-    .nav-brand i {
-      margin-right: 0.8rem;
-      font-size: 1.8rem;
-      animation: bounce 2s infinite;
-    }
-    
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-5px); }
-    }
-    
-    .nav-links {
-      display: flex;
-      gap: 1rem;
-    }
-    
-    .nav-links a {
-      color: rgba(255, 255, 255, 0.85);
-      text-decoration: none;
-      padding: 0.6rem 1rem;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      transition: all var(--transition-speed) ease;
-    }
-    
-    .nav-links a i {
-      margin-right: 0.5rem;
-    }
-    
-    .nav-links a:hover {
-      color: white;
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-    
-    /* ====== CONTAINER ====== */
-    .container {
-      max-width: 900px;
-      margin: 2rem auto;
-      padding: 0 1.5rem;
-      flex: 1;
-      animation: fadeIn 0.5s ease-out;
-    }
-    
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    h1 {
-      font-size: 2.2rem;
-      color: var(--primary-color);
-      margin-bottom: 2rem;
-      text-align: center;
-      position: relative;
-      padding-bottom: 0.5rem;
-    }
-    
-    h1:after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 60px;
-      height: 4px;
-      background: var(--gradient-primary);
-      border-radius: 2px;
-    }
-    
-    /* ====== FORM STYLES ====== */
-    form {
-      background-color: var(--background-white);
-      border-radius: 12px;
-      box-shadow: var(--shadow-md);
-      padding: 2rem;
-      margin-bottom: 3rem;
-      transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
-    }
-    
-    form:hover {
-      transform: translateY(-5px);
-      box-shadow: var(--shadow-lg);
-    }
-    
-    form div {
-      margin-bottom: 1.5rem;
-    }
-    
-    label {
-      display: block;
-      margin-bottom: 0.5rem;
-      color: var(--text-light);
-      font-weight: 500;
-    }
-    
-    input[type="text"] {
-      width: 100%;
-      padding: 0.8rem 1rem;
-      border-radius: 6px;
-      border: 1px solid var(--border-color);
-      background-color: var(--background-light);
-      font-family: 'Poppins', sans-serif;
-      font-size: 1rem;
-      transition: all var(--transition-speed) ease;
-    }
-    
-    input[type="text"]:focus {
-      outline: none;
-      border-color: var(--primary-light);
-      box-shadow: 0 0 0 3px rgba(84, 105, 212, 0.15);
-    }
-    
-    button[type="submit"] {
-      width: 100%;
-      padding: 1rem;
-      border: none;
-      border-radius: 6px;
-      background: var(--gradient-success);
-      color: white;
-      font-family: 'Poppins', sans-serif;
-      font-size: 1rem;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      transition: all var(--transition-speed) ease;
-    }
-    
-    button[type="submit"] i {
-      margin-right: 0.5rem;
-    }
-    
-    button[type="submit"]:hover {
-      background: linear-gradient(135deg, #1eab56 0%, #23bd65 100%);
-    }
-    
-    button[type="submit"]:active {
-      transform: translateY(1px);
-    }
-    
-    /* ====== EMPLOYEE LIST ====== */
-    h2 {
-      font-size: 1.6rem;
-      color: var(--primary-color);
-      margin: 2rem 0 1.5rem;
-      display: flex;
-      align-items: center;
-    }
-    
-    h2:before {
-      content: '\f0ae';
-      font-family: 'Font Awesome 6 Free';
-      font-weight: 900;
-      margin-right: 0.8rem;
-      font-size: 1.4rem;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      background-color: var(--background-white);
-      border-radius: 12px;
-      box-shadow: var(--shadow-md);
-      overflow: hidden;
-    }
-    
-    thead {
-      background-color: rgba(84, 105, 212, 0.1);
-    }
-    
-    th {
-      padding: 1.2rem 1rem;
-      text-align: left;
-      color: var(--primary-dark);
-      font-weight: 600;
-      border-bottom: 2px solid var(--primary-light);
-    }
-    
-    td {
-      padding: 1rem;
-      border-bottom: 1px solid var(--border-color);
-    }
-    
-    tbody tr:last-child td {
-      border-bottom: none;
-    }
-    
-    tbody tr {
-      transition: background-color var(--transition-speed) ease;
-    }
-    
-    tbody tr:hover {
-      background-color: rgba(84, 105, 212, 0.05);
-    }
-    
-    .delete-btn {
-      background-color: var(--danger-color);
-      color: white;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      cursor: pointer;
-      font-family: 'Poppins', sans-serif;
-      font-size: 0.9rem;
-      display: flex;
-      align-items: center;
-      transition: all var(--transition-speed) ease;
-    }
-    
-    .delete-btn i {
-      margin-right: 0.5rem;
-    }
-    
-    .delete-btn:hover {
-      background-color: #d32f2f;
-    }
-    
-    /* Empty state styling */
-    p {
-      text-align: center;
-      padding: 2rem;
-      background-color: var(--background-white);
-      border-radius: 12px;
-      box-shadow: var(--shadow-md);
-      color: var(--text-light);
-      font-style: italic;
-    }
-    
-    /* ====== RESPONSIVE DESIGN ====== */
-    @media screen and (max-width: 768px) {
-      nav {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 1rem;
-      }
-      
-      .nav-brand {
-        margin-bottom: 1rem;
-      }
-      
-      .nav-links {
-        width: 100%;
-        justify-content: space-between;
-      }
-      
-      .container {
-        padding: 0 1rem;
-        margin: 1rem auto;
-      }
-      
-      h1 {
-        font-size: 1.8rem;
-      }
-      
-      form, table {
-        padding: 1.5rem;
-      }
-      
-      th, td {
-        padding: 0.75rem 0.5rem;
-      }
-    }
-    
-    @media screen and (max-width: 480px) {
-      .nav-links {
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      
-      .nav-links a {
-        width: 100%;
-        padding: 0.8rem;
-      }
-      
-      form {
-        padding: 1.5rem 1rem;
-      }
-      
-      .delete-btn {
-        padding: 0.5rem;
-      }
-      
-      .delete-btn span {
-        display: none;
-      }
-    }
-    
-    /* Improve focus states for accessibility */
-    button:focus, input:focus {
-      outline: none;
-      box-shadow: 0 0 0 3px rgba(84, 105, 212, 0.3);
-    }
-    
-    /* Style for input placeholders */
-    ::placeholder {
-      color: #b0b0b0;
-      opacity: 1;
-    }
+    /* ==========================================================
+   create-employee.css  – light + charcoal-dark theme (2025-06-30)
+   ========================================================== */
+
+/*  RESET  */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;scroll-padding-top:72px;}
+body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);}
+
+/* ─────────────────────────
+   COLOR-TOKENS — BRIGHT MODE
+   ───────────────────────── */
+:root{
+  /* brand blues */
+  --primary-dark :#1e3a8a;
+  --primary      :#2563eb;
+  --primary-light:#3b82f6;
+
+  --success:#10b981;
+  --danger :#ef4444;
+
+  /* neutrals */
+  --bg        :#f5f7fa;
+  --bg-alt    :#ffffff;
+  --border    :#e0e0e0;
+
+  /* text */
+  --text      :#333;
+  --text-light:#6c757d;
+
+  /* misc */
+  --radius:.5rem;--radius-sm:.25rem;--shadow-sm:0 1px 3px rgba(0,0,0,.06);--shadow-md:0 4px 8px rgba(0,0,0,.1);--shadow-lg:0 12px 18px rgba(0,0,0,.14);
+}
+
+/* ─────────────────────────
+   DARK-MODE OVERRIDES
+   (triggered by .dark-mode on <html> + <body>)
+   ───────────────────────── */
+.dark-mode{
+  --bg        :#0c0c0f;
+  --bg-alt    :#131417;
+  --border    :#2d333d;
+
+  --text      :#e2e8f0;
+  --text-light:#9ca3af;
+
+  /* keep brand blues unchanged */
+}
+
+/* ==========================================================
+   NAV BAR
+   ========================================================== */
+nav{background:linear-gradient(135deg,var(--primary)0%,var(--primary-light)100%);color:#fff;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-md);}
+.nav-brand{display:flex;align-items:center;font-size:1.5rem;font-weight:600;}
+.nav-brand i{margin-right:.8rem;font-size:1.8rem;animation:bounce 2s infinite;}
+@keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+.nav-links{display:flex;gap:1rem;flex-wrap:wrap;}
+.nav-links a{display:flex;align-items:center;padding:.6rem 1rem;border-radius:.4rem;color:rgba(255,255,255,.85);transition:.2s;}
+.nav-links a i{margin-right:.5rem;}
+.nav-links a:hover{background:rgba(255,255,255,.18);color:#fff;}
+
+/* ==========================================================
+   CONTAINER & HEADINGS
+   ========================================================== */
+.container{max-width:900px;margin:2rem auto;padding:0 1.5rem;flex:1;animation:fadeIn .45s ease-out;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+h1{font-size:2.2rem;color:var(--primary);text-align:center;margin-bottom:2rem;position:relative;padding-bottom:.5rem;}
+h1::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:60px;height:4px;background:var(--primary);border-radius:2px;}
+h2{font-size:1.6rem;color:var(--primary);display:flex;align-items:center;margin:2rem 0 1.4rem;}
+h2::before{content:'\f0ae';font-family:'Font Awesome 6 Free';font-weight:900;margin-right:.8rem;font-size:1.4rem;}
+
+/* ==========================================================
+   FORM
+   ========================================================== */
+form{background:var(--bg-alt);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:2rem;margin-bottom:3rem;transition:.25s;}
+form:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg);}
+form div{margin-bottom:1.5rem;}
+label{display:block;margin-bottom:.5rem;font-weight:500;color:var(--text-light);}
+input[type="text"]{width:100%;padding:.8rem 1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:1rem;transition:.2s;}
+input[type="text"]:focus{outline:none;border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(37,99,235,.18);}
+button[type="submit"]{width:100%;padding:1rem;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--success)0%,#22c55e 100%);color:#fff;font-size:1rem;font-weight:500;display:flex;align-items:center;justify-content:center;transition:.2s;cursor:pointer;}
+button[type="submit"] i{margin-right:.5rem;}
+button[type="submit"]:hover{background:linear-gradient(135deg,#059669 0%,var(--success)100%);}
+button[type="submit"]:active{transform:translateY(1px);}
+
+/* ==========================================================
+   TABLE
+   ========================================================== */
+table{width:100%;border-collapse:collapse;background:var(--bg-alt);border-radius:var(--radius);box-shadow:var(--shadow-md);overflow:hidden;}
+thead{background:color-mix(in srgb,var(--primary)15%,transparent);}
+th,td{padding:1rem;border-bottom:1px solid var(--border);}
+th{color:var(--primary-dark);font-weight:600;border-bottom:2px solid var(--primary-light);}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr{transition:.2s;}
+tbody tr:hover{background:color-mix(in srgb,var(--primary)5%,transparent);}
+
+/* delete button */
+.delete-btn{display:inline-flex;align-items:center;padding:.5rem 1rem;font-size:.9rem;border:none;border-radius:var(--radius-sm);background:var(--danger);color:#fff;cursor:pointer;transition:.2s;}
+.delete-btn i{margin-right:.5rem;}
+.delete-btn:hover{background:#d32f2f;}
+
+/* ==========================================================
+   EMPTY STATE
+   ========================================================== */
+.empty{display:flex;flex-direction:column;align-items:center;padding:2rem;background:var(--bg-alt);border-radius:var(--radius);box-shadow:var(--shadow-md);color:var(--text-light);font-style:italic;}
+.empty i{font-size:2rem;margin-bottom:1rem;color:var(--border);}
+
+/* ==========================================================
+   FOCUS & PLACEHOLDER
+   ========================================================== */
+input:focus,button:focus{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.23);}
+::placeholder{color:#b0b0b0;opacity:1;}
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+@media(max-width:768px){
+  nav{flex-direction:column;align-items:flex-start;padding:1rem;}
+  .nav-brand{margin-bottom:1rem;}
+  .nav-links{width:100%;justify-content:space-between;}
+  .container{padding:0 1rem;margin:1rem auto;}
+  h1{font-size:1.8rem;}
+  form,table{padding:1.5rem;}
+  th,td{padding:.75rem .5rem;}
+}
+@media(max-width:480px){
+  .nav-links{flex-direction:column;gap:.6rem;}
+  .nav-links a{width:100%;justify-content:center;}
+  form{padding:1.25rem;}
+  .delete-btn{padding:.5rem;}
+  .delete-btn span{display:none;}
+}
+
+/* ==========================================================
+   JS-hooked HOVER (optional; keeps original behaviour)
+   ========================================================== */
+tbody tr.hovered{background:color-mix(in srgb,var(--primary)5%,transparent);}
+
   </style>
 </head>
 <body>

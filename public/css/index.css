@@ -69,8 +69,7 @@ body::before {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
-}s
-
+}
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   color: var(--text-dark);
@@ -502,10 +501,11 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   transition: var(--transition);
-  border: 1px solid rgba(229, 231, 235, 0.5);
+  border: 1px solid rgba(229, 231, 235, 0.3);
   position: relative;
   overflow: hidden;
 }
+
 
 
 
@@ -622,6 +622,15 @@ button {
   overflow: hidden;
   z-index: 1;
 }
+/* ── Sidebar-specific button overrides: slightly darker gradient ── */
+.forms-sidebar button {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+}
+
+.forms-sidebar .go-report-link {
+  background: linear-gradient(to right, var(--primary-dark), var(--primary-color));
+}
+
 
 button::before {
   content: '';
@@ -636,14 +645,17 @@ button::before {
   transition: opacity 0.3s ease;
 }
 
-button:hover {
+/* ── Less-bright hover for all buttons except the logout button ── */
+button:not(.logout-btn):hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
+  filter: brightness(0.9);       /* dim the hover background */
 }
 
-button:hover::before {
-  opacity: 1;
+button:not(.logout-btn):hover::before {
+  opacity: 0.6;                  /* show the gradient at 60% opacity */
 }
+
 
 button:active {
   transform: translateY(0);
@@ -756,10 +768,17 @@ table th {
 table tr {
   transition: var(--transition);
 }
-
+/* Even rows — light mode */
 table tr:nth-child(even) {
   background-color: rgba(241, 245, 249, 0.5);
 }
+
+/* Even rows — dark mode override */
+body.dark-mode table tr:nth-child(even) {
+  /* match your --input-bg (#222222) or tweak opacity as you like */
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
 
 table tr:hover {
   background-color: rgba(58, 123, 213, 0.05);
@@ -792,7 +811,6 @@ table tr:hover {
   border-left: 3px solid var(--primary-light);
 }
 
-/* Enhanced Summary Box Styling */
 .summary-box {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(10px);
@@ -801,10 +819,11 @@ table tr:hover {
   padding: 2.5rem;
   box-shadow: var(--shadow-lg);
   transition: var(--transition);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   position: relative;
   overflow: hidden;
 }
+
 
 .summary-box::after {
   content: '';
@@ -836,19 +855,31 @@ table tr:hover {
 }
 
 /* Customized Summary Section Overrides */
+/* Darker “Show Summary” button */
 #toggleSummary {
   width: auto;
   display: inline-block;
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary-color));
+  color: var(--text-white);
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition);
 }
+
+/* Subtler hover for “Show Summary” */
+#toggleSummary:hover {
+  background: var(--primary-dark);
+}
+
+
 
 #summaryContent {
   max-width: 300px;
   margin: 1.5rem 0 0;
 }
 
-#toggleSummary:hover {
-  background: linear-gradient(to right, var(--primary-light), var(--secondary-color));
-}
 
 /* Summary Content Styling */
 #summaryContent {
@@ -1051,6 +1082,7 @@ table tr:hover {
   transform: scale(1.1);
 }
 
+/* ── Scrollbar base styling ───────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -1061,14 +1093,27 @@ table tr:hover {
   border-radius: 4px;
 }
 
+/* Dark mode override: make sidebar track dark, not white */
+body.dark-mode .forms-sidebar::-webkit-scrollbar-track {
+  background: var(--card-bg);
+}
+
+/* Darker, subtler scrollbar thumb */
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, var(--primary-light), var(--secondary-color));
+  background: linear-gradient(to bottom, var(--primary-dark), var(--primary-color));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--primary-color);
+  background: var(--primary-dark);
 }
+
+/* ── Dark mode: calendar icon white ──────────────────────────── */
+/* Invert the date-picker indicator so the default calendar glyph turns white */
+body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(1.5);
+}
+
 
 
 .styled-input {
@@ -1199,19 +1244,26 @@ button[disabled] { opacity: .6; cursor: not-allowed; }
 }
 
 /* “Start Invoice” button beside the sales header */
+/* Darker “Start Invoice” button */
 .start-invoice-btn {
-  margin-left: 12px;          /* gap after the header text */
+  margin-left: 12px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 12px;
-  background: #0d6efd;        /* primary blue – tweak to taste */
+  background: var(--primary-dark);
   color: #fff;
   border-radius: 4px;
   text-decoration: none;
   font-size: 0.9rem;
+  transition: var(--transition);
 }
-.start-invoice-btn:hover { opacity: 0.9; }
+/* Subtler hover for “Start Invoice” */
+.start-invoice-btn:hover {
+  background: var(--primary-dark);
+  opacity: 0.9;
+}
+
 
 
 /* ────────── Invoice controls beside the “Sales for …” header ────────── */
@@ -1258,3 +1310,71 @@ button[disabled] { opacity: .6; cursor: not-allowed; }
 #salesTable td a:hover {            /* hover / focus                */
   color: var(--primary-light);      /* slightly lighter blue        */
 }
+/* ─── Dark-mode variable overrides (instant-paint) ───────────────────────── */
+/* Kicks in the moment *either* <html> OR <body> has .dark-mode */
+html.dark-mode,
+body.dark-mode {
+  /* background + surface colours */
+  --light-bg:   #121212;
+  --card-bg:    #1a1a1a;
+  --border-color:#2e2e2e;
+
+  /* inputs & table rows */
+  --input-bg:   #222222;
+
+  /* text colours */
+  --text-dark:  #e5e7eb;
+  --text-light: #9ca3af;
+  --text-white: #f8fafc;
+
+  /* navigation */
+  --nav-bg:     #000000;
+  --nav-hover:  rgba(255,255,255,0.08);
+
+  /* shadows (subtler on dark) */
+  --shadow-sm:  0 1px 2px   rgba(255,255,255,0.05);
+  --shadow-md:  0 4px 6px  -1px rgba(255,255,255,0.08);
+  --shadow-lg:  0 10px 15px -3px rgba(255,255,255,0.08);
+
+  background-color: var(--light-bg);   /* first paint is now dark   */
+  color: var(--text-dark);
+}
+
+
+
+body.dark-mode form input[type="text"],
+body.dark-mode form input[type="number"],
+body.dark-mode form input[type="date"],
+body.dark-mode form select,
+body.dark-mode form textarea,
+body.dark-mode .styled-input {
+  background-color: var(--input-bg);   /* dark fields */
+  color: var(--text-dark);
+  border-color: var(--border-color);
+}
+
+body.dark-mode form input::placeholder,
+body.dark-mode form textarea::placeholder {
+  color: var(--text-light);
+}
+
+/* Summary card – match other dark surfaces */
+body.dark-mode .summary-box {
+  background-color: var(--card-bg);          /* near-black surface */
+  backdrop-filter: none;                     /* no glass blur in dark */
+  -webkit-backdrop-filter: none;
+  border: 1px solid var(--border-color);     /* subtle outline */
+}
+
+/* Inner “Show Summary” panel */
+body.dark-mode #summaryContent {
+  background: var(--card-bg);                /* same dark surface */
+  box-shadow: inset 0 0 0 1px var(--border-color);  /* faint inset outline */
+}
+
+/* Divider lines & labels inside the summary panel */
+body.dark-mode #summaryContent p {
+  border-bottom-color: var(--border-color);
+  color: var(--text-dark);
+}
+
