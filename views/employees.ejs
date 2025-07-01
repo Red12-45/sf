@@ -56,14 +56,36 @@ body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100v
 }
 
 /* =============== HEADER / NAV =============== */
-.app-header{background:linear-gradient(135deg,var(--primary)0%,var(--primary-light)100%);color:#fff;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-md);}
+/* deep-blue navigation bar */
+.app-header{
+  background:linear-gradient(135deg,var(--primary-dark) 0%,var(--primary) 100%);
+  color:#fff;
+  padding:1rem 2rem;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  position:sticky;
+  top:0;
+  z-index:100;
+  box-shadow:var(--shadow-md);
+}
+
 .nav-brand{display:flex;align-items:center;font-size:1.5rem;font-weight:600;}
 .nav-brand i{margin-right:.8rem;font-size:1.8rem;animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
 
 /* nav links */
 .nav-links{display:flex;gap:1rem;flex-wrap:wrap;}
-.nav-link{display:flex;align-items:center;padding:.6rem 1rem;border-radius:.4rem;color:rgba(255,255,255,.85);transition:.2s;}
+/* links – no underline, consistent hover */
+.nav-link{
+  display:flex;
+  align-items:center;
+  padding:.6rem 1rem;
+  border-radius:.4rem;
+  color:rgba(255,255,255,.85);
+  text-decoration:none;               /* ← removed underline */
+  transition:.2s;
+}
 .nav-link i{margin-right:.5rem;}
 .nav-link:hover,.nav-link.active{background:rgba(255,255,255,.15);color:#fff;}
 
@@ -106,7 +128,23 @@ body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100v
 label{display:block;margin-bottom:.4rem;color:var(--text-light);font-weight:500;}
 .select-wrapper,.date-input-wrapper{position:relative;}
 .select-wrapper i,.date-input-wrapper i{position:absolute;right:1rem;top:50%;transform:translateY(-50%);color:var(--text-light);pointer-events:none;}
-select,input[type="text"],input[type="date"]{width:100%;padding:.8rem 1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);font-size:1rem;transition:.2s;}
+/* form controls – inherit correct foreground colour in both themes */
+select,
+input[type="text"],
+input[type="date"] {
+  width: 100%;
+  padding: .8rem 1rem;
+  padding-right: 2.5rem;            /* space for custom icon */
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font-size: 1rem;
+  color: var(--text);
+  appearance: none;                 /* hide native arrow */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  transition: .2s;
+}
 select:focus,input:focus{outline:none;border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(37,99,235,.18);}
 
 .time-input-group{display:flex;gap:.5rem;align-items:center;}
@@ -153,10 +191,45 @@ input.filled{border-color:var(--success);background:color-mix(in srgb,var(--succ
 .footer-links a:hover{color:#fff;}
 
 @media(max-width:480px){.footer-content{flex-direction:column;text-align:center;}.footer-links{justify-content:center;}}
+/* ───────────────────────────────────────────────
+   Decorative radial-gradient background (matches
+   permission.css – works in light & dark themes)
+   ─────────────────────────────────────────────── */
+.bg-decoration{
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  opacity:.3;
+  pointer-events:none;
+  overflow:hidden;
+}
+.bg-decoration::before,
+.bg-decoration::after{
+  content:'';
+  position:absolute;
+  border-radius:50%;
+}
+.bg-decoration::before{
+  top:-50%;
+  right:-50%;
+  width:100%;
+  height:100%;
+  background:radial-gradient(circle,var(--primary-light) 0%,transparent 70%);
+  transform:rotate(-15deg);
+}
+.bg-decoration::after{
+  bottom:-30%;
+  left:-30%;
+  width:80%;
+  height:80%;
+  background:radial-gradient(circle,var(--primary-light) 0%,transparent 70%);
+  transform:rotate(15deg);
+}
 
   </style>
 </head>
 <body>
+    <div class="bg-decoration"></div>
   <!-- Header with animated gradient background -->
   <header class="app-header">
     <div class="nav-brand">
@@ -165,7 +238,7 @@ input.filled{border-color:var(--success);background:color-mix(in srgb,var(--succ
     </div>
     <nav class="nav-links">
       <a href="/" class="nav-link"><i class="fas fa-home"></i> <span>Dashboard</span></a>
-      <a href="/create-employee" class="nav-link"><i class="fas fa-user-plus"></i> <span>New Employee</span></a>
+      <a href="/create-employee" class="nav-link"><i class="fas fa-user-plus"></i> <span>Create</span></a>
       <a href="/employeeReport" class="nav-link active"><i class="fas fa-file-alt"></i> <span>Reports</span></a>
       <a href="/logout" class="nav-link"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></a>
     </nav>
@@ -191,10 +264,10 @@ input.filled{border-color:var(--success);background:color-mix(in srgb,var(--succ
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
           <div class="form-group">
-            <label for="checkinEmployeeId">Employee:</label>
+            <label for="checkinEmployeeId">Name:</label>
             <div class="select-wrapper">
               <select id="checkinEmployeeId" name="employeeId" required>
-                <option value="">-- Select Employee --</option>
+                <option value="">-- Select Name --</option>
                 <% employees.forEach(function(emp){ %>
                   <option value="<%= emp.id %>"><%= emp.name %></option>
                 <% }); %>
@@ -234,10 +307,10 @@ input.filled{border-color:var(--success);background:color-mix(in srgb,var(--succ
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
           <div class="form-group">
-            <label for="checkoutEmployeeId">Employee:</label>
+            <label for="checkoutEmployeeId">Name:</label>
             <div class="select-wrapper">
               <select id="checkoutEmployeeId" name="employeeId" required>
-                <option value="">-- Select Employee --</option>
+                <option value="">-- Select Name --</option>
                 <% employees.forEach(function(emp){ %>
                   <option value="<%= emp.id %>"><%= emp.name %></option>
                 <% }); %>

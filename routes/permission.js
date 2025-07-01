@@ -27,13 +27,18 @@ module.exports = function permissionRoutesFactory ({
         const lockedRoutes   = doc.exists ? (doc.data().lockedRoutes   || []) : [];
         const blockedActions = doc.exists ? (doc.data().blockedActions || {}) : {};
 
+           // ─────────── permissions list ───────────
         const availableRoutes = [
-          { path:'/profit',        label:'Profit Report' },
-          { path:'/sales',         label:'Sales Report',   canLockActions:true },
-          { path:'/expense',       label:'Expense Report', canLockActions:true },
-          { path:'/add-product',   label:'Add Product' },
-          { path:'/view-products', label:'View Products',  canLockActions:true }
+          { path:'/profit',           label:'Profit Report'              },
+          { path:'/sales',            label:'Sales Report',    canLockActions:true },
+          { path:'/expense',          label:'Expense Report', canLockActions:true },
+          { path:'/add-product',      label:'Add Product'                },
+          { path:'/view-products',    label:'View Products',   canLockActions:true },
+          { path:'/gst',              label:'GST Summary',     },
+          { path:'/stats',            label:'Statistics',      },
+          { path:'/edit-stock-batch', label:'Edit Stock Batch',}
         ];
+
 
         res.render('permission', {
           lockedRoutes,

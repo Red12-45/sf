@@ -55,18 +55,19 @@ body{
 }
 
 /* ====== HEADER & NAVIGATION ====== */
-nav{
-  background:var(--gradient-primary);
-  color:#fff;
-  padding:1rem 2rem;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  position:sticky;
-  top:0;
-  z-index:1000;
-  box-shadow:var(--shadow-md);
+nav {
+  background: var(--primary-dark);   /* solid dark-blue */
+  color: #fff;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
 }
+
 
 .nav-brand{
   display:flex;align-items:center;
@@ -143,12 +144,24 @@ form:before{
 form div{display:flex;align-items:center;flex-wrap:wrap;gap:1rem;justify-content:center;flex:1;}
 label{font-weight:500;color:var(--primary-dark);font-size:1.1rem;}
 
-input[type="month"]{
-  padding:.7rem 1rem;border-radius:6px;border:1px solid var(--border-color);
-  background-color:var(--background-light);
-  font-family:'Poppins',sans-serif;font-size:1rem;
-  transition:all .3s ease;flex:1;min-width:200px;
+input[type="month"] {
+  padding: .7rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background-color: var(--background-light);
+  color: var(--text-color);             /* ensure date text matches body */
+  font-family: 'Poppins', sans-serif;
+  font-size: 1rem;
+  transition: all .3s ease;
+  flex: 1;
+  min-width: 200px;
 }
+/* keep month-picker text light in dark mode */
+body.dark-mode input[type="month"] {
+  background-color: var(--background-white);
+  color: var(--text-color);
+}
+
 input[type="month"]:focus{
   outline:none;border-color:var(--primary-light);
   box-shadow:0 0 0 3px rgba(84,105,212,.15);
@@ -317,10 +330,45 @@ body.dark-mode .no-data{background-color:var(--background-white);}
 
 /* invert month-picker icon so it stays white */
 body.dark-mode input[type="month"]::-webkit-calendar-picker-indicator{filter:invert(1) brightness(1.5);}
+.bg-decoration {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;          /* bring it above the body’s background */
+  opacity: .3;
+  pointer-events: none;
+  overflow: hidden;
+}
 
+.bg-decoration::before,
+.bg-decoration::after{
+  content:'';
+  position:absolute;
+  border-radius:50%;
+}
+.bg-decoration::before{
+  top:-50%;
+  right:-50%;
+  width:100%;
+  height:100%;
+  background:radial-gradient(circle,var(--primary-light) 0%,transparent 70%);
+  transform:rotate(-15deg);
+}
+.bg-decoration::after{
+  bottom:-30%;
+  left:-30%;
+  width:80%;
+  height:80%;
+  background:radial-gradient(circle,var(--primary-light) 0%,transparent 70%);
+  transform:rotate(15deg);
+}
   </style>
 </head>
 <body>
+  <div class="bg-decoration"></div>
+
   <!-- Navigation Bar -->
   <nav>
     <div class="nav-brand">
@@ -447,15 +495,18 @@ body.dark-mode input[type="month"]::-webkit-calendar-picker-indicator{filter:inv
       </div>
       
       <table>
-        <thead>
-          <tr>
-            <th><i class="fas fa-user"></i> Employee</th>
-            <th><i class="fas fa-calendar-day"></i> Date</th>
-            <th><i class="fas fa-sign-in-alt"></i> Check In</th>
-            <th><i class="fas fa-sign-out-alt"></i> Check Out</th>
-            <th><i class="fas fa-hourglass-half"></i> Duration</th>
-          </tr>
-        </thead>
+       <thead>
+  <tr>
+    <th><i class="fas fa-user"></i> Employee</th>
+    <th><i class="fas fa-calendar-day"></i> Date</th>
+    <th><i class="fas fa-sign-in-alt"></i> Check In</th>
+    <th><i class="fas fa-sign-out-alt"></i> Check Out</th>
+    <th><i class="fas fa-hourglass-half"></i> Duration</th>
+    <% if (user.isMaster) { %>
+      <th>Actions</th>
+    <% } %>
+  </tr>
+</thead>
         <tbody>
           <% reports.forEach(function(report){ 
             // Calculate duration if both times exist
@@ -507,23 +558,48 @@ body.dark-mode input[type="month"]::-webkit-calendar-picker-indicator{filter:inv
               });
             };
           %>
-          <tr>
-            <td class="employee-name"><%= report.employeeName %></td>
-            <td class="report-date"><%= formatDate(report.reportDate) %></td>
-            <td class="check-in">
-              <%- report.reportTime ? report.reportTime : '<span class="no-checkin">Not checked in</span>' %>
-            </td>
-            <td class="check-out">
-              <%- report.leaveTime ? report.leaveTime : '<span class="no-checkout">Not checked out</span>' %>
-            </td>
-            <td>
-              <% if (report.reportTime && report.leaveTime) { %>
-                <span class="duration"><%= duration %></span>
-              <% } else { %>
-                <span class="no-checkout">-</span>
-              <% } %>
-            </td>
-          </tr>
+<tr>
+  <td class="employee-name"><%= report.employeeName %></td>
+  <td class="report-date"><%= formatDate(report.reportDate) %></td>
+  <td class="check-in">
+    <%- report.reportTime
+        ? report.reportTime
+        : '<span class="no-checkin">Not checked in</span>' %>
+  </td>
+  <td class="check-out">
+    <%- report.leaveTime
+        ? report.leaveTime
+        : '<span class="no-checkout">Not checked out</span>' %>
+  </td>
+  <td>
+    <% if (report.reportTime && report.leaveTime) { %>
+      <span class="duration"><%= duration %></span>
+    <% } else { %>
+      <span class="no-checkout">-</span>
+    <% } %>
+  </td>
+  <% if (user.isMaster) { %>
+    <td>
+      <form
+        method="POST"
+        action="/employee/deleteReport?month=<%= month %>"
+        style="display:inline;"
+      >
+        <input type="hidden" name="reportId" value="<%= report.id %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button
+          type="submit"
+          class="action-btn"
+          onclick="return confirm('Are you sure you want to delete this entry?');"
+          title="Delete Entry"
+        >
+          <i class="fas fa-trash-alt"></i>
+        </button>
+      </form>
+    </td>
+  <% } %>
+</tr>
+
           
           <% }); %>
         </tbody>

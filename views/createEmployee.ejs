@@ -62,12 +62,31 @@ body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100v
 /* ==========================================================
    NAV BAR
    ========================================================== */
-nav{background:linear-gradient(135deg,var(--primary)0%,var(--primary-light)100%);color:#fff;padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-md);}
+nav {
+  background: var(--primary-dark);          /* solid dark-blue */
+  color: #fff;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
 .nav-brand{display:flex;align-items:center;font-size:1.5rem;font-weight:600;}
 .nav-brand i{margin-right:.8rem;font-size:1.8rem;animation:bounce 2s infinite;}
 @keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
 .nav-links{display:flex;gap:1rem;flex-wrap:wrap;}
-.nav-links a{display:flex;align-items:center;padding:.6rem 1rem;border-radius:.4rem;color:rgba(255,255,255,.85);transition:.2s;}
+.nav-links a {
+  display: flex;
+  align-items: center;
+  padding: .6rem 1rem;
+  border-radius: .4rem;
+  color: rgba(255,255,255,.85);
+  text-decoration: none;           /* remove underline */
+  transition: .2s;
+}
 .nav-links a i{margin-right:.5rem;}
 .nav-links a:hover{background:rgba(255,255,255,.18);color:#fff;}
 
@@ -147,10 +166,40 @@ input:focus,button:focus{outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.23);}
    JS-hooked HOVER (optional; keeps original behaviour)
    ========================================================== */
 tbody tr.hovered{background:color-mix(in srgb,var(--primary)5%,transparent);}
-
+.bg-decoration{
+  position:fixed;
+  inset:0;
+  z-index:-1;
+  opacity:.3;
+  pointer-events:none;
+  overflow:hidden;
+}
+.bg-decoration::before,
+.bg-decoration::after{
+  content:'';
+  position:absolute;
+  border-radius:50%;
+}
+.bg-decoration::before{
+  top:-50%;
+  right:-50%;
+  width:100%;
+  height:100%;
+  background:radial-gradient(circle,var(--primary-light) 0%,transparent 70%);
+  transform:rotate(-15deg);
+}
+.bg-decoration::after{
+  bottom:-30%;
+  left:-30%;
+  width:80%;
+  height:80%;
+  background:radial-gradient(circle,var(--primary-light) 0%,transparent 70%);
+  transform:rotate(15deg);
+}
   </style>
 </head>
 <body>
+      <div class="bg-decoration"></div> 
   <!-- Navigation Bar -->
   <nav>
     <div class="nav-brand">

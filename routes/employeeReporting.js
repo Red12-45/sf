@@ -1,7 +1,7 @@
 // routes/employeeReporting.js
 const express = require('express');
 
-module.exports = function makeEmployeeRoutes({ db, isAuthenticated }) {
+module.exports = function makeEmployeeRoutes({ db, isAuthenticated, requireMaster }) {
   const router = express.Router();
 
   // helper identical to the one in app.js
@@ -61,7 +61,27 @@ module.exports = function makeEmployeeRoutes({ db, isAuthenticated }) {
       res.status(500).send(e.toString());
     }
   });
-
+  router.post(
+    '/employee/deleteReport',
+    isAuthenticated,
+    requireMaster,
+    async (req, res) => {
+      try {
+        const { reportId } = req.body;
+        const accountId = req.session.user.accountId;
+        const reportRef = db.collection('employeeReports').doc(reportId);
+        const reportDoc = await reportRef.get();
+        if (!reportDoc.exists || reportDoc.data().accountId !== accountId) {
+          return res.status(403).send('Access denied or report not found');
+        }
+        await reportRef.delete();
+        // Redirect back to the Monthly Report page
+        res.redirect(`/employeeReport?month=${req.query.month || ''}`);
+      } catch (e) {
+        res.status(500).send(e.toString());
+      }
+    }
+  );
   // POST /employee/checkout
   router.post('/employee/checkout', isAuthenticated, async (req, res) => {
     try {
@@ -85,26 +105,40 @@ module.exports = function makeEmployeeRoutes({ db, isAuthenticated }) {
   router.get('/employeeReport', isAuthenticated, async (req, res) => {
     try {
       const accountId = req.session.user.accountId;
-      let reportsQuery = db.collection('employeeReports')
-                           .where('accountId','==',accountId)
-                           .orderBy('reportDate','desc');
-      const { month } = req.query;
-      if (month && month.trim()) {
-        const [y,m] = month.split('-');
-        const startDate = `${month}-01`;
-        let nextM=parseInt(m,10)+1, nextY=parseInt(y,10);
-        if(nextM>12){ nextM=1; nextY++; }
-        const nextMonth=`${nextY}-${pad(nextM)}-01`;
-        reportsQuery = reportsQuery.where('reportDate','>=',startDate)
-                                   .where('reportDate','<',nextMonth);
+
+      // Determine month: use query or default to current month
+      let { month } = req.query;
+      if (!month || !month.trim()) {
+        const now = new Date();
+        month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
       }
-      const snap = await reportsQuery.get();
-      const reports = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-      res.render('employeedReport', { reports, month: month||'' });
+
+      // Compute date range for that month
+      const [y, m] = month.split('-');
+      const startDate = `${month}-01`;
+      let nextM = parseInt(m, 10) + 1;
+      let nextY = parseInt(y, 10);
+      if (nextM > 12) {
+        nextM = 1;
+        nextY += 1;
+      }
+      const nextMonth = `${nextY}-${pad(nextM)}-01`;
+
+      // Query only entries in that month, sorted by reportDate descending
+      const snap = await db.collection('employeeReports')
+        .where('accountId', '==', accountId)
+        .where('reportDate', '>=', startDate)
+        .where('reportDate', '<', nextMonth)
+        .orderBy('reportDate', 'desc')
+        .get();
+
+      const reports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      res.render('employeedReport', { reports, month });
     } catch (e) {
       res.status(500).send(e.toString());
     }
   });
+
 
   // GET /create-employee
   router.get('/create-employee', isAuthenticated, async (req, res) => {

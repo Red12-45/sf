@@ -914,7 +914,8 @@ app.use('/', billingRoutes);
 const makeEmployeeRoutes = require('./routes/employeeReporting');
 const employeeRoutes     = makeEmployeeRoutes({
   db,
-  isAuthenticated
+  isAuthenticated,
+  requireMaster           // ← grant “master” users extra powers
 });
 app.use('/', employeeRoutes);
 
