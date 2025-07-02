@@ -445,17 +445,20 @@ h1, h2, h3, h4, h5, h6 {
   background-color: rgba(239, 68, 68, 0.2);
 }
 
-/* Page Container */
 .page-container {
   display: flex;
   width: 100%;
   gap: 2rem;
-  /* Allocate full viewport height minus nav height (70px) */
-  height: calc(100vh - 70px);
-  overflow: hidden; /* Prevent the container itself from scrolling */
+  height: calc(100vh - 70px);   /* unchanged height calculation */
+  overflow-y: hidden;           /* still stop the page from scrolling */
+  overflow-x: visible;          /* ⭐ let productSelect extend past the sidebar */
 }
 
-/* Sidebar (Forms) Styling */
+/* ────────────────────────────────────────────────────────────
+   SIDEBAR
+   – still scrolls vertically on its own
+   – no longer clips content that pokes out horizontally
+   ──────────────────────────────────────────────────────────── */
 .forms-sidebar {
   width: 420px;
   padding: 1rem;
@@ -464,9 +467,11 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--shadow-md);
   transition: width 0.3s, padding 0.3s;
   height: 100%;
-  overflow-y: auto;
+  overflow-y: auto;     /* keep the nice vertical scroll */
+  overflow-x: visible;  /* ⭐ allow the open dropdown to overflow sideways */
   position: relative;
 }
+
 
 .forms-sidebar:hover {
   box-shadow: var(--shadow-lg);
@@ -494,6 +499,10 @@ h1, h2, h3, h4, h5, h6 {
   z-index: 1;
 }
 
+/* ────────────────────────────────────────────────────────────
+   FORM CARD
+   – lets the open product dropdown flow outside the card
+   ──────────────────────────────────────────────────────────── */
 .formBox {
   margin-bottom: 2rem;
   padding: 1.5rem;
@@ -503,8 +512,9 @@ h1, h2, h3, h4, h5, h6 {
   transition: var(--transition);
   border: 1px solid rgba(229, 231, 235, 0.3);
   position: relative;
-  overflow: hidden;
+  overflow: visible;         /* ✅ allow the select to overflow sideways */
 }
+
 
 
 
@@ -1134,6 +1144,52 @@ body.dark-mode input[type="date"]::-webkit-calendar-picker-indicator {
   box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.2);
 }
 
+/* =====================================================================
+   ENHANCED PRODUCT DROPDOWN  –  pretty list-box while searching
+   ===================================================================== */
+#productSelect[size]:not([size="1"]) {
+  /* The <select> is acting as an open list when it has size>1          */
+  position: relative;                 /* keep it inside the form column */
+  z-index: 1050;                      /* float above neighbouring fields */
+  display: block;
+  max-height: 300px;                  /* tidy scroll limit               */
+  overflow-y: auto;
+  border: 2px solid var(--primary-light);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  padding: 4px 0;                     /* gentle top/bottom breathing room */
+  transition: box-shadow 0.25s ease;
+}
+
+#productSelect[size] option {
+  padding: 0.55rem 0.85rem;
+  margin: 2px 4px;                    /* tiny gap between rows           */
+  border-radius: 0.45rem;
+  cursor: pointer;
+}
+
+#productSelect[size] option:hover,
+#productSelect[size] option:focus,
+#productSelect[size] option:checked {
+  background: var(--primary-light);
+  color: #ffffff;
+}
+
+/* -------- Dark-mode overrides -------- */
+body.dark-mode #productSelect[size]:not([size="1"]) {
+  background: var(--card-bg);
+  border-color: var(--primary-light);
+}
+
+body.dark-mode #productSelect[size] option:hover,
+body.dark-mode #productSelect[size] option:focus,
+body.dark-mode #productSelect[size] option:checked {
+  background: var(--primary-light);
+  color: #ffffff;
+}
+
+
 .go-report-link {
   display: inline-flex;
   align-items: center;
@@ -1377,4 +1433,142 @@ body.dark-mode #summaryContent p {
   border-bottom-color: var(--border-color);
   color: var(--text-dark);
 }
+/* ——— Chart canvas: keep native resolution for crisp text ——— */
+.chart-container canvas{
+  width:100% !important;      /* fill the card’s width */
+  height:auto !important;     /* let Chart.js decide height – no scaling → no blur */
+  display:block;              /* removes stray baseline whitespace */
+}
 
+/* Optional but helpful: force sub-pixel font smoothing on dark & light modes */
+.chart-card,
+.chart-container canvas{
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* === INLINE SUMMARY BADGES (Revenue / Gross / Expense / GST / Net) === */
+.summary-inline{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.5rem;
+  margin-bottom:1rem;           /* keeps badges clear of the card below */
+}
+/* ⬆⬆⬆ bigger—but not huge—summary badges ⬆⬆⬆ */
+.summary-item{
+  display:flex;
+  align-items:center;
+  gap:.4rem;                 /* a touch wider so icons don’t crowd text  */
+  padding:.45rem 1rem;       /* slightly taller & wider badge            */
+  border-radius:.6rem;
+  font-weight:600;
+  font-size:1rem;            /* ↑ from 0.8 rem → makes all text larger   */
+  box-shadow:0 1px 2px rgba(0,0,0,.08);
+}
+
+/* numbers a shade larger than the labels for quick scanning */
+.summary-item span{
+  font-size:1.05rem;
+}
+
+.summary-item.revenue{background:rgba(46,204,113,.15);color:#27ae60;}
+.summary-item.gross  {background:rgba(52,152,219,.15);color:#2980b9;}
+.summary-item.expense{background:rgba(231,76,60,.15);color:#c0392b;}
+.summary-item.gst    {background:rgba(76,201,240,.18);color:#4cc9f0;}
+.summary-item.net    {background:rgba(155,89,182,.15);color:#8e44ad;}
+.summary-item .fas{font-size:.9em;}
+/* ===============================================================
+   ⬇⬇  CHARTS MODULE  (migrated from stats.css – no further edits) ⬇⬇
+   =============================================================== */
+
+.charts-wrapper{display:grid;gap:1.55rem;transition:grid-template-columns .35s ease;}
+.charts-wrapper.cols-1{grid-template-columns:1fr;}
+.charts-wrapper.cols-2{grid-template-columns:repeat(2,1fr);}
+.charts-wrapper.cols-3{grid-template-columns:repeat(3,1fr);}
+.charts-wrapper.cols-4{grid-template-columns:repeat(4,1fr);}
+
+.chart-card{
+  background:var(--card-bg);
+  border:1px solid rgba(229,231,235,.55);
+  border-radius:var(--radius-lg);
+  padding:1.55rem;
+  box-shadow:var(--shadow-md);
+  transition:var(--transition);
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden;
+  height:600px;
+}
+.chart-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);}
+.chart-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--primary-color);}
+.chart-card h2{
+  margin:0 0 1.05rem;
+  font-size:1.12rem;
+  display:flex;
+  align-items:center;
+  gap:.8rem;
+  color:var(--primary-color);
+  font-weight:700;
+}
+.chart-card h2 i{
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(67,97,238,.12);
+  color:var(--primary-color);
+}
+.chart-container{flex:1;position:relative;width:100%;height:100%;}
+
+.chart-type-toggle{position:absolute;top:1rem;right:1rem;display:flex;gap:.35rem;z-index:2;}
+.chart-type-btn{
+  background:#fff;
+  border:1px solid #e2e8f0;
+  border-radius:.45rem;
+  padding:.35rem .55rem;
+  font-size:1rem;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  transition:var(--transition);
+}
+.chart-type-btn:hover{background:rgba(67,97,238,.12);color:var(--primary-color);}
+.chart-type-btn[aria-pressed="true"]{
+  background:var(--primary-color);
+  color:#fff;
+  border-color:var(--primary-color);
+}
+.chart-type-btn i {
+  pointer-events: none;
+  /* ensure icons are visible in light mode */
+  color: var(--text-dark);
+}
+
+/* Responsive tweaks matching original stats.css */
+@media (max-width:1199px){.charts-wrapper.cols-4{grid-template-columns:repeat(3,1fr);}}
+@media (max-width:991px){
+  .charts-wrapper.cols-3,
+  .charts-wrapper.cols-4{grid-template-columns:repeat(2,1fr);}
+}
+@media (max-width:767px){
+  .charts-wrapper{grid-template-columns:1fr!important;}
+  .chart-card{height:480px;}
+}
+
+/* ---------- Dark-mode overrides ---------- */
+body.dark-mode .chart-card{background:var(--card-bg);box-shadow:var(--shadow-lg);}
+body.dark-mode .chart-card h2{color:#9ac8ff;}
+body.dark-mode .chart-card h2 i{background:var(--primary-light);color:#9ac8ff;}
+body.dark-mode .chart-type-btn{
+  background:#222;border-color:#2e2e2e;color:var(--text-light);
+}
+body.dark-mode .chart-type-btn:hover{
+  background:var(--primary-light);color:#9ac8ff;
+}
+body.dark-mode .chart-type-btn[aria-pressed="true"]{
+  background:var(--primary-color);color:#fff;border-color:var(--primary-color);
+}
+
+/* ===============================================================
+   ⬆⬆  END of CHARTS MODULE  ⬆⬆
+   =============================================================== */

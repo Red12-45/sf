@@ -283,6 +283,28 @@ window.CHART_YEAR    = <%= chartYear %>;
         type === 'Units Sold'
           ? (short ? fmtUnitsShort(v) : `${v} units`)
           : (short ? fmtRupeeShort(v) : fmtRupee(v));
+          /* ⇣⇣ NEW – returns an ARRAY so Chart.js draws real multi-line ticks ⇣⇣ */
+const wrapLabel = str => {
+  const MAX = 12;                              // ≈ 12 chars per row
+  if (str.length <= MAX) return [str];
+
+  const words = str.split(' ');
+  if (words.length === 1)              // single very-long word
+    return str.match(new RegExp('.{1,' + MAX + '}', 'g'));
+
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    if ((line + w).length + 1 > MAX) { // +1 for space
+      lines.push(line.trim());
+      line = '';
+    }
+    line += w + ' ';
+  });
+  lines.push(line.trim());
+  return lines;
+};
+
 
       /* ⇢⇢ KPI Calculation */
   const calcKPIs = () => {
@@ -345,7 +367,13 @@ document.getElementById('kpiMargin' ).textContent = profitMargin.toFixed(2) + '%
             legend : { display:false }
           },
           scales : {
-            x : { grid:{ display:false }, ticks:{ maxRotation:45, minRotation:45 } },
+            x : { grid:{ display:false }, ticks:{
+  maxRotation : 0,
+  minRotation : 0,
+  autoSkip    : false,       // show *every* label
+  padding     : 6,           // clears gap between stacked lines
+  font        : { size:11, lineHeight:1.2 }
+} },
             y : { beginAtZero:true, grace:'10%', grid:{ color:'rgba(0,0,0,.05)' } }
           },
           animation : { duration:1200, easing:'easeOutQuart' },
@@ -450,42 +478,48 @@ document.getElementById('kpiMargin' ).textContent = profitMargin.toFixed(2) + '%
 )
 
       };
+const CHART_DATA = {
+  /* —— Top-N product charts —— */
+  chartUnits : {
+    labels    : STATS_DATA.topSelling.map(r  => wrapLabel(r.productName)),
+    values    : STATS_DATA.topSelling.map(r  => +r.unitsSold.toFixed(2)),
+    valueType : 'Units Sold',
+    color     : colors.blue
+  },
+  chartRevenue : {
+    labels    : STATS_DATA.topRevenue.map(r  => wrapLabel(r.productName)),
+    values    : STATS_DATA.topRevenue.map(r  => +r.revenue.toFixed(2)),
+    valueType : 'Revenue',
+    color     : colors.orange
+  },
+  chartProductProfit : {
+    labels    : STATS_DATA.topProfit.map(r   => wrapLabel(r.productName)),
+    values    : STATS_DATA.topProfit.map(r   => +r.profit.toFixed(2)),
+    valueType : 'Profit',
+    color     : colors.green
+  },
 
-      /* ⇢⇢ Data registry (id → meta) */
-      const CHART_DATA = {
-        chartUnits : {
-          labels    : STATS_DATA.topSelling.map(r => r.productName),
-          values    : STATS_DATA.topSelling.map(r => +r.unitsSold.toFixed(2)),
-          valueType : 'Units Sold', color : colors.blue
-        },
-        chartRevenue : {
-          labels    : STATS_DATA.topRevenue.map(r => r.productName),
-          values    : STATS_DATA.topRevenue.map(r => +r.revenue.toFixed(2)),
-          valueType : 'Revenue',    color : colors.orange
-        },
-        chartProductProfit : {
-          labels    : STATS_DATA.topProfit.map(r => r.productName),
-          values    : STATS_DATA.topProfit.map(r => +r.profit.toFixed(2)),
-          valueType : 'Profit',     color : colors.green
-        },
-        chartMonthlyProfit : {
-          labels    : netProfitSeries.labels,
-          values    : netProfitSeries.values,
-          valueType : 'Net Profit', color : colors.green
-        },
-        chartMonthlyExpense : {
-          labels    : expenseSeries.labels,
-          values    : expenseSeries.values,
-          valueType : 'Expense',    color : colors.red
-        },
-        chartMonthlyGst : {
-  labels    : gstSeries.labels,
-  values    : gstSeries.values,
-  valueType : 'GST Payable',
-  color     : colors.orange        // pick what you like
-},
+  /* —— Monthly trend charts —— */
+  chartMonthlyProfit : {
+    labels    : netProfitSeries.labels,
+    values    : netProfitSeries.values,
+    valueType : 'Net Profit',
+    color     : colors.green
+  },
+  chartMonthlyExpense : {
+    labels    : expenseSeries.labels,
+    values    : expenseSeries.values,
+    valueType : 'Expense',
+    color     : colors.red
+  },
+  chartMonthlyGst : {
+    labels    : gstSeries.labels,
+    values    : gstSeries.values,
+    valueType : 'GST Payable',
+    color     : colors.orange
+  }
+};
 
-      };
 
       /* ⇢⇢ Runtime registry (id → Chart instance) */
       const CHART_INSTANCES = {};

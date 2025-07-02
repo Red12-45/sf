@@ -574,3 +574,15 @@
   .btn-generate:active {
     transform: translateY(0);
   }
+
+.input-icon-wrapper { position:relative; }
+.toggle-password{
+  position:absolute;
+  right:10px;
+  background:none;
+  border:none;
+  cursor:pointer;
+  font-size:14px;
+  color:var(--text-light);
+  pointer-events:auto;
+}

@@ -782,7 +782,8 @@ const dashboardRoutes = makeDashboardRoutes({
   getCategories,         // helper
   pad,                   // helper for date-padding
   processSale,           // ★ MUST be passed
-  computeDailySummary    // ★ MUST be passed
+  computeDailySummary,   // ★ MUST be passed
+  computeMonthTotal      // ★ NEW – gives index the right badge totals
 });
 app.use('/', dashboardRoutes);
 

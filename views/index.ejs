@@ -7,16 +7,14 @@
   <link rel="icon" href="/favicon.ico?v=<%= v %>" type="image/x-icon">
 
   <title>SalesFlow Dashboard</title>
-  
+
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
  <!-- EARLY theme bootstrap – absolutely zero flash anywhere -->
 
-
-<!-- Main stylesheet & full theme logic -->
 <link rel="stylesheet" href="/css/index.css?v=<%= v %>">
+
+
 <script src="/js/theme.js?v=<%= v %>"></script>
-
-
 </head>
 
 <body>
@@ -361,32 +359,62 @@
 
     <!-- RIGHT CONTENT AREA (Tables and Summary) -->
     <div class="tables-content">
-  <!-- Sales Table -->
   <div>
+
+<div class="summary-inline">
+  <div class="summary-item revenue">
+    Revenue&nbsp;<i class="fas fa-coins"></i>
+    <span data-key="revenue">₹<%= totalRevenueAmount.toFixed(2) %></span>
+  </div>
+
+  <div class="summary-item gross">
+    Gross&nbsp;Profit&nbsp;<i class="fas fa-arrow-trend-up"></i>
+    <span data-key="gross">₹<%= profitWithoutExpenses.toFixed(2) %></span>
+  </div>
+
+  <div class="summary-item expense">
+    Expense&nbsp;<i class="fas fa-money-bill-wave"></i>
+    <span data-key="expense">₹<%= totalExpensesAmount.toFixed(2) %></span>
+  </div>
+
+  <div class="summary-item gst">
+    GST&nbsp;Payable&nbsp;<i class="fas fa-file-invoice-dollar"></i>
+    <span data-key="gst">₹<%= monthGstPayable.toFixed(2) %></span>
+  </div>
+
+  <div class="summary-item net">
+    Net&nbsp;Profit&nbsp;after&nbsp;Expenses&nbsp;&amp;&nbsp;GST&nbsp;
+    <i class="fas fa-chart-line"></i>
+    <span data-key="net">₹<%= profitAfterExpenses.toFixed(2) %></span>
+  </div>
+</div>
+
+
+    <!-- ▲ badges end here ▲ -->
+
     <h2>
       <span id="salesHeader">
         Sales for <%= saleDate %> (Opening Balance: ₹<%= parseFloat(openingBalance).toFixed(2) %>)
       </span>
 
- <!-- ▸ INVOICE ACTIONS (AJAX, zero-refresh) -->
-<span id="invoiceActionWrap">
-  <% if (!currentInvoiceNo) { %>
-    <a href="#" id="startInvoiceBtn" class="invoice-action-btn btn-blue ajax-invoice">
-      <i class="fas fa-file-invoice"></i>
-      <span>Start Invoice</span>
-    </a>
-  <% } else { %>
-    <span class="current-invoice-label">
-      <i class="fas fa-file-invoice"></i>
-      Invoice #<%= currentInvoiceNo %>
-    </span>
-    <a href="#" id="finishInvoiceBtn" class="invoice-action-btn btn-green ajax-invoice">
-      <i class="fas fa-check-circle"></i>
-      <span>Finish</span>
-    </a>
-  <% } %>
-</span>
-
+      <!-- ▸ INVOICE ACTIONS (AJAX, zero-refresh) -->
+      <span id="invoiceActionWrap">
+        <% if (!currentInvoiceNo) { %>
+          <a href="#" id="startInvoiceBtn" class="invoice-action-btn btn-blue ajax-invoice">
+            <i class="fas fa-file-invoice"></i>
+            <span>Start Invoice</span>
+          </a>
+        <% } else { %>
+          <span class="current-invoice-label">
+            <i class="fas fa-file-invoice"></i>
+            Invoice #<%= currentInvoiceNo %>
+          </span>
+          <a href="#" id="finishInvoiceBtn" class="invoice-action-btn btn-green ajax-invoice">
+            <i class="fas fa-check-circle"></i>
+            <span>Finish</span>
+          </a>
+        <% } %>
+      </span>
 
       <!-- live-updating time chips -->
       <span id="dateInfo" class="date-info">
@@ -403,12 +431,78 @@
 
 
 
-    <% if (sales.length === 0) { %>
-      <div class="no-data">
-        <i class="far fa-chart-bar"></i>
-        <p>No sales recorded for this date.</p>
-      </div>
-    <% } else { %>
+    <% if (sales.length === 0 && (!expenses || expenses.length === 0)) { %>
+ <!-- ────────── Default Analytics Charts (no filters) ────────── -->
+<section id="chartsWrapper" class="charts-wrapper cols-2">
+  <!-- Top-Selling Products -->
+  <div class="chart-card">
+    <h2><i class="fas fa-cubes"></i> Top-Selling Products</h2>
+    <div class="chart-type-toggle" data-chart="chartUnits">
+      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
+      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
+      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
+    </div>
+    <div class="chart-container"><canvas id="chartUnits"></canvas></div>
+  </div>
+
+  <!-- Top Revenue Products -->
+  <div class="chart-card">
+    <h2><i class="fas fa-hand-holding-dollar"></i> Top Revenue Products</h2>
+    <div class="chart-type-toggle" data-chart="chartRevenue">
+      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
+      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
+      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
+    </div>
+    <div class="chart-container"><canvas id="chartRevenue"></canvas></div>
+  </div>
+
+  <!-- Top Profit Products -->
+  <div class="chart-card">
+    <h2><i class="fas fa-sack-dollar"></i> Top Profit Products</h2>
+    <div class="chart-type-toggle" data-chart="chartProductProfit">
+      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
+      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
+      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
+    </div>
+    <div class="chart-container"><canvas id="chartProductProfit"></canvas></div>
+  </div>
+
+  <!-- Monthly Net-Profit Trend -->
+  <div class="chart-card">
+    <h2><i class="fas fa-chart-line"></i> Monthly Net Profit Trend</h2>
+    <div class="chart-type-toggle" data-chart="chartMonthlyProfit">
+      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
+      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
+      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
+    </div>
+    <div class="chart-container"><canvas id="chartMonthlyProfit"></canvas></div>
+  </div>
+
+  <!-- Monthly Expense Trend -->
+  <div class="chart-card">
+    <h2><i class="fas fa-chart-line"></i> Monthly Expense Trend</h2>
+    <div class="chart-type-toggle" data-chart="chartMonthlyExpense">
+      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
+      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
+      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
+    </div>
+    <div class="chart-container"><canvas id="chartMonthlyExpense"></canvas></div>
+  </div>
+
+  <!-- Monthly GST Payable -->
+  <div class="chart-card">
+    <h2><i class="fas fa-file-invoice-dollar"></i> Monthly GST Payable</h2>
+    <div class="chart-type-toggle" data-chart="chartMonthlyGst">
+      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
+      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
+      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
+    </div>
+    <div class="chart-container"><canvas id="chartMonthlyGst"></canvas></div>
+  </div>
+</section>
+
+    <% } else { %> <!-- (existing sales-table branch – leave untouched) -->
+
       <table id="salesTable">
         <thead>
           <tr>
@@ -510,8 +604,8 @@
   </div>
 
 <!-- Expenses Table (rendered only when at least one expense exists) -->
-<div>
-  <% if (expenses && expenses.length > 0) { %>
+<% if (expenses && expenses.length > 0) { %>
+   <div id="expenseSection">
     <% const totalExpenseAmount =
          expenses.reduce((sum, exp) =>
            sum + parseFloat(exp.expenseCost || 0), 0); %>
@@ -522,45 +616,45 @@
     </h2>
 
     <table id="expenseTable">
-  <thead>
-  <tr>
-    <th>Expense Reason</th>
-    <th>Expense Cost</th>
-    <th>Payment Method</th>
-    <th>Detail&nbsp;1</th>
-    <th>Detail&nbsp;2</th>
-    <th>Time</th>
-    <th>Action</th>
-  </tr>
-</thead>
+      <thead>
+        <tr>
+          <th>Expense Reason</th>
+          <th>Expense Cost</th>
+          <th>Payment Method</th>
+          <th>Detail&nbsp;1</th>
+          <th>Detail&nbsp;2</th>
+          <th>Time</th>
+          <th>Action</th>
+        </tr>
+      </thead>
 
       <tbody>
         <% expenses.forEach(expense => { %>
-         <tr>
-  <td><%= expense.expenseReason %></td>
-  <td><%= expense.expenseCost.toFixed(2) %></td>
-  <td><%= expense.expenseStatus %></td>
-  <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : '-' %></td>
-  <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : '-' %></td>
-  <td>
-    <%
-      const expenseTime = expense.createdAt.toDate
-        ? expense.createdAt.toDate().toLocaleTimeString()
-        : new Date(expense.createdAt).toLocaleTimeString();
-    %>
-    <%= expenseTime %>
-  </td>
-  <td style="text-align:center;">
-    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
-       data-id="<%= expense.id %>"></i>
-  </td>
-</tr>
-
+          <tr>
+            <td><%= expense.expenseReason %></td>
+            <td><%= expense.expenseCost.toFixed(2) %></td>
+            <td><%= expense.expenseStatus %></td>
+            <td><%= expense.expenseDetail1 ? expense.expenseDetail1 : '-' %></td>
+            <td><%= expense.expenseDetail2 ? expense.expenseDetail2 : '-' %></td>
+            <td>
+              <%
+                const expenseTime = expense.createdAt.toDate
+                  ? expense.createdAt.toDate().toLocaleTimeString()
+                  : new Date(expense.createdAt).toLocaleTimeString();
+              %>
+              <%= expenseTime %>
+            </td>
+            <td style="text-align:center;">
+              <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
+                 data-id="<%= expense.id %>"></i>
+            </td>
+          </tr>
         <% }); %>
       </tbody>
     </table>
-  <% } %> <!-- nothing is rendered when there are zero expenses -->
-</div>
+  </div>
+<% } %> <!-- nothing is rendered when there are zero expenses -->
+
 
 
       <!-- Summary Section -->
@@ -606,57 +700,88 @@
 
   <!-- Client‑Side Script -->
   <script>
-    document.addEventListener('click', async (e) => {
+/* ===== guarded Sale-delete (blocks double-clicks) ===== */
+document.addEventListener('click', async e => {
   const btn = e.target.closest('.delete-sale-btn');
   if (!btn) return;
+
+  /* already busy? → ignore extra clicks */
+  if (btn.dataset.busy === '1') return;
+
   if (!confirm('Delete this sale and restore stock?')) return;
 
-  // grab the two new data-attributes
+  /* lock this button */
+  btn.dataset.busy = '1';
+  btn.style.pointerEvents = 'none';
+  btn.classList.add('btn-lock');          // optional: uses existing CSS
+
   const saleQty = parseFloat(btn.getAttribute('data-quantity')) || 0;
   const prodId  = btn.getAttribute('data-product-id');
 
   try {
     const res = await postJSON('/api/delete-sale', { saleId: btn.dataset.id });
 
-    // 1) remove the row and update your summary
+    /* 1) remove the row and refresh UI */
     const row = btn.closest('tr');
     row.remove();
     refreshSummary(res.summary);
+    refreshBadges(res.badges);
 
-    // 2) now patch the <option> in your dropdown
+    /* 2) restore stock figure in the <select> option */
     const option = productSelect.querySelector(`option[value="${prodId}"]`);
     if (option) {
       const oldQty = parseFloat(option.getAttribute('data-quantity')) || 0;
       const newQty = oldQty + saleQty;
       option.setAttribute('data-quantity', newQty);
-
-      // rebuild its label to show the new stock
-       const label = option.dataset.originalName || option.textContent.split(' (Stock:')[0];
+      const label = option.dataset.originalName || option.textContent.split(' (Stock:')[0];
       option.textContent = `${label} (Stock: ${newQty.toFixed(2)})`;
     }
   } catch (err) {
     alert(err.message);
+  } finally {
+    /* unlock */
+    delete btn.dataset.busy;
+    btn.style.pointerEvents = '';
+    btn.classList.remove('btn-lock');
   }
 });
 
 
-    document.addEventListener('click', async e => {
-      const btn = e.target.closest('.delete-expense-btn');
-      if (!btn) return;
 
-      if (!confirm('Delete this expense and update the summary?')) return;
+/* ===== guarded Expense-delete (blocks double-clicks) ===== */
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('.delete-expense-btn');
+  if (!btn) return;
 
-      try {
-        const res = await postJSON('/api/delete-expense', {
-          expenseId: btn.dataset.id
-        });
-        btn.closest('tr').remove();
-refreshSummary(res.summary);
-refreshExpenseHeader();  
-      } catch (err) {
-        alert(err.message);
-      }
+  /* busy? → ignore further clicks until done */
+  if (btn.dataset.busy === '1') return;
+
+  if (!confirm('Delete this expense and update the summary?')) return;
+
+  /* lock this button */
+  btn.dataset.busy = '1';
+  btn.style.pointerEvents = 'none';
+  btn.classList.add('btn-lock');
+
+  try {
+    const res = await postJSON('/api/delete-expense', {
+      expenseId: btn.dataset.id
     });
+
+    btn.closest('tr').remove();
+    refreshSummary(res.summary);
+    refreshBadges(res.badges);
+    refreshExpenseHeader();
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    /* unlock */
+    delete btn.dataset.busy;
+    btn.style.pointerEvents = '';
+    btn.classList.remove('btn-lock');
+  }
+});
+
 
     const categorySelect = document.getElementById('categorySelect');
     const productSelect = document.getElementById('productSelect');
@@ -966,7 +1091,8 @@ function ensureTableExists (wrapperSelector, tableId, theadHtml) {
       if (!j.success) throw new Error(j.error || 'Unknown error');
       return j;
     };
- /* ──────────────────────────────────────────────────────────────
+
+/* ──────────────────────────────────────────────────────────────
    refreshSummary – robust label-agnostic updater
    (no regex → always overwrites the number, so *every* figure
     – including Total GST Payable – swaps instantly after any
@@ -990,6 +1116,18 @@ const refreshSummary = summary => {
   document.getElementById('toggleSummary').textContent    = 'Hide Summary';
 };
 
+
+/* ──────────────────────────────────────────────────────────────
+   NEW  removeChartsIfPresent – hides default charts once data
+   arrives (called after every successful add)
+   ────────────────────────────────────────────────────────────── */
+function removeChartsIfPresent () {
+  const charts = document.getElementById('chartsWrapper');
+  if (charts) {
+    charts.remove();                         // kill the entire section
+           // ⏹ disable stats.css
+  }
+}
 
     /* ── helper: recompute total expense and patch header ── */
 function refreshExpenseHeader () {
@@ -1107,11 +1245,18 @@ row.innerHTML = `
    </thead>`
 );
 
-    document.querySelector('#salesTable tbody').prepend(row);
+ document.querySelector('#salesTable tbody').prepend(row);
 
-    /* refresh UI */
-    refreshSummary(res.summary);
-    e.target.reset();
+// NEW: hide default charts if present
+removeChartsIfPresent();
+
+/* refresh UI */
+/* refresh UI */
+refreshSummary(res.summary);
+refreshBadges(res.badges);
+
+e.target.reset();
+
     updateSaleCalculations();
     statusSelect.dispatchEvent(new Event('change'));
 
@@ -1135,67 +1280,88 @@ document.getElementById('expenseForm').addEventListener('submit', async e => {
     const obj = Object.fromEntries(new FormData(e.target).entries());
     const res = await postJSON('/api/expense', obj);   // res.expenses ⇢ array
 
-    /* 2. render every row that came back (works for 1-N inserts) */
-/* 2. render every row that came back (works for 1-N inserts) */
-res.expenses.forEach(ex => {
-  /* make sure the expense table exists BEFORE each prepend */
-  ensureTableExists(
-    '.tables-content div:nth-child(2)',
-    '#expenseTable',
-  `<thead>
-  <tr>
-    <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
-    <th>Detail 1</th><th>Detail 2</th><th>Time</th><th>Action</th>
-  </tr>
-</thead>`
-  );
+/* ────────────────────────────────────────────────────────────────
+   2.  Ensure the “Expenses” section exists – create on first use
+   ─────────────────────────────────────────────────────────────── */
+let expenseSection = document.getElementById('expenseSection');
+if (!expenseSection) {
+  expenseSection = document.createElement('div');
+  expenseSection.id = 'expenseSection';
 
-  /* ───────────────────────────────
-     Timestamp → IST string (robust)
-     ─────────────────────────────── */
-/* ───────────────────────────────
-   Timestamp → IST string (robust)
-   ─────────────────────────────── */
-const ts = ex.createdAt;
-let d;                                       // final Date object
-
-if (ts instanceof Date) {
-  d = ts;                                    // already a Date
-} else if (ts && typeof ts === 'object') {
-  if ('_seconds' in ts)        d = new Date(ts._seconds * 1000);
-  else if ('seconds' in ts)    d = new Date(ts.seconds  * 1000);
-  else if (typeof ts.toDate === 'function') d = ts.toDate();
+  /* insert just before the Summary card so order is: Sales ➜ Expenses ➜ Summary */
+  const summarySection = document.getElementById('summarySection');
+  const container      = document.querySelector('.tables-content');
+  container.insertBefore(expenseSection, summarySection);
 }
 
-if (!d || isNaN(d)) d = new Date(ts);        // fallback
+/* 3.  Make sure the expense table itself exists (adds header + <table>) */
+if (!document.getElementById('expenseTable')) {
+  /* header */
+  const h2 = document.createElement('h2');
+  h2.innerHTML = `Expenses for ${escapeHtml(document.getElementById('saleDate').value)}
+                  (Expense Amount: ₹0.00)`;
+  expenseSection.appendChild(h2);
 
-const timeIST = d.toLocaleTimeString('en-IN', {
-  hour12  : true,             // ← CHANGED: show “am/pm”
-  timeZone: 'Asia/Kolkata'
-});
+  /* table skeleton */
+  const table = document.createElement('table');
+  table.id = 'expenseTable';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Expense Reason</th><th>Expense Cost</th><th>Payment Method</th>
+        <th>Detail&nbsp;1</th><th>Detail&nbsp;2</th><th>Time</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody></tbody>`;
+  expenseSection.appendChild(table);
+}
 
+/* 4.  Now prepend every returned expense row */
+res.expenses.forEach(ex => {
+  /* robust IST time conversion (unchanged) */
+  const ts = ex.createdAt;
+  let d;
+  if (ts instanceof Date)             d = ts;
+  else if (ts && typeof ts === 'object') {
+    if ('_seconds' in ts)             d = new Date(ts._seconds * 1000);
+    else if ('seconds' in ts)         d = new Date(ts.seconds  * 1000);
+    else if (typeof ts.toDate==='function') d = ts.toDate();
+  }
+  if (!d || isNaN(d)) d = new Date(ts);
+  const timeIST = d.toLocaleTimeString('en-IN',{hour12:true,timeZone:'Asia/Kolkata'});
 
-  /* build row and prepend it */
+  /* build & insert */
   const row = document.createElement('tr');
-row.innerHTML = `
-  <td>${escapeHtml(ex.expenseReason)}</td>
-  <td>${cash(ex.expenseCost)}</td>
-  <td>${escapeHtml(ex.expenseStatus)}</td>
-  <td>${ex.expenseDetail1 ? cash(ex.expenseDetail1) : '-'}</td>
-  <td>${ex.expenseDetail2 ? cash(ex.expenseDetail2) : '-'}</td>
-  <td>${timeIST}</td>
-  <td style="text-align:center;">
-    <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
-       data-id="${escapeHtml(ex.id)}"></i>
-  </td>`;
+  row.innerHTML = `
+    <td>${escapeHtml(ex.expenseReason)}</td>
+    <td>${cash(ex.expenseCost)}</td>
+    <td>${escapeHtml(ex.expenseStatus)}</td>
+    <td>${ex.expenseDetail1 ? cash(ex.expenseDetail1) : '-'}</td>
+    <td>${ex.expenseDetail2 ? cash(ex.expenseDetail2) : '-'}</td>
+    <td>${timeIST}</td>
+    <td style="text-align:center;">
+      <i class="fas fa-trash-alt delete-expense-icon delete-expense-btn"
+         data-id="${escapeHtml(ex.id)}"></i>
+    </td>`;
+document.querySelector('#expenseTable tbody').prepend(row);
+});   // end forEach
 
-  document.querySelector('#expenseTable tbody').prepend(row);
-});
+// NEW: hide default charts if present
+removeChartsIfPresent();
+
+/* 5.  Re-compute the header total and summary figures */
+refreshExpenseHeader();
+if (res.summary) refreshSummary(res.summary);
+if (res.badges)  refreshBadges(res.badges);
+
+
 
 
     /* 3. housekeeping */
     refreshExpenseHeader();                     // rebuild “Expense Amount: ₹…”
-    if (res.summary) refreshSummary(res.summary); // safely refresh when provided
+if (res.summary) refreshSummary(res.summary);
+if (res.badges)  refreshBadges(res.badges);
+
 
     e.target.reset();                           // clear the form
     expenseStatusSelect.dispatchEvent(new Event('change')); // hide extra fields
@@ -1231,6 +1397,7 @@ document.getElementById('openingForm').addEventListener('submit', async e => {
     document.getElementById('closeTimeWrap').style.display  = res.closingTime ? '' : 'none';
 
     refreshSummary(res.summary);
+    refreshBadges(res.badges);
   } catch (err) {
     alert(err.message);
   } finally {
@@ -1241,6 +1408,20 @@ document.getElementById('openingForm').addEventListener('submit', async e => {
 
 
   </script>
+
+<!-- ★ NEW: monthly-badge updater -->
+<!-- ★ FIXED: monthly-badge updater (null-safe) -->
+<script>
+const refreshBadges = badges => {
+  if (!badges || typeof badges !== 'object') return;   /* ← stops the crash */
+  const money = n => Number(n).toFixed(2);
+  for (const [k, v] of Object.entries(badges)) {
+    const el = document.querySelector(`[data-key="${k}"]`);
+    if (el) el.textContent = '₹' + money(v);
+  }
+};
+</script>
+
 
 
 <!-- ─── Invoice AJAX helpers (spam-safe) ─── -->
@@ -1392,8 +1573,268 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-</body>
+<!-- ▼▼▼  CHARTS – libraries + data + builder  ▼▼▼ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 
+<script>
+/* ===== DATA PAYLOAD (injected by dashboard route) ===== */
+window.STATS_DATA = {
+  topSelling : <%- JSON.stringify(topSelling)  %>,
+  topRevenue : <%- JSON.stringify(topRevenue)  %>,
+  topProfit  : <%- JSON.stringify(topProfit)   %>
+};
+window.MONTHLY_DATA = {
+  profit  : <%- JSON.stringify(monthlyProfit)  %>,
+  expense : <%- JSON.stringify(monthlyExpense) %>,
+  gst     : <%- JSON.stringify(monthlyGst)     %>
+};
+window.TOTAL_REVENUE = <%- totalRevenueAmount.toFixed(2) %>;
+window.TOTAL_EXPENSE = <%- totalExpensesAmount.toFixed(2) %>;
+window.TOTAL_GST     = <%- monthGstPayable.toFixed(2) %>;
+window.NET_PROFIT    = <%- profitAfterExpenses.toFixed(2) %>;
+window.CHART_YEAR    = <%= chartYear %>;
+</script>
+
+<!-- ===== CHARTS – builder with per-chart toggles (FIXED) ===== -->
+<script>
+(() => {
+  const wrap = document.getElementById('chartsWrapper');
+  if (!wrap) return;                       // dashboard has live data → charts skipped
+
+  /* ── Chart.js defaults ── */
+  Chart.register(ChartDataLabels);
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  Chart.defaults.responsive  = true;
+  Chart.defaults.scale.grid.color = 'rgba(0,0,0,.05)';
+Chart.defaults.devicePixelRatio = Math.max(2, window.devicePixelRatio || 1);
+Chart.defaults.font.size = 14;            // bigger & crisper labels
+  /* ── palette ── */
+  const colors = {
+    blue  : { rgb:'67,97,238'  },
+    orange: { rgb:'255,170,0'  },
+    green : { rgb:'56,176,0'   },
+    red   : { rgb:'239,71,111' }
+  };
+/* Helper to wrap long labels onto two lines (newline → multi-line tick) */
+/* ⇣⇣ NEW – returns an ARRAY ⇒ Chart.js shows true multi-line ticks ⇣⇣ */
+const wrapLabel = str => {
+  const MAX = 12;                                 // ≈ 12 chars per line
+  if (str.length <= MAX) return [str];            // short → single-line array
+
+  const words = str.split(' ');
+  if (words.length === 1) {
+    /* single very-long word → hard split every MAX chars */
+    return str.match(new RegExp('.{1,' + MAX + '}', 'g'));
+  }
+
+  /* greedy wrap, building lines no longer than MAX */
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    if ((line + w).length + 1 > MAX) {            // +1 for the space
+      lines.push(line.trim());
+      line = '';
+    }
+    line += w + ' ';
+  });
+  lines.push(line.trim());
+  return lines;
+};
+
+
+  /* safe ASCII helper ─ replaces the old “₹” identifier */
+  const rupee = v => `₹${(+v).toFixed(2)}`;
+
+  /* ── data registry ── */
+const CHART_DATA = {
+  /* —— Top-N product charts —— */
+  chartUnits : {
+    labels : STATS_DATA.topSelling.map(r => wrapLabel(r.productName)),
+    values : STATS_DATA.topSelling.map(r => +r.unitsSold.toFixed(2)),
+    label  : 'Units Sold',
+    colour : colors.blue
+  },
+  chartRevenue : {
+    labels : STATS_DATA.topRevenue.map(r => wrapLabel(r.productName)),
+    values : STATS_DATA.topRevenue.map(r => +r.revenue.toFixed(2)),
+    label  : 'Revenue',
+    colour : colors.orange
+  },
+  chartProductProfit : {
+    labels : STATS_DATA.topProfit.map(r => wrapLabel(r.productName)),
+    values : STATS_DATA.topProfit.map(r => +r.profit.toFixed(2)),
+    label  : 'Profit',
+    colour : colors.green
+  },
+
+  /* —— Monthly trend charts —— */
+  chartMonthlyProfit : {
+    labels : Object.keys(MONTHLY_DATA.profit).sort()
+             .map(k => new Date(k + '-01').toLocaleString('default',{month:'short'})),
+    values : Object.keys(MONTHLY_DATA.profit).sort()
+             .map(k => +(MONTHLY_DATA.profit[k]
+                       - (MONTHLY_DATA.expense[k] || 0)
+                       - (MONTHLY_DATA.gst[k]     || 0)).toFixed(2)),
+    label  : 'Net Profit',
+    colour : colors.green
+  },
+  chartMonthlyExpense : {
+    labels : Object.keys(MONTHLY_DATA.expense).sort()
+             .map(k => new Date(k + '-01').toLocaleString('default',{month:'short'})),
+    values : Object.keys(MONTHLY_DATA.expense).sort()
+             .map(k => +MONTHLY_DATA.expense[k].toFixed(2)),
+    label  : 'Expense',
+    colour : colors.red
+  },
+  chartMonthlyGst : {
+    labels : Object.keys(MONTHLY_DATA.gst).sort()
+             .map(k => new Date(k + '-01').toLocaleString('default',{month:'short'})),
+    values : Object.keys(MONTHLY_DATA.gst).sort()
+             .map(k => +MONTHLY_DATA.gst[k].toFixed(2)),
+    label  : 'GST Payable',
+    colour : colors.orange
+  }
+};
+
+/* ──────────────────────────────────────────────────────────────
+   makeCfg – builds a Chart.js config WITH axis titles & rotation
+   (works for bar, line, and horizontal-bar)
+   ────────────────────────────────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────
+   makeCfg – builds a Chart.js config WITH axis titles & rotation
+   (works for bar, line, and horizontal-bar)
+   ────────────────────────────────────────────────────────────── */
+const makeCfg = (meta, type) => {
+  const {labels, values, label, colour:{rgb}} = meta;
+
+  /* x-axis caption: Products for top-N charts, Month otherwise */
+  const xName = (label==='Units Sold'||label==='Revenue'||label==='Profit')
+      ? 'Product'
+      : 'Month';
+
+  /* helper – inject axis titles based on indexAxis */
+  const addTitles = cfg => {
+    const cat = cfg.options.indexAxis==='y' ? 'y' : 'x';
+    const val = cfg.options.indexAxis==='y' ? 'x' : 'y';
+    cfg.options.scales[cat].title = {display:true,text:xName,font:{weight:'700',size:12}};
+    cfg.options.scales[val].title = {display:true,text:label ,font:{weight:'700',size:12}};
+    return cfg;
+  };
+
+  const bar = addTitles({
+    type : 'bar',
+    data : {
+      labels,
+      datasets:[{
+        data: values,
+        label,
+        backgroundColor: `rgba(${rgb},0.75)`,
+        borderColor:     `rgb(${rgb})`,
+        borderWidth: 1,
+        borderRadius: 6,
+        maxBarThickness: 44
+      }]
+    },
+    options:{
+      maintainAspectRatio: false,
+      layout:{ padding:{ bottom: 30 } },
+      plugins:{
+        datalabels:{
+          anchor:'end',align:'end',
+          font:{weight:'700',size:11},
+          // show raw number for Units Sold, otherwise rupee
+          formatter: (value, ctx) =>
+            (ctx.dataset.label === 'Units Sold' ? value : rupee(value))
+        },
+        legend:{ display:false },
+        tooltip:{
+          callbacks:{
+            // same: raw qty for Units Sold, rupee for everything else
+            label: ctx =>
+              ctx.dataset.label === 'Units Sold'
+                ? `${ctx.parsed.y}`
+                : rupee(ctx.parsed.y)
+          }
+        }
+      },
+      scales:{
+        x:{
+          grid:{ display:false },
+          ticks:{
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip   : false,
+            padding    : 6,
+            font       : { size: 11, lineHeight: 1.2 }
+          }
+        },
+        y:{ beginAtZero:true }
+      }
+    }
+  });
+
+  // line-type branch (untouched)...
+  if (type==='line'){
+    const cfg = JSON.parse(JSON.stringify(bar));
+    cfg.type = 'line';
+    cfg.data = {
+      labels,
+      datasets:[{
+        data:values, label,
+        tension:.25, fill:true,
+        backgroundColor:`rgba(${rgb},0.15)`,
+        borderColor:`rgb(${rgb})`, borderWidth:2,
+        pointBackgroundColor:`rgb(${rgb})`, pointRadius:4
+      }]
+    };
+    return cfg;
+  }
+
+  // horizontal-type branch (untouched)...
+  if (type==='horizontal'){
+    const cfg = JSON.parse(JSON.stringify(bar));
+    cfg.options.indexAxis = 'y';
+    return addTitles(cfg);
+  }
+
+  return bar;
+};
+
+
+  /* ── registry & builders ── */
+  const CHARTS = {};
+  const buildChart = (id, type='bar') => {
+    if (CHARTS[id]) CHARTS[id].destroy();
+    CHARTS[id] = new Chart(
+      document.getElementById(id),
+      makeCfg(CHART_DATA[id], type)
+    );
+  };
+
+  /* initial render (all bar) */
+  Object.keys(CHART_DATA).forEach(id => buildChart(id));
+
+  /* per-chart toggle buttons */
+  document.querySelectorAll('.chart-type-btn').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      if (btn.getAttribute('aria-pressed')==='true') return;
+      const group   = btn.closest('.chart-type-toggle');
+      const chartId = group.dataset.chart;
+      const newType = btn.dataset.type;
+
+      group.querySelectorAll('.chart-type-btn')
+           .forEach(b => b.setAttribute('aria-pressed','false'));
+      btn.setAttribute('aria-pressed','true');
+
+      buildChart(chartId, newType);
+    });
+  });
+})();
+</script>
+<!-- ===== end builder (FIXED) ===== -->
+</body>
 </html>
+
 
 

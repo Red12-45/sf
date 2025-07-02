@@ -183,3 +183,198 @@ footer{background:#1e293b;color:#e2e8f0;padding:25px 20px;margin-top:50px;}
    ========================================================== */
 @keyframes pulse{0%{transform:scale(1);}50%{transform:scale(1.02);}100%{transform:scale(1);}}
 .current-plan.expiring-soon{animation:pulse 2s infinite;}
+
+
+.bg-decoration {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 95%, var(--primary)) 100%);
+}
+
+.bg-decoration::before,
+.bg-decoration::after {
+  content: '';
+  position: absolute;
+}
+
+/* Primary geometric shape - Large diamond */
+.bg-decoration::before {
+  top: -10%;
+  right: -5%;
+  width: 60%;
+  height: 60%;
+  background: var(--primary);
+  opacity: 0.08;
+  transform: rotate(45deg);
+  border-radius: 20% 0 20% 0;
+}
+
+/* Secondary accent shape - Curved triangle */
+.bg-decoration::after {
+  bottom: -15%;
+  left: -10%;
+  width: 50%;
+  height: 50%;
+  background: var(--secondary);
+  opacity: 0.12;
+  transform: rotate(-30deg);
+  border-radius: 0 50% 0 50%;
+}
+
+/* Additional decorative elements */
+.bg-decoration .accent-circle-1,
+.bg-decoration .accent-circle-2,
+.bg-decoration .accent-circle-3 {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.06;
+}
+
+.bg-decoration .accent-circle-1 {
+  top: 20%;
+  left: 10%;
+  width: 200px;
+  height: 200px;
+  background: var(--accent);
+}
+
+.bg-decoration .accent-circle-2 {
+  top: 60%;
+  right: 15%;
+  width: 150px;
+  height: 150px;
+  background: var(--success);
+}
+
+.bg-decoration .accent-circle-3 {
+  bottom: 30%;
+  left: 60%;
+  width: 100px;
+  height: 100px;
+  background: var(--danger);
+}
+
+/* Floating geometric shapes */
+.bg-decoration .floating-shape-1,
+.bg-decoration .floating-shape-2 {
+  position: absolute;
+  opacity: 0.04;
+}
+
+.bg-decoration .floating-shape-1 {
+  top: 15%;
+  right: 25%;
+  width: 300px;
+  height: 300px;
+  background: var(--primary-light);
+  transform: rotate(15deg);
+  border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+}
+
+.bg-decoration .floating-shape-2 {
+  bottom: 20%;
+  right: 40%;
+  width: 250px;
+  height: 250px;
+  background: var(--secondary);
+  transform: rotate(-25deg);
+  border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+}
+
+/* Modern grid pattern overlay */
+.bg-decoration .grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.02;
+  background-image: 
+    linear-gradient(var(--primary) 1px, transparent 1px),
+    linear-gradient(90deg, var(--primary) 1px, transparent 1px);
+  background-size: 50px 50px;
+  background-position: 0 0, 0 0;
+}
+
+/* Subtle radial gradient overlay for depth */
+.bg-decoration .depth-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    ellipse at 30% 20%,
+    color-mix(in srgb, var(--primary) 8%, transparent) 0%,
+    transparent 50%
+  ),
+  radial-gradient(
+    ellipse at 70% 80%,
+    color-mix(in srgb, var(--secondary) 6%, transparent) 0%,
+    transparent 50%
+  );
+}
+
+/* Dark mode adjustments */
+.dark-mode .bg-decoration::before {
+  opacity: 0.12;
+}
+
+.dark-mode .bg-decoration::after {
+  opacity: 0.15;
+}
+
+.dark-mode .bg-decoration .accent-circle-1,
+.dark-mode .bg-decoration .accent-circle-2,
+.dark-mode .bg-decoration .accent-circle-3 {
+  opacity: 0.08;
+}
+
+.dark-mode .bg-decoration .floating-shape-1,
+.dark-mode .bg-decoration .floating-shape-2 {
+  opacity: 0.06;
+}
+
+.dark-mode .bg-decoration .grid-overlay {
+  opacity: 0.03;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .bg-decoration::before {
+    width: 80%;
+    height: 80%;
+    top: -20%;
+    right: -15%;
+  }
+  
+  .bg-decoration::after {
+    width: 70%;
+    height: 70%;
+    bottom: -25%;
+    left: -20%;
+  }
+  
+  .bg-decoration .floating-shape-1,
+  .bg-decoration .floating-shape-2 {
+    display: none;
+  }
+  
+  .bg-decoration .accent-circle-1 {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .bg-decoration .accent-circle-2 {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .bg-decoration .accent-circle-3 {
+    width: 80px;
+    height: 80px;
+  }
+}

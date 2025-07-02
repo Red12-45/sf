@@ -28,6 +28,52 @@ module.exports = function makeExpenseRoutes ({
     }
   };
 
+  // ★ NEW – returns the five badge numbers for any YYYY-MM
+async function computeMonthlyBadges (accountId, month) {
+  const start = `${month}-01`;
+  const [y, m] = month.split('-');
+  const nextM  = (parseInt(m, 10) % 12) + 1;
+  const nextY  = nextM === 1 ? +y + 1 : +y;
+  const end    = `${nextY}-${String(nextM).padStart(2,'0')}-01`;
+
+  // pull every sale + expense in parallel
+  const [salesSnap, expSnap] = await Promise.all([
+    db.collection('sales')
+      .where('accountId','==',accountId)
+      .where('saleDate','>=',start)
+      .where('saleDate','<', end)
+      .get(),
+    db.collection('expenses')
+      .where('accountId','==',accountId)
+      .where('saleDate','>=',start)
+      .where('saleDate','<', end)
+      .get()
+  ]);
+
+  let revenue = 0, gross = 0, expense = 0, gst = 0;
+  salesSnap.forEach(d => {
+    const s   = d.data();
+    const amt = s.totalSale !== undefined
+                 ? +s.totalSale
+                 : s.retailPrice * s.saleQuantity;
+    revenue += amt;
+    gross   += s.profit;
+    gst     += (s.gstPayable || 0);
+  });
+  expSnap.forEach(d => expense += (+d.data().expenseCost || 0));
+
+  const net = +(gross - expense - gst).toFixed(2);
+
+  return {
+    revenue : +revenue.toFixed(2),
+    gross   : +gross.toFixed(2),
+    expense : +expense.toFixed(2),
+    gst     : +gst.toFixed(2),
+    net
+  };
+}
+
+
   /* ─────────── processExpense (shared) ─────────── */
   async function processExpense (body, user) {
     const accountId = user.accountId;
@@ -230,11 +276,18 @@ const monthTotal= await computeMonthTotal(
   month
 );
 
+    const badges = await computeMonthlyBadges(
+      req.session.user.accountId,
+      req.body.saleDate.slice(0, 7)
+    );
+
+
 /* 3️⃣  Send everything the browser needs */
 return res.json({
   success   : true,
   summary,          // ← NEW
   monthTotal,
+  badges ,
   expenses  : addedExpenses
 });
 
@@ -351,8 +404,15 @@ const monthTotal = await computeMonthTotal(
   exp.saleDate.substring(0, 7)   // "YYYY-MM"
 );
 
-/* 3️⃣  Send the up-to-date numbers back                         */
-return res.json({ success: true, summary, monthTotal });
+/* 3️⃣  Fresh month-to-date badges                               */
+const badges = await computeMonthlyBadges(
+  exp.accountId,
+  exp.saleDate.slice(0, 7)       // use the same YYYY-MM
+);
+
+/* 4️⃣  Send the up-to-date numbers back                         */
+return res.json({ success: true, summary, monthTotal, badges });
+
 
 
       } catch (e) {

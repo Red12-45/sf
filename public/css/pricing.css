@@ -1116,3 +1116,89 @@ ul {
     .copyright { color: var(--gray-400); }
     .footer-link:hover { color: #ffffff; }
 }
+/* Decorative Background – solid colour with soft geometry
+   ------------------------------------------------------- */
+.bg-decoration{
+    position:fixed;
+    inset:0;
+    z-index:-2;          /* sits behind everything */
+    pointer-events:none;
+    background:var(--light-color);        /* solid base in light mode   */
+    transition:background 0.4s ease;
+}
+
+/* Base circles (brand accent colours) */
+.bg-decoration .accent-circle-1,
+.bg-decoration .accent-circle-2,
+.bg-decoration .accent-circle-3{
+    position:absolute;
+    border-radius:50%;
+    opacity:0.06;
+}
+
+.accent-circle-1{top:18%; left:10%; width:220px; height:220px; background:var(--primary-color);}
+.accent-circle-2{top:65%; right:15%; width:160px; height:160px; background:var(--secondary-color);}
+.accent-circle-3{bottom:30%; left:58%; width:120px; height:120px; background:var(--accent-color);}
+
+/* Organic floating blobs */
+.bg-decoration .floating-shape-1,
+.bg-decoration .floating-shape-2{
+    position:absolute;
+    opacity:0.045;
+    animation:float 16s ease-in-out infinite;
+}
+
+.floating-shape-1{
+    top:12%; right:24%;
+    width:320px; height:320px;
+    background:var(--primary-light);
+    border-radius:35% 65% 60% 40% / 35% 40% 60% 65%;
+}
+
+.floating-shape-2{
+    bottom:18%; right:42%;
+    width:260px; height:260px;
+    background:var(--secondary-light);
+    border-radius:60% 40% 30% 70% / 60% 30% 70% 40%;
+}
+
+/* Subtle grid texture */
+.bg-decoration .grid-overlay{
+    position:absolute;
+    inset:0;
+    opacity:0.025;
+    background-image:
+        linear-gradient(var(--gray-200) 1px, transparent 1px),
+        linear-gradient(90deg, var(--gray-200) 1px, transparent 1px);
+    background-size:52px 52px;
+}
+
+/* Float animation reused from the old design */
+@keyframes float{
+    0%   {transform:translateY(0)   scale(1);}
+    50%  {transform:translateY(-22px) scale(1.05);}
+    100% {transform:translateY(0)   scale(1);}
+}
+
+/* ───────────────────────────────
+   Dark-mode overrides (same logic)
+   ─────────────────────────────── */
+@media (prefers-color-scheme: dark){
+    .bg-decoration{background:var(--dark-color);}
+    .bg-decoration .accent-circle-1,
+    .bg-decoration .accent-circle-2,
+    .bg-decoration .accent-circle-3{opacity:0.08;}
+    .bg-decoration .floating-shape-1,
+    .bg-decoration .floating-shape-2{opacity:0.06;}
+    .bg-decoration .grid-overlay{opacity:0.035;}
+}
+
+/* Responsive tweaks */
+@media(max-width:768px){
+    .accent-circle-1{width:140px; height:140px;}
+    .accent-circle-2{width:120px; height:120px;}
+    .accent-circle-3{width:90px;  height:90px;}
+
+    .floating-shape-1,
+    .floating-shape-2{display:none;}     /* keep mobile light */
+}
