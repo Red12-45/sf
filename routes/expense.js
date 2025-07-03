@@ -28,6 +28,15 @@ module.exports = function makeExpenseRoutes ({
     }
   };
 
+  /* ─────────── helper: toTitleCase ─────────── */
+const toTitleCase = str =>
+  String(str)
+    .trim()
+    .split(/\s+/)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+
+
   // ★ NEW – returns the five badge numbers for any YYYY-MM
 async function computeMonthlyBadges (accountId, month) {
   const start = `${month}-01`;
@@ -140,18 +149,69 @@ async function computeMonthlyBadges (accountId, month) {
           .orderBy('createdAt','desc')
           .get();
 
-        const recurringMonthSnap = isFuture
-          ? { docs: [] }
-          : await db.collection('recurringMonthly')
-              .where('accountId','==',accountId)
-              .where('month','==',monthParam)
-              .orderBy('expenseReason','asc')
-              .get();
+/* ────────────────  A. month-snapshot (lazy create)  ──────────────── */
+let recurringMonthSnap = isFuture
+  ? { docs: [] }                                     // future → nothing yet
+  : await db.collection('recurringMonthly')
+      .where('accountId', '==', accountId)
+      .where('month',     '==', monthParam)
+      .orderBy('expenseReason', 'asc')
+      .get();
 
-        const expenses          = expenseSnap.docs.map(d => ({ id:d.id, ...d.data() }));
-        const recurringMonthly  = recurringMonthSnap.docs
-          .map(d => ({ id:d.id, ...d.data() }))
-          .filter(t => !t.deleted);
+/* If the user navigates to a past/current month that has no snapshot
+   yet, create it ON-DEMAND from the active templates. */
+if (!isFuture && recurringMonthSnap.empty) {
+  const tplSnap = await db.collection('recurringExpenses')
+    .where('accountId', '==', accountId)
+    .get();                                           // we’ll filter below
+
+  const batch = db.batch();
+tplSnap.docs.forEach(tplDoc => {
+  const tpl = tplDoc.data();
+
+  /* ① Skip templates that are retired */
+  if (tpl.removalMonth) return;
+
+  /* ② Do NOT back-fill before the template began */
+  const tplStart = tpl.startMonth ||
+                   (tpl.createdAt
+                      ? tpl.createdAt.toDate().toISOString().slice(0, 7)
+                      : monthParam);               // fail-safe
+  if (monthParam < tplStart) return;               // not active yet
+
+  /* ③ Create (or merge) the month snapshot */
+  const snapId = `${accountId}_${monthParam}_${tplDoc.id}`;
+  batch.set(
+    db.collection('recurringMonthly').doc(snapId),
+    {
+      accountId,
+      month        : monthParam,
+      templateId   : tplDoc.id,
+      expenseReason: tpl.expenseReason,
+      expenseCost  : 0,
+      expenseStatus: 'Not Paid',
+      createdAt    : new Date()
+    },
+    { merge: true }
+  );
+});
+
+  if (batch._ops?.length) await batch.commit();
+
+  /* Re-query so the rest of the handler works with fresh data */
+  recurringMonthSnap = await db.collection('recurringMonthly')
+    .where('accountId', '==', accountId)
+    .where('month',     '==', monthParam)
+    .orderBy('expenseReason', 'asc')
+    .get();
+}
+
+/* ────────────────  B. final maps  ──────────────── */
+const expenses = expenseSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+const recurringMonthly = recurringMonthSnap.docs
+  .map(d => ({ id: d.id, ...d.data() }))
+  .filter(t => !t.deleted);
+
 
         const totalExpense  = expenses.reduce((s, e) => s + paidPortion(e), 0);
         const recTotal      = recurringMonthly.reduce((s, t) => s + paidPortion(t), 0);
@@ -179,44 +239,123 @@ async function computeMonthlyBadges (accountId, month) {
     }
   );
 
-  /* ─────────── create recurring template ─────────── */
-  router.post('/add-recurring-expense', isAuthenticated, async (req, res) => {
-    try {
-      const accountId = req.session.user.accountId;
-      const { recurringReason } = req.body;
-      const tplRef = await db.collection('recurringExpenses').add({
-        accountId,
-        expenseReason : recurringReason.trim(),
-        createdAt     : new Date()
-      });
+/* ─────────── create / RE-CREATE recurring template  ────────────────── */
+router.post('/add-recurring-expense', isAuthenticated, async (req, res) => {
+  try {
+    const accountId  = req.session.user.accountId;
 
+    /* 1️⃣ Normalise the reason */
+const rawReason  = (req.body.recurringReason || '').trim();
+
+// Display version: Capitalized, compact spacing
+const reasonDisp = toTitleCase(rawReason.replace(/\s+/g, ' '));
+
+// Normalized key: lowercase, compacted spaces
+const reasonKey  = rawReason.toLowerCase().replace(/\s+/g, ' ').trim();
+
+if (!reasonKey) return res.status(400).send('Recurring-expense reason is required.');
+
+    /* 2️⃣ Deterministic template ID */
+    const tplId = `${accountId}_${reasonKey}`;
+
+    /* 3️⃣ FIRST ACTIVE MONTH
+           – use the month shown in the UI (`req.body.month`)
+           – fallback to the server’s current month if absent           */
+const uiMonth   = (req.body.month || '').trim();            // "YYYY-MM" or ""
+const today     = new Date();
+const ymToday   = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
+
+/*─────────────────────────────────────────────────────────────────────────
+  Decide the template’s FIRST active month:
+  • If the UI month is   ↟future or current↟ ➜ honour it.
+  • If the UI month is   ↡past↡               ➜ bump to today’s month.
+─────────────────────────────────────────────────────────────────────────*/
+let firstMonth  = /^[0-9]{4}-[0-9]{2}$/.test(uiMonth) ? uiMonth : ymToday;
+if (firstMonth < ymToday) firstMonth = ymToday;   // never start in the past
+
+
+    /* ===============================================================
+       ATOMIC TRANSACTION – creates, re-activates, or blocks duplicates
+       ============================================================== */
+    await db.runTransaction(async txn => {
+      const tplRef  = db.collection('recurringExpenses').doc(tplId);
+      const tplSnap = await txn.get(tplRef);
+
+      const exists        = tplSnap.exists;
+      const removalMonth  = exists ? tplSnap.get('removalMonth') : null;
+      const startMonthOld = exists ? tplSnap.get('startMonth')   : null;
+      const isActive      = exists && !removalMonth;
+
+      if (isActive) throw new Error('DUPLICATE');       // hard stop
+
+      /* ① Create OR revive the master template */
+      txn.set(
+        tplRef,
+        {
+          accountId,
+          expenseReason : reasonDisp,
+          reasonKey,
+          removalMonth  : null,                         // (re)activate
+          startMonth    : startMonthOld || firstMonth,  // preserve earliest
+          updatedAt     : new Date(),
+          ...(exists ? {} : { createdAt: new Date() })  // only on first create
+        },
+        { merge: true }
+      );
+
+      /* ② Ensure a snapshot for the FIRST active month */
+      const snapId = `${accountId}_${firstMonth}_${tplId}`;
+      txn.set(
+        db.collection('recurringMonthly').doc(snapId),
+        {
+          accountId,
+          month        : firstMonth,
+          templateId   : tplId,
+          expenseReason: reasonDisp,
+          expenseCost  : 0,
+          expenseStatus: 'Not Paid',
+          createdAt    : new Date(),
+          deleted      : false
+        },
+        { merge: true }
+      );
+    });
+
+    /* 4️⃣ OPTIONAL – revive any *future* snapshots previously deleted */
+    const reviveSnapPromise = (async () => {
+      const futSnap = await db.collection('recurringMonthly')
+        .where('accountId', '==', accountId)
+        .where('templateId','==', tplId)
+        .where('deleted',    '==', true)
+        .get();
+
+      if (futSnap.empty) return;
       const batch = db.batch();
-      const today = new Date();
-      for (let i = 0; i < 24; i++) {
-        const dt   = new Date(today.getFullYear(), today.getMonth() + i, 1);
-        const ym   = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}`;
-        const id   = `${accountId}_${ym}_${tplRef.id}`;
-        batch.set(
-          db.collection('recurringMonthly').doc(id),
-          {
-            accountId,
-            month        : ym,
-            templateId   : tplRef.id,
-            expenseReason: recurringReason.trim(),
-            expenseCost  : 0,
-            expenseStatus: 'Not Paid',
-            createdAt    : new Date()
-          },
-          { merge:true }
-        );
-      }
+      futSnap.docs.forEach(d => batch.update(d.ref, {
+        deleted      : false,
+        expenseReason: reasonDisp,
+        updatedAt    : new Date()
+      }));
       await batch.commit();
-      const month = req.body.month || new Date().toISOString().substring(0,7);
-      res.redirect(`/expense?month=${month}`);
-    } catch (err) {
-      res.status(500).send(err.toString());
+    })();
+
+    await reviveSnapPromise;
+
+    /* Redirect back to the month where the user was working */
+    return res.redirect(`/expense?month=${firstMonth}`);
+
+  } catch (err) {
+    if (err.message === 'DUPLICATE') {
+      return res.status(400).send(
+        'A recurring-expense template with this name already exists.'
+      );
     }
-  });
+    console.error('add-recurring-expense error:', err);
+    res.status(500).send(err.toString());
+  }
+});
+
+
 
   /* ─────────── full-page POST /expense ─────────── */
   router.post('/expense', isAuthenticated, restrictRoute('/expense'), async (req, res) => {
@@ -421,89 +560,127 @@ return res.json({ success: true, summary, monthTotal, badges });
     }
   );
 
-  /* ─────────── EDIT recurring snapshot row ─────────── */
-  router.post('/api/recurring-monthly/:recId', isAuthenticated, async (req, res) => {
-    try {
-      const { recId } = req.params;
-      const snapRef   = db.collection('recurringMonthly').doc(recId);
-      const snap      = await snapRef.get();
+ /* ─────────── EDIT recurring snapshot row (now propagates a rename) ─────────── */
+router.post('/api/recurring-monthly/:recId', isAuthenticated, async (req, res) => {
+  try {
+    const { recId } = req.params;
+    const snapRef   = db.collection('recurringMonthly').doc(recId);
+    const snap      = await snapRef.get();
+    if (!snap.exists) throw new Error('Row not found');
 
-      if (!snap.exists) throw new Error('Row not found');
+    const row        = snap.data();
+    const accountId  = row.accountId;
+    const templateId = row.templateId;
 
-      const update = {};
-      if (req.body.expenseCost   !== undefined)
-        update.expenseCost   = parseFloat(req.body.expenseCost);
-      if (req.body.expenseReason !== undefined)
-        update.expenseReason = req.body.expenseReason.trim();
-      if (req.body.expenseStatus !== undefined)
-        update.expenseStatus = req.body.expenseStatus.trim();
+    /*───────────────────────────────────────────────────────────────────────
+      A.  RENAME  → update template and *all* snapshots in one go
+    ───────────────────────────────────────────────────────────────────────*/
+    if (req.body.expenseReason !== undefined) {
+      const newDisp = toTitleCase(req.body.expenseReason);   // Title-Case
 
-      if (!Object.keys(update).length)
-        return res.json({ success:true });
+      /* ① update master template */
+      await db.collection('recurringExpenses')
+              .doc(templateId)
+              .update({ expenseReason: newDisp, updatedAt: new Date() });
 
-      await snapRef.update(update);
+      /* ② fetch every month that already exists for this template   */
+      const allSnaps = await db.collection('recurringMonthly')
+        .where('accountId','==',accountId)
+        .where('templateId','==',templateId)
+        .get();
 
-      const monthTotal = await computeMonthTotal(
-        req.session.user.accountId,
-        snap.data().month
-      );
+      /* ③ batch-update “expenseReason” everywhere */
+      const batch = db.batch();
+      allSnaps.docs.forEach(d => batch.update(d.ref, {
+        expenseReason: newDisp,
+        updatedAt    : new Date()
+      }));
+      await batch.commit();
 
-      return res.json({ success:true, monthTotal });
-    } catch (err) {
-      res.status(500).json({ success:false, error: err.message });
+      /* same JSON shape as before, plus the new display string      */
+      const monthTotal = await computeMonthTotal(accountId, row.month);
+      return res.json({ success:true, monthTotal, expenseReason:newDisp });
     }
-  });
+
+    /*───────────────────────────────────────────────────────────────────────
+      B.  COST / STATUS edits (previous behaviour, untouched)
+    ───────────────────────────────────────────────────────────────────────*/
+    const update = {};
+    if (req.body.expenseCost   !== undefined)
+      update.expenseCost   = parseFloat(req.body.expenseCost);
+    if (req.body.expenseStatus !== undefined)
+      update.expenseStatus = req.body.expenseStatus.trim();
+
+    if (!Object.keys(update).length)
+      return res.json({ success:true });
+
+    await snapRef.update(update);
+    const monthTotal = await computeMonthTotal(accountId, row.month);
+    return res.json({ success:true, monthTotal });
+
+  } catch (err) {
+    console.error('recurring-monthly edit error:', err);
+    res.status(500).json({ success:false, error: err.message });
+  }
+});
+
 
   /* ─────────── DELETE recurring snapshot row ─────────── */
   router.post('/delete-recurring-monthly/:recId', isAuthenticated, async (req, res) => {
     try {
-      const { recId } = req.params;
-      const ref  = db.collection('recurringMonthly').doc(recId);
-      const snap = await ref.get();
+      const { recId }  = req.params;
+      const snapRef    = db.collection('recurringMonthly').doc(recId);
+      const snapDoc    = await snapRef.get();
 
-      if (!snap.exists || snap.data().accountId !== req.session.user.accountId) {
+      if (!snapDoc.exists || snapDoc.data().accountId !== req.session.user.accountId) {
         const msg = 'Access denied';
         return req.xhr
-          ? res.json({ success: false, error: msg })
+          ? res.json({ success:false, error:msg })
           : res.status(403).send(msg);
       }
 
-      await ref.update({ deleted: true, updatedAt: new Date() });
+      const row       = snapDoc.data();
+      const accountId = row.accountId;
+      const tplId     = row.templateId || null;
+      const month     = row.month;
+      const todayYM   = new Date().toISOString().slice(0, 7);
 
-      const tplId  = snap.data().templateId || null;
-      const month  = snap.data().month;
-      const todayYM = new Date().toISOString().substring(0,7);
+      /* 1️⃣  HARD-delete this month’s snapshot */
+      await snapRef.delete();
 
+      /* 2️⃣  If deleting the CURRENT month, retire template & wipe future months */
       if (tplId && month === todayYM) {
+        // retire the master template
         await db.collection('recurringExpenses')
                 .doc(tplId)
-                .set({ removalMonth:month, updatedAt:new Date() },{ merge:true });
+                .set({ removalMonth: month, updatedAt: new Date() }, { merge:true });
 
-        const futSnap = await db.collection('recurringMonthly')
-          .where('accountId','==',snap.data().accountId)
-          .where('templateId','==',tplId)
+        // fetch ALL snapshots for this template (no inequality ⇒ no index)
+        const allSnap = await db.collection('recurringMonthly')
+          .where('accountId', '==', accountId)
+          .where('templateId','==', tplId)
           .get();
 
-        const futBatch = db.batch();
-        futSnap.docs.forEach(d => {
-          if (d.data().month > month) {
-            futBatch.update(d.ref, { deleted:true, updatedAt:new Date() });
-          }
+        const batch = db.batch();
+        allSnap.docs.forEach(d => {
+          if (d.data().month > month) batch.delete(d.ref);  // delete only future
         });
-        if (futBatch._ops?.length) await futBatch.commit();
+        if (batch._ops?.length) await batch.commit();
       }
 
+      /* 3️⃣  Reply */
       if (req.xhr) {
-        const monthTotal = await computeMonthTotal(req.session.user.accountId, month);
-        return res.json({ success: true, monthTotal });
+        const monthTotal = await computeMonthTotal(accountId, month);
+        return res.json({ success:true, monthTotal });
       }
       res.redirect(`/expense?month=${month}`);
 
     } catch (err) {
-      if (req.xhr) return res.json({ success: false, error: err.toString() });
+      if (req.xhr) return res.json({ success:false, error:err.toString() });
       res.status(500).send(err.toString());
     }
   });
+
 
   return router;
 };

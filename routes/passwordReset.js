@@ -46,14 +46,14 @@ module.exports = function ({ db, bcrypt, crypto, transporter }) {
         createdAt: new Date()
       });
 
-      const link = `${process.env.BASE_URL || 'http://localhost:3000'}` +
+      const link = `${process.env.BASE_URL}` +
                    `/reset-password/${rawToken}`;
 
       // Fire the e-mail
       await transporter.sendMail({
         to      : email,
         from    : process.env.EMAIL_USER,
-        subject : 'Reset your DashInsight master password',
+        subject : 'Reset your SalesFlow master password',
         html    : `
           <p>Hi ${userDoc.data().name},</p>
           <p>You (or someone using your email) requested a password reset.</p>
