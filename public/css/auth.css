@@ -58,6 +58,25 @@
     box-sizing: border-box;
 }
 
+/* === GLOBAL-SCALE FIX (v-dashboard) =========================
+     Shrinks everything to the same 67 % you were using with
+     manual Ctrl - , then removes the unwanted horizontal scroll.
+     ───────────────────────────────────────────────────────── */
+html{
+  zoom:0.67;
+  overflow-x:hidden;
+}
+
+/* ---------- Firefox / Safari fallback ---------- */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;       /* 100 / 0.67 */
+  }
+}
+
+
 html {
     scroll-behavior: smooth;
 }
@@ -69,7 +88,7 @@ body {
   background-attachment: fixed !important;
     color: var(--text-color);
     line-height: 1.7;
-    min-height: 100vh;
+    min-height:calc(100vh / 0.67); height:calc(100vh / 0.67);
     display: flex;
     align-items: center;
     justify-content: center;

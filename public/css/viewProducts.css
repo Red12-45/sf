@@ -4,7 +4,23 @@
     padding: 0;
     box-sizing: border-box;
 }
+/* === GLOBAL-SCALE FIX (v-dashboard) ===========================
+     Shrinks every page to the same 67 % you were using with
+     manual Ctrl - .  Removes any horizontal scroll as well.     */
+html {
+  zoom: 0.67;
+  overflow-x: hidden;
+}
 
+/* ---------- Firefox / Safari fallback ---------- */
+@supports not (zoom: 1) {
+  body {
+    transform: scale(0.67);
+    transform-origin: top left;
+    /* keep the shrunken layout spanning the full viewport width */
+    width: 149.2537%;        /* 100 / 0.67 */
+  }
+}
 :root {
     --primary-color: #3a7bd5;
     --primary-light: #6faae7;
@@ -43,20 +59,30 @@ body {
     flex-direction: column;
 }
 
-/* Sidebar Styling */
+/* ──────────────────────────────────────────────────────────────
+   SIDEBAR – extend to the true bottom after the 0.67 zoom
+   ────────────────────────────────────────────────────────────── */
 .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: var(--sidebar-width);
-    background-color: var(--sidebar-bg);
-    padding: 1.5rem 0;
-    overflow-y: auto;
-    box-shadow: var(--shadow-lg);
-    display: flex;
-    flex-direction: column;
-    z-index: 100;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: var(--sidebar-width);
+
+  /* 100 vh shrank → multiply back up */
+  height: calc(100vh / 0.67);
+
+  background-color: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+
+/* Firefox / Safari fallback */
+@supports not (zoom: 1) {
+  .sidebar { height: calc(100vh / 0.67); }
 }
 
 .sidebar-logo {
@@ -152,14 +178,29 @@ body {
     margin-right: 0.5rem;
 }
 
-/* Main Content Styling */
+/* ──────────────────────────────────────────────────────────────
+   MAIN-CONTENT – restore full viewport height so no gap remains
+   ────────────────────────────────────────────────────────────── */
 .main-content {
-    margin-left: var(--sidebar-width);
-    padding: 1.5rem;
-    width: calc(100% - var(--sidebar-width));
-    transition: var(--transition);
-    min-height: 100vh;
+  margin-left: var(--sidebar-width);
+  padding: 1.5rem;
+  width: calc(100% - var(--sidebar-width));
+
+  /* same compensation as sidebar */
+  min-height: calc(100vh / 0.67);
+  height:     calc(100vh / 0.67);
+
+  transition: var(--transition);
 }
+
+/* Firefox / Safari fallback */
+@supports not (zoom: 1) {
+  .main-content {
+    min-height: calc(100vh / 0.67);
+    height:     calc(100vh / 0.67);
+  }
+}
+
 
 .page-container {
     background-color: var(--card-bg);

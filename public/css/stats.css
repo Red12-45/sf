@@ -28,10 +28,28 @@
 
 /* ─── Reset & base ─── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* === GLOBAL SCALE FIX (v-dashboard) ===========================
+   Keeps the whole stats dashboard at 67 % zoom and prevents the
+   empty strip that was appearing at the bottom.                */
+html{
+  zoom:0.67;
+  overflow-x:hidden;
+}
+
+/* ---------- Firefox / Safari fallback ---------- */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;            /* 100 / 0.67 */
+  }
+}
+
 html{font-size:15px}
 body{
   font-family:var(--font-main);color:var(--text);background:var(--bg-light);
-  line-height:1.6;min-height:100vh;padding-bottom:3rem;position:relative;
+  line-height:1.6; min-height:calc(100vh / 0.67);height:calc(100vh / 0.67);padding-bottom:3rem;position:relative;
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
 }
 h1,h2,h3,h4,h5,h6{font-weight:650;color:var(--dark);margin-bottom:1rem}
@@ -313,3 +331,9 @@ body.dark-mode .chart-type-btn[aria-pressed="true"]{
 /* ── SCROLLBAR (whole page) ────────────────────────────────── */
 body.dark-mode ::-webkit-scrollbar-track{ background:#1a1a1a }
 body.dark-mode ::-webkit-scrollbar-thumb{ background:#4361ee }
+html.dark-mode,
+body.dark-mode{
+  min-height:calc(100vh / 0.67);
+  height:calc(100vh / 0.67);
+  /* …existing dark-mode variables… */
+}

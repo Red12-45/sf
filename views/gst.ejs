@@ -55,9 +55,24 @@
      RESET & BASE
   ========================================================= */
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+  /* ═══ 67 % GLOBAL ZOOM PATCH ════════════════════════════════════════ */
+html{
+  zoom:0.67;                /* Chrome / Edge / Opera               */
+  overflow-x:hidden;
+}
+
+/* Fallback for Firefox & WebKit */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;        /* 100 ÷ 0.67                           */
+  }
+}
+
   html{scroll-behavior:smooth;}
   body{
-    display:flex;min-height:100vh;font-family:var(--font);
+    display:flex;min-height:calc(100vh / 0.67); height:calc(100vh / 0.67);font-family:var(--font);
     background:var(--page-bg);color:var(--text-main);
     transition:background var(--transition),color var(--transition);
   }

@@ -4,6 +4,24 @@
   padding: 0;
   box-sizing: border-box;
 }
+/* === GLOBAL-SCALE FIX: stop the “giant” 100 % zoom === */
+html {
+  /* 0.67 = identical to the 67 % browser zoom you tested */
+  zoom: 0.67;
+
+  /* after shrinking, kill any stray sideways scroll-bars */
+  overflow-x: hidden;
+}
+
+/* ---------- Firefox & Safari fallback ---------- */
+@supports not (zoom: 1) {
+  body {
+    transform: scale(0.67);
+    transform-origin: top left;
+    /* widen the canvas so the shrunken layout still spans the full viewport */
+    width: 149.2537%; /* 100 / 0.67 */
+  }
+}
 
 :root {
   --primary-color: #4361ee;
@@ -445,14 +463,30 @@ h1, h2, h3, h4, h5, h6 {
   background-color: rgba(239, 68, 68, 0.2);
 }
 
+/* ──────────────────────────────────────────────────────────────
+   PAGE CONTAINER  –  restore full viewport height after zoom
+   (100 vh is scaled down by 0.67, so we divide by 0.67 to
+    bring the visual height back to a true 100 % of the screen)
+   ────────────────────────────────────────────────────────────── */
 .page-container {
   display: flex;
   width: 100%;
   gap: 2rem;
-  height: calc(100vh - 70px);   /* unchanged height calculation */
-  overflow-y: hidden;           /* still stop the page from scrolling */
-  overflow-x: visible;          /* ⭐ let productSelect extend past the sidebar */
+
+  /* original 100vh-70px, now compensated for the 0.67 zoom */
+height: calc((100vh / 0.67) - 70px);
+
+  overflow-y: hidden;      /* keep the page from vertical scrolling */
+  overflow-x: visible;     /* allow productSelect to overflow sideways */
 }
+
+/* ---------- Firefox & Safari fallback ---------- */
+@supports not (zoom: 1) {
+  .page-container {
+    height: calc((100vh - 70px) / 0.67);  /* same compensation – we’re using scale() */
+  }
+}
+
 
 /* ────────────────────────────────────────────────────────────
    SIDEBAR
@@ -1568,6 +1602,7 @@ body.dark-mode .chart-type-btn:hover{
 body.dark-mode .chart-type-btn[aria-pressed="true"]{
   background:var(--primary-color);color:#fff;border-color:var(--primary-color);
 }
+
 
 /* ===============================================================
    ⬆⬆  END of CHARTS MODULE  ⬆⬆

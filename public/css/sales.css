@@ -4,6 +4,22 @@
     padding: 0;
     box-sizing: border-box;
 }
+/* === GLOBAL-SCALE FIX (v-dashboard) ==========================
+     Scales every page to the same 67 % you were using with
+     manual “Ctrl −”.  Also removes horizontal scroll.         */
+html{
+  zoom:0.67;
+  overflow-x:hidden;
+}
+
+/* ---------- Firefox / Safari fallback ---------- */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;           /* 100 / 0.67 */
+  }
+}
 
 :root {
     --primary-color: #3a7bd5;
@@ -81,21 +97,32 @@ h1::after {
     border-radius: var(--radius-sm);
 }
 
-/* SIDEBAR STYLING */
-.sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: var(--sidebar-width);
-    background-color: var(--sidebar-bg);
-    padding: 1.5rem 0;
-    overflow-y: auto;
-    z-index: 1000;
-    box-shadow: var(--shadow-lg);
-    display: flex;
-    flex-direction: column;
+/* ──────────────────────────────────────────────────────────────
+   SIDEBAR – restores true full-height after the 0.67 zoom
+   ────────────────────────────────────────────────────────────── */
+.sidebar{
+  position:fixed;
+  left:0;
+  top:0;
+  width:var(--sidebar-width);
+
+  /* 100 vh shrank → multiply back up */
+  height:calc(100vh / 0.67);
+
+  background-color:var(--sidebar-bg);
+  padding:1.5rem 0;
+  overflow-y:auto;
+  z-index:1000;
+  box-shadow:var(--shadow-lg);
+  display:flex;
+  flex-direction:column;
 }
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  .sidebar{height:calc(100vh / 0.67);}
+}
+
 
 .sidebar-logo {
     display: flex;
@@ -189,15 +216,30 @@ h1::after {
 .sidebar-footer i {
     margin-right: 0.5rem;
 }
+/* ──────────────────────────────────────────────────────────────
+   MAIN-CONTENT – fills the viewport vertically at the new scale
+   ────────────────────────────────────────────────────────────── */
+.main-content{
+  flex:1;
+  margin-left:var(--sidebar-width);
+  padding:1.5rem;
+  width:calc(100% - var(--sidebar-width));
 
-/* Main Content Area */
-.main-content {
-    flex: 1;
-    margin-left: var(--sidebar-width);
-    padding: 1.5rem;
-    width: calc(100% - var(--sidebar-width));
-    transition: var(--transition);
+  /* compensate for the global 0.67 zoom */
+  min-height:calc(100vh / 0.67);
+  height:calc(100vh / 0.67);
+
+  transition:var(--transition);
 }
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  .main-content{
+    min-height:calc(100vh / 0.67);
+    height:calc(100vh / 0.67);
+  }
+}
+
 
 /* Top Navigation Bar */
 .top-nav {

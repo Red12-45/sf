@@ -42,13 +42,27 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box;}
+/* ═══ 67 % GLOBAL ZOOM PATCH ════════════════════════════════════════ */
+html{
+  zoom:0.67;                /* Chrome / Edge / Opera               */
+  overflow-x:hidden;
+}
+
+/* Fallback for Firefox & WebKit */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;        /* 100 ÷ 0.67                           */
+  }
+}
 
 body{
   font-family:'Poppins',sans-serif;
   background-color:var(--background-light);   /* variable-driven */
   color:var(--text-color);
   line-height:1.6;
-  min-height:100vh;
+ min-height:calc(100vh / 0.67); height:calc(100vh / 0.67); min-height:100vh;
   position:relative;
   padding-bottom:70px;                       /* Space for footer */
   transition:background-color .3s ease,color .3s ease;

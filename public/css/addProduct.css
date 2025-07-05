@@ -4,6 +4,23 @@
 
 /*  RESET  */
 *{margin:0;padding:0;box-sizing:border-box;}
+/* === GLOBAL-SCALE FIX (v-dashboard) =========================
+     Shrinks everything to the same 67 % you were using with
+     manual Ctrl - , then removes the unwanted horizontal scroll.
+     ───────────────────────────────────────────────────────── */
+html{
+  zoom:0.67;
+  overflow-x:hidden;
+}
+
+/* ---------- Firefox / Safari fallback ---------- */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;       /* 100 / 0.67 */
+  }
+}
 
 /* ─────────────────────────
    COLOR-TOKENS (LIGHT MODE)
@@ -81,24 +98,58 @@ body{
   line-height:1.6;
   min-height:100vh;
 }
-.page-wrapper {
-  position: relative;   /* create a new stacking context */
-  z-index: 1;           /* sit above the decoration */
-  display: flex;
-  min-height: 100vh;
+/* ──────────────────────────────────────────────────────────────
+   PAGE-WRAPPER – restore full viewport height after the 0.67 zoom
+   ────────────────────────────────────────────────────────────── */
+.page-wrapper{
+  position:relative;
+  z-index:1;
+  display:flex;
+
+  /* 100vh shrank → multiply back up */
+  min-height:calc(100vh / 0.67);
+  height:calc(100vh / 0.67);
 }
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  .page-wrapper{
+    min-height:calc(100vh / 0.67);
+    height:calc(100vh / 0.67);
+  }
+}
+
 
 .hidden{display:none!important;}
 
 /* ==========================================================
    SIDEBAR
    ========================================================== */
+/* ──────────────────────────────────────────────────────────────
+   SIDEBAR – same compensation so it reaches the real bottom
+   ────────────────────────────────────────────────────────────── */
 .sidebar{
-  position:fixed;left:0;top:0;height:100%;width:250px;
+  position:fixed;
+  left:0;top:0;
+  width:250px;
+
+  /* compensate for the zoom exactly as we did for .page-wrapper */
+  height:calc(100vh / 0.67);
+
   background:var(--bg-sidebar);
-  padding:1.5rem 0;overflow-y:auto;z-index:1000;
-  box-shadow:var(--shadow-lg);display:flex;flex-direction:column;
+  padding:1.5rem 0;
+  overflow-y:auto;
+  z-index:1000;
+  box-shadow:var(--shadow-lg);
+  display:flex;
+  flex-direction:column;
 }
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  .sidebar{height:calc(100vh / 0.67);}
+}
+
 .sidebar-logo{display:flex;align-items:center;justify-content:center;padding:0 1.5rem 1.5rem;margin-bottom:1rem;border-bottom:1px solid rgba(255,255,255,.12);}
 .sidebar-logo i{font-size:1.5rem;color:var(--secondary);margin-right:.75rem;}
 .sidebar-logo span{font-size:1.2rem;font-weight:700;color:var(--text-white);}

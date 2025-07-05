@@ -6,7 +6,22 @@
 
 /* ─────────────────── 1. RESET & VARIABLES ────────────────── */
 * { margin:0; padding:0; box-sizing:border-box; }
+/* === GLOBAL-SCALE FIX (v-dashboard) ============================
+   Keeps every page at the same 67 % zoom you were applying by
+   hand and removes the stray blank strip at the bottom.        */
+html{
+  zoom:0.67;
+  overflow-x:hidden;
+}
 
+/* ---------- Firefox / Safari fallback ---------- */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;           /* 100 / 0.67 */
+  }
+}
 :root {
   --primary-color:   #3a7bd5;
   --primary-light:   #6faae7;
@@ -220,11 +235,32 @@ body{
 }
 
 /* ─────────────────── 3. SIDEBAR ───────────────────────────── */
+/* ──────────────────────────────────────────────────────────────
+   SIDEBAR  – restore full height after the 0.67 zoom
+   ────────────────────────────────────────────────────────────── */
 .sidebar{
-  position:fixed;left:0;top:0;width:var(--sidebar-width);height:100%;
-  background:var(--sidebar-bg);padding:1.5rem 0;overflow-y:auto;
-  box-shadow:var(--shadow-lg);display:flex;flex-direction:column;
+  position:fixed;
+  left:0;
+  top:0;
+  width:var(--sidebar-width);
+
+  /* 100 vh shrank; multiply back up */
+  height:calc(100vh / 0.67);
+
+  background:var(--sidebar-bg);
+  padding:1.5rem 0;
+  overflow-y:auto;
+  z-index:1000;
+  box-shadow:var(--shadow-lg);
+  display:flex;
+  flex-direction:column;
 }
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  .sidebar{height:calc(100vh / 0.67);}
+}
+
 .sidebar-logo{display:flex;align-items:center;justify-content:center;
   padding:0 1.5rem 1.5rem;margin-bottom:1rem;
   border-bottom:1px solid rgba(255,255,255,.1)}
@@ -250,10 +286,29 @@ body{
 .sidebar-footer i{margin-right:.5rem}
 
 /* ─────────────────── 4. MAIN PANEL / NAV ─────────────────── */
+/* ──────────────────────────────────────────────────────────────
+   MAIN-CONTENT – fills the viewport vertically at the new scale
+   ────────────────────────────────────────────────────────────── */
 .main-content{
-  margin-left:var(--sidebar-width);padding:1.5rem;
-  width:calc(100% - var(--sidebar-width));transition:var(--transition)
+  margin-left:var(--sidebar-width);
+  padding:1.5rem;
+  width:calc(100% - var(--sidebar-width));
+
+  /* compensate for the global 0.67 zoom */
+  min-height:calc(100vh / 0.67);
+  height:calc(100vh / 0.67);
+
+  transition:var(--transition);
 }
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  .main-content{
+    min-height:calc(100vh / 0.67);
+    height:calc(100vh / 0.67);
+  }
+}
+
 .top-nav{background:var(--card-bg);display:flex;justify-content:space-between;
   align-items:center;padding:1rem 1.5rem;margin-bottom:1.5rem;
   border-radius:var(--radius-lg);box-shadow:var(--shadow-md)}

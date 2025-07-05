@@ -5,7 +5,23 @@
     box-sizing: border-box;
     font-family: 'Poppins', 'Segoe UI', sans-serif;
   }
-  
+  /* === GLOBAL SCALE FIX (User-Management page) ==========================
+   Shrinks the whole canvas to 67 %.  Chrome/Edge honour `zoom`; Firefox
+   and Safari need the transform fallback.                          */
+html{
+  zoom:0.67;                 /* global 67 % zoom */
+  overflow-x:hidden;         /* kill stray h-scroll bar */
+}
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;         /* 100 ÷ 0.67 */
+  }
+}
+
   /* CSS Variables */
   :root {
     --primary-color: #3a7bd5;
@@ -38,7 +54,8 @@
     background-color: var(--light-bg);
     color: var(--text-dark);
     line-height: 1.5;
-    min-height: 100vh;
+    min-height: calc(100vh / 0.67);
+     height:      calc(100vh / 0.67);
     display: flex;
   }
   

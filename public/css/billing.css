@@ -4,7 +4,21 @@
 
 /*  RESET  */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);}
+body{font-family:'Poppins','Segoe UI',sans-serif;line-height:1.6;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);min-height:calc(100vh / 0.67); height:calc(100vh / 0.67);}
+/* ═══ 67 % GLOBAL ZOOM PATCH ════════════════════════════════════════ */
+html{
+  zoom:0.67;                /* Chrome / Edge / Opera               */
+  overflow-x:hidden;
+}
+
+/* Fallback for Firefox & WebKit */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;        /* 100 ÷ 0.67                           */
+  }
+}
 
 /* ─────────────────────────
    COLOR-TOKENS — LIGHT MODE

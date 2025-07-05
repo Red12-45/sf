@@ -20,6 +20,22 @@
 
 /*  RESET  */
 *{margin:0;padding:0;box-sizing:border-box;}
+/* === GLOBAL SCALE FIX (Profile page) ===================================
+   Chrome / Edge honour `zoom`; Firefox & Safari don’t, so an @supports
+   fallback is added for them.                                             */
+html{
+  zoom:0.67;          /* scale everything to 67 % */
+  overflow-x:hidden;  /* prevent horizontal scroll */
+}
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;      /* 100 / 0.67 */
+  }
+}
 
 /* ─────────────────────────
    COLOR-TOKENS — LIGHT MODE
@@ -104,7 +120,7 @@ body{
   font-family:'Inter','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
   background:var(--bg);
   color:var(--text);
-  line-height:1.6;min-height:100vh;position:relative;
+  line-height:1.6; min-height:calc(100vh / 0.67); height:calc(100vh / 0.67);position:relative;
 }
 /* subtle radial overlays */
 /* ────────── Background Decoration ────────── */

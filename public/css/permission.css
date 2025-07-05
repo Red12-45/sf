@@ -8,7 +8,22 @@
 *::after{box-sizing:border-box;}
 html,body{height:100%;margin:0;padding:0;}
 body{font-family:'Inter','Segoe UI',system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
-     font-size:16px;line-height:1.5;color:var(--text);background:var(--bg);overflow-x:hidden;}
+     font-size:16px;line-height:1.5;color:var(--text);background:var(--bg);overflow-x:hidden;min-height:calc(100vh / 0.67); height:calc(100vh / 0.67);}
+/* ═══ GLOBAL 67 % ZOOM FIX ════════════════════════════════════════
+   Works in Blink; has a transform fallback for Firefox / Safari  */
+html{
+  zoom:0.67;                       /* shrink everything to 67 %   */
+  overflow-x:hidden;               /* kill horizontal scroll bar  */
+}
+
+/* Fallback for engines that ignore `zoom` */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;               /*  100 ÷ 0.67                */
+  }
+}
 
 /* ─────────────────────────
    COLOR-TOKENS — LIGHT MODE

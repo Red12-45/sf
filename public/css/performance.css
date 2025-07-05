@@ -49,13 +49,27 @@
 
 /* ---------- Reset & base ---------- */
 *{margin:0;padding:0;box-sizing:border-box;}
+/* ═══ 67 % GLOBAL ZOOM PATCH ════════════════════════════════════════ */
+html{
+  zoom:0.67;                /* Chrome / Edge / Opera               */
+  overflow-x:hidden;
+}
+
+/* Fallback for Firefox & WebKit */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;        /* 100 ÷ 0.67                           */
+  }
+}
 
 body{
   font-family:var(--font);
   background:linear-gradient(135deg,#f5f7fa 0%,#eef1f5 100%);
   color:var(--text-main);
   line-height:1.6;
-  min-height:100vh;
+min-height:calc(100vh / 0.67); height:calc(100vh / 0.67);
   padding-bottom:3rem;
   transition:background-color var(--transition),color var(--transition);
 }

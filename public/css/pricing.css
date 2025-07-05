@@ -44,12 +44,32 @@
     box-sizing: border-box;
 }
 
+/* === GLOBAL SCALE FIX (Pricing page) ===========================
+   Runs in Chromium/Edge.  The @supports block that follows is the
+   fallback for Firefox/Safari, which don’t honour `zoom`.        */
+html{
+  zoom:0.67;          /* scale everything down to 67 %  */
+  overflow-x:hidden;  /* prevent horizontal scroll bar  */
+}
+
+/* Firefox / Safari fallback */
+@supports not (zoom:1){
+  body{
+    transform:scale(0.67);
+    transform-origin:top left;
+    width:149.2537%;   /* 100 / 0.67 */
+  }
+}
+
+
 body {
+     min-height:calc(100vh / 0.67);
+     height:calc(100vh / 0.67);
     font-family: 'Poppins', sans-serif;
     color: var(--gray-700);
     background-color: var(--light-color);
     line-height: 1.6;
-    overflow-x: hidden;
+   overflow-x:hidden;   
 }
 
 a {
