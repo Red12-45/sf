@@ -1,5 +1,6 @@
 // routes/invoice.js
 const express = require('express');
+const admin   = require('firebase-admin');
 
 module.exports = function ({ db, isAuthenticated, getNextInvoiceNo }) {
   const router = express.Router();
@@ -21,17 +22,75 @@ module.exports = function ({ db, isAuthenticated, getNextInvoiceNo }) {
     }
   });
 
-  /* ─────────── GET /invoice/finish ─────────── */
-  router.get('/invoice/finish', isAuthenticated, (req, res) => {
-    delete req.session.currentInvoiceNo;
-    res.redirect('/dashboard');
-  });
+/* ─────────── GET /invoice/finish ─────────── */
+router.get('/invoice/finish', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const invoiceNo = req.session.currentInvoiceNo;
 
-  /* ─────────── POST /api/invoice/finish ─────────── */
-  router.post('/api/invoice/finish', isAuthenticated, (req, res) => {
+    if (invoiceNo) {
+      /* 1️⃣  Check if the invoice generated ANY sale rows */
+      const snap = await db.collection('sales')
+                           .where('accountId', '==', accountId)
+                           .where('invoiceNo', '==', invoiceNo)
+                           .limit(1)
+                           .get();
+
+      /* 2️⃣  If unused → decrement the sharded counter by 1 */
+      if (snap.empty) {
+        const rand = Math.floor(Math.random() * 10).toString();   // shard ‘0’‥‘9’
+        await db.collection('accounts').doc(accountId)
+                 .collection('counterShards').doc(rand)
+                 .set(
+                   { value: admin.firestore.FieldValue.increment(-1) },
+                   { merge: true }
+                 );
+      }
+    }
+  } catch (err) {
+    console.error('/invoice/finish rollback error:', err);
+    /* proceed with redirect regardless – UX must not break */
+  } finally {
     delete req.session.currentInvoiceNo;
-    return res.json({ success: true });
-  });
+    return res.redirect('/dashboard');
+  }
+});
+
+
+/* ─────────── POST /api/invoice/finish ─────────── */
+router.post('/api/invoice/finish', isAuthenticated, async (req, res) => {
+  try {
+    const accountId = req.session.user.accountId;
+    const invoiceNo = req.session.currentInvoiceNo;
+
+    if (invoiceNo) {
+      /* 1️⃣  Was this invoice actually used? */
+      const snap = await db.collection('sales')
+                           .where('accountId', '==', accountId)
+                           .where('invoiceNo', '==', invoiceNo)
+                           .limit(1)
+                           .get();
+
+      /* 2️⃣  If NO sale rows → roll back the counter (undo the skip) */
+      if (snap.empty) {
+        const rand = Math.floor(Math.random() * 10).toString();   // shard ‘0’‥‘9’
+        await db.collection('accounts').doc(accountId)
+                 .collection('counterShards').doc(rand)
+                 .set(
+                   { value: admin.firestore.FieldValue.increment(-1) },
+                   { merge: true }
+                 );
+      }
+    }
+  } catch (err) {
+    console.error('/api/invoice/finish rollback error:', err);
+    return res.json({ success: false, error: err.toString() });
+  } finally {
+    delete req.session.currentInvoiceNo;
+  }
+  return res.json({ success: true });
+});
+
 
   /* ─────────── GET /invoice/:saleId  (single-item print) ─────────── */
   router.get('/invoice/:saleId', isAuthenticated, async (req, res) => {

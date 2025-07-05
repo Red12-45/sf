@@ -398,23 +398,25 @@
       </span>
 
       <!-- ▸ INVOICE ACTIONS (AJAX, zero-refresh) -->
-      <span id="invoiceActionWrap">
-        <% if (!currentInvoiceNo) { %>
-          <a href="#" id="startInvoiceBtn" class="invoice-action-btn btn-blue ajax-invoice">
-            <i class="fas fa-file-invoice"></i>
-            <span>Start Invoice</span>
-          </a>
-        <% } else { %>
-          <span class="current-invoice-label">
-            <i class="fas fa-file-invoice"></i>
-            Invoice #<%= currentInvoiceNo %>
-          </span>
-          <a href="#" id="finishInvoiceBtn" class="invoice-action-btn btn-green ajax-invoice">
-            <i class="fas fa-check-circle"></i>
-            <span>Finish</span>
-          </a>
-        <% } %>
-      </span>
+<span id="invoiceActionWrap">
+  <% if (!currentInvoiceNo) { %>
+    <a href="#" id="startInvoiceBtn" class="invoice-action-btn btn-blue ajax-invoice">
+      <i class="fas fa-file-invoice"></i>
+      <span>Start Invoice</span>
+    </a>
+  <% } else { %>
+    <span class="current-invoice-label">
+      <i class="fas fa-file-invoice"></i>
+      Invoice #<%= currentInvoiceNo %>
+    </span>
+    <!-- ⇢ Fallback GET keeps the button alive after any hard refresh -->
+    <a href="/invoice/finish" id="finishInvoiceBtn" class="invoice-action-btn btn-green ajax-invoice">
+      <i class="fas fa-check-circle"></i>
+      <span>Finish</span>
+    </a>
+  <% } %>
+</span>
+
 
       <!-- live-updating time chips -->
       <span id="dateInfo" class="date-info">
@@ -446,26 +448,27 @@
   </div>
 
   <!-- Top Revenue Products -->
-  <div class="chart-card">
-    <h2><i class="fas fa-hand-holding-dollar"></i> Top Revenue Products</h2>
-    <div class="chart-type-toggle" data-chart="chartRevenue">
-      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
-      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
-      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
-    </div>
-    <div class="chart-container"><canvas id="chartRevenue"></canvas></div>
+<div class="chart-card">
+  <h2><i class="fas fa-hand-holding-dollar"></i> Top Revenue Products</h2>
+  <div class="chart-type-toggle" data-chart="chartRevenue">
+    <button class="chart-type-btn" data-type="bar"        aria-pressed="false" title="Bar"><i class="fas fa-chart-bar"></i></button>
+    <button class="chart-type-btn" data-type="line"       aria-pressed="true"  title="Line"><i class="fas fa-chart-line"></i></button>
+    <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
   </div>
+  <div class="chart-container"><canvas id="chartRevenue"></canvas></div>
+</div>
+
 
   <!-- Top Profit Products -->
-  <div class="chart-card">
-    <h2><i class="fas fa-sack-dollar"></i> Top Profit Products</h2>
-    <div class="chart-type-toggle" data-chart="chartProductProfit">
-      <button class="chart-type-btn" data-type="bar"        aria-pressed="true"  title="Bar"><i class="fas fa-chart-bar"></i></button>
-      <button class="chart-type-btn" data-type="line"       aria-pressed="false" title="Line"><i class="fas fa-chart-line"></i></button>
-      <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
-    </div>
-    <div class="chart-container"><canvas id="chartProductProfit"></canvas></div>
+<div class="chart-card">
+  <h2><i class="fas fa-sack-dollar"></i> Top Profit Products</h2>
+  <div class="chart-type-toggle" data-chart="chartProductProfit">
+    <button class="chart-type-btn" data-type="bar"        aria-pressed="false" title="Bar"><i class="fas fa-chart-bar"></i></button>
+    <button class="chart-type-btn" data-type="line"       aria-pressed="true"  title="Line"><i class="fas fa-chart-line"></i></button>
+    <button class="chart-type-btn" data-type="horizontal" aria-pressed="false" title="Horizontal"><i class="fas fa-chart-bar fa-rotate-90"></i></button>
   </div>
+  <div class="chart-container"><canvas id="chartProductProfit"></canvas></div>
+</div>
 
   <!-- Monthly Net-Profit Trend -->
   <div class="chart-card">
@@ -1468,7 +1471,8 @@ function updateInvoiceUI () {
          <i class="fas fa-file-invoice"></i>
          Invoice #${escapeHtml(currentInvoiceNo)}
        </span>
-       <a href="#" id="finishInvoiceBtn"
+       <!-- fallback GET keeps the button alive even if JS dies -->
+       <a href="/invoice/finish" id="finishInvoiceBtn"
           class="invoice-action-btn btn-green ajax-invoice">
          <i class="fas fa-check-circle"></i><span>Finish</span>
        </a>`
@@ -1482,6 +1486,10 @@ function updateInvoiceUI () {
   document.getElementById('invoiceNoHidden').value =
     currentInvoiceNo || '';
 }
+
+/* 🔑  Sync UI immediately after every full-page load */
+updateInvoiceUI();
+
 
 /* global click-delegate – passes the clicked element to the helper */
 document.addEventListener('click', e => {
@@ -1813,7 +1821,21 @@ const makeCfg = (meta, type) => {
   };
 
   /* initial render (all bar) */
-  Object.keys(CHART_DATA).forEach(id => buildChart(id));
+/* ────────────────────────────────────────────────
+   initial render
+   – chartRevenue & chartProductProfit → LINE
+   – everything else                  → BAR
+   ──────────────────────────────────────────────── */
+const DEFAULT_TYPES = {
+  chartRevenue:        'line',
+  chartProductProfit:  'line'
+};
+
+Object.keys(CHART_DATA).forEach(id => {
+  const type = DEFAULT_TYPES[id] || 'bar';
+  buildChart(id, type);
+});
+
 
   /* per-chart toggle buttons */
   document.querySelectorAll('.chart-type-btn').forEach(btn=>{

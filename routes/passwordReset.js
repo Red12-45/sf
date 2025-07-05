@@ -105,14 +105,20 @@ module.exports = function ({ db, bcrypt, crypto, transporter }) {
   /* ─────────── POST /reset-password ─────────── */
   router.post('/reset-password', async (req, res) => {
     try {
-      const { token, password, confirmPassword } = req.body;
+      const { token: rawToken, password, confirmPassword } = req.body;
 
       if (!password || password !== confirmPassword) {
         return res.status(400).render('resetPassword',
-          { token, invalid: false, error: 'Passwords do not match.' });
+          { token: rawToken, invalid: false, error: 'Passwords do not match.' });
       }
 
-      const tokenRef  = db.collection('passwordResets').doc(token);
+      /* 🔑  IMPORTANT: hash the raw token exactly the same way you did
+          when you first stored it (SHA-256 hex)                     */
+      const tokenHash = crypto.createHash('sha256')
+                              .update(rawToken)
+                              .digest('hex');
+
+      const tokenRef  = db.collection('passwordResets').doc(tokenHash);
       const tokenSnap = await tokenRef.get();
 
       if (!tokenSnap.exists) {
@@ -126,11 +132,11 @@ module.exports = function ({ db, bcrypt, crypto, transporter }) {
           { token: '', invalid: true, error: 'Link has expired. Request a new one.' });
       }
 
-      // Hash & store new password
+      /* 🔒  Hash & store the new password */
       const hashed = await bcrypt.hash(password, 10);
       await db.collection('users').doc(tData.userId).update({ password: hashed });
 
-      // Mark token consumed
+      /* ☑️  Mark this reset token as consumed */
       await tokenRef.update({ used: true, usedAt: new Date() });
 
       res.redirect('/login');
@@ -138,7 +144,7 @@ module.exports = function ({ db, bcrypt, crypto, transporter }) {
     } catch (err) {
       console.error('/reset-password error:', err);
       res.status(500).render('resetPassword',
-        { token, invalid: false, error: 'Something went wrong. Please try again.' });
+        { token: rawToken, invalid: false, error: 'Something went wrong. Please try again.' });
     }
   });
 
