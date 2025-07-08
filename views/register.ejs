@@ -1,4 +1,4 @@
-<!-- views/register.ejs — fully-responsive, no stray text, no duplicate scripts -->
+<!-- views/register.ejs — fully-responsive, no stray text -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -62,10 +62,10 @@
                  onblur="this.value=this.value.toLowerCase()">
         </div>
 
-        <!-- Phone -->
+        <!-- Phone (now optional to match server) -->
         <div class="form-group">
           <label for="phone"><i class="fas fa-phone"></i> Phone&nbsp;Number</label>
-          <input id="phone" name="phone" type="tel" autocomplete="tel" required
+          <input id="phone" name="phone" type="tel" autocomplete="tel"
                  placeholder="Enter your phone number"
                  value="<%= oldInput?.phone || '' %>">
         </div>

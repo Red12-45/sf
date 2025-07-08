@@ -1,4 +1,5 @@
 // routes/login.js
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY; 
 const express = require('express');
 const bcrypt  = require('bcrypt');
 const { body, validationResult } = require('express-validator');
@@ -76,10 +77,14 @@ module.exports = (redisClient) => {
           db.collection('users').where('subUserId', '==', identifier).get(),
           db.collection('users').where('phone', '==', identifier).get()
         ]);
-        const userDoc = !emailQ.empty ? emailQ.docs[0]
-                      : !subUserQ.empty ? subUserQ.docs[0]
-                      : !phoneQ.empty   ? phoneQ.docs[0]
-                      : null;
+    const userDoc = !emailQ.empty ? emailQ.docs[0]
+              : !subUserQ.empty ? subUserQ.docs[0]
+              : !phoneQ.empty   ? phoneQ.docs[0]
+              : null;
+
+/* 🔑  NEW — we need this object later */
+const userData = userDoc ? userDoc.data() : null;
+
 
         if (!userDoc) {
           await recordFailure(bruteKey);
@@ -93,18 +98,41 @@ module.exports = (redisClient) => {
         }
 
         /* 3️⃣  Password check */
-        const userData = userDoc.data();
-        const validPw  = await bcrypt.compare(password, userData.password);
-        if (!validPw) {
-          const tries = await recordFailure(bruteKey);
-          const left  = MAX_LOGIN_ATTEMPTS - tries;
-          return res.status(400).render('login', {
-            loginError: left > 0
-              ? `Invalid password – ${left} attempt${left === 1 ? '' : 's'} remaining.`
-              : 'Too many failed attempts. Please try again later.',
-            identifier
-          });
-        }
+  /* ────────────────────────────────────────────────────────────────
+   3️⃣  Password check – via Firebase Authentication
+   ────────────────────────────────────────────────────────────── */
+try {
+  const resp = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
+    {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify({
+        email            : userDoc.data().email,   // MUST be the e-mail
+        password,                                   // raw password from form
+        returnSecureToken: false                    // we only care if it works
+      })
+    }
+  );
+
+  if (!resp.ok) {                                  // bad password
+    await recordFailure(bruteKey);
+    const left = MAX_LOGIN_ATTEMPTS - (await getAttempts(bruteKey));
+    return res.status(400).render('login', {
+      loginError: left > 0
+        ? `Invalid password – ${left} attempt${left === 1 ? '' : 's'} remaining.`
+        : 'Too many failed attempts. Please try again later.',
+      identifier
+    });
+  }
+} catch (err) {                                    // network / service error
+  console.error('Firebase Auth sign-in error:', err);
+  return res.status(503).render('login', {
+    loginError: 'Auth service unavailable – please try again.',
+    identifier
+  });
+}
+
 
         /* 4️⃣  Success – wipe failures */
         await clearFailures(bruteKey);

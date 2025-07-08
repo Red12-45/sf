@@ -42,7 +42,7 @@ router.post(
       .optional({ checkFalsy: true })
       .trim().escape(),
 
-    /* ─── optional GST Number (15-char GSTIN) ─── */
+    /* optional 15-char GSTIN */
     body('gstNumber')
       .optional({ checkFalsy: true })
       .matches(/^[0-9A-Z]{15}$/)
@@ -82,6 +82,27 @@ router.post(
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
+
+      /* 0️⃣  Duplicate-email check directly in Firebase Auth */
+      try {
+        const authUser = await admin.auth().getUserByEmail(normalizedEmail);
+        if (authUser) {
+          return res.status(400).render('register', {
+            errorMessage: 'Email already registered.',
+            oldInput
+          });
+        }
+      } catch (e) {
+        if (e.code !== 'auth/user-not-found') {
+          console.error('Auth lookup failed:', e);
+          return res.status(500).render('register', {
+            errorMessage: 'Could not verify account. Please try again.',
+            oldInput
+          });
+        }
+      }
+
+      /* 0️⃣.b Duplicate in Firestore (legacy check) */
       const exists = await db.collection('users')
         .where('email', '==', normalizedEmail)
         .limit(1).get();
@@ -92,7 +113,17 @@ router.post(
         });
       }
 
-      /* 1️⃣  Hash password and create user */
+      /* 1️⃣  Create Auth account – UID = Firestore doc ID */
+      const userRef = db.collection('users').doc();
+      const uid     = userRef.id;
+
+      await admin.auth().createUser({
+        uid,
+        email   : normalizedEmail,
+        password
+      });
+
+      /* 2️⃣  Firestore profile (hash kept for server-side bcrypt login flow) */
       const hashed = await bcrypt.hash(password, 10);
       const userData = {
         name,
@@ -102,32 +133,38 @@ router.post(
         location,
         businessName,
         ...(gstNumber && { gstNumber: gstNumber.trim().toUpperCase() }),
-        password: hashed,
-        isMaster: true,
+        password : hashed,
+        isMaster : true,
         createdAt: new Date()
       };
 
-      const userRef = await db.collection('users').add(userData);
+      try {
+        await userRef.set(userData);
+      } catch (dbErr) {
+        /* rollback Auth user if Firestore write failed */
+        await admin.auth().deleteUser(uid).catch(()=>{});
+        throw dbErr;
+      }
 
-      /* 2️⃣  Set accountId AND a 30-day trial expiry */
+      /* 3️⃣  30-day trial + accountId */
       const trialExpiry = new Date();
       trialExpiry.setDate(trialExpiry.getDate() + 30);
       await userRef.update({
-        accountId: userRef.id,
+        accountId: uid,
         subscriptionExpiry: trialExpiry
       });
 
-      /* 3️⃣  Pre-create 10 counter shards */
+      /* 4️⃣  Pre-create 10 counter-shard docs */
       const shardBatch = db.batch();
       for (let i = 0; i < 10; i++) {
         const shardRef = db
-          .collection('accounts').doc(userRef.id)
+          .collection('accounts').doc(uid)
           .collection('counterShards').doc(String(i));
         shardBatch.set(shardRef, { value: 0 }, { merge: true });
       }
       await shardBatch.commit();
 
-      /* 4️⃣  Done → send them to login */
+      /* 5️⃣  Done – send them to log in */
       res.redirect('/login');
     } catch (err) {
       console.error(err);
