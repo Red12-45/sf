@@ -1,6 +1,5 @@
 // routes/register.js
 const express = require('express');
-const bcrypt  = require('bcrypt');
 const { body, validationResult } = require('express-validator');
 const admin   = require('firebase-admin');
 
@@ -124,7 +123,7 @@ router.post(
       });
 
       /* 2️⃣  Firestore profile (hash kept for server-side bcrypt login flow) */
-      const hashed = await bcrypt.hash(password, 10);
+ /* 2️⃣  Firestore profile — rely on Firebase Auth for the password */
       const userData = {
         name,
         email: normalizedEmail,
@@ -133,10 +132,10 @@ router.post(
         location,
         businessName,
         ...(gstNumber && { gstNumber: gstNumber.trim().toUpperCase() }),
-        password : hashed,
         isMaster : true,
         createdAt: new Date()
       };
+
 
       try {
         await userRef.set(userData);

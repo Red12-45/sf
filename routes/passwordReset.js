@@ -1,7 +1,7 @@
 // routes/passwordReset.js
 const express = require('express');
-
-module.exports = function ({ db, bcrypt, crypto, transporter }) {
+const admin   = require('firebase-admin');
+module.exports = function ({ db, crypto, transporter }) {
   const router = express.Router();
 
   /* ─────────── GET /forgot-password ─────────── */
@@ -132,9 +132,18 @@ module.exports = function ({ db, bcrypt, crypto, transporter }) {
           { token: '', invalid: true, error: 'Link has expired. Request a new one.' });
       }
 
-      /* 🔒  Hash & store the new password */
-      const hashed = await bcrypt.hash(password, 10);
-      await db.collection('users').doc(tData.userId).update({ password: hashed });
+    
+     
+    /* 🔒  Update the password directly in Firebase Authentication
+   -----------------------------------------------------------
+   IMPORTANT: on some legacy accounts the Firestore doc ID
+   (tData.userId) ≠ the real Auth UID.  
+   We therefore resolve the UID from the e-mail first to be
+   100 % sure we hit the correct Auth record.                */
+const authRec = await admin.auth().getUserByEmail(tData.email);
+await admin.auth().updateUser(authRec.uid, { password });
+
+
 
       /* ☑️  Mark this reset token as consumed */
       await tokenRef.update({ used: true, usedAt: new Date() });

@@ -1,11 +1,13 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    /* allow every signed-in user to read *their own* profile */
+    match /users/{userId} {
+      allow get : if request.auth != null
+                   && request.auth.uid == userId;
     }
+
+    // everything else automatically falls through to “deny”
   }
 }
-
-
